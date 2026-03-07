@@ -32,7 +32,7 @@ async function saveCurrentPage() {
     // 检查是否已存在
     const exists = await isLinkExists(tab.url);
     if (exists) {
-      alert('⚠️ 该页面已经在收藏夹中了！');
+      alert('⚠️ 该页面已经在"稍后再看"列表中了！');
       return;
     }
 
@@ -59,7 +59,7 @@ async function saveCurrentPage() {
     await loadLinkCount();
     
     // 显示成功提示
-    alert('✅ 当前页面已保存！');
+    alert('✅ 已收好！稍后记得来看哦~');
   } catch (error) {
     console.error('Failed to save current page:', error);
     alert('❌ 保存失败，请重试');
@@ -72,42 +72,42 @@ async function saveCurrentPage() {
 <template>
   <div class="popup-container">
     <header class="header">
-      <h1>UrlMem</h1>
+      <h1>稍后再看</h1>
       <span class="badge">{{ linkCount }} 个链接</span>
     </header>
 
     <main class="main">
       <p class="description">
-        右键点击网页中的链接，选择"收藏链接到 UrlMem"即可保存
+        看到好内容来不及看？右键或长按链接收好，稍后有空再看
       </p>
 
       <div class="actions">
         <button class="btn btn-primary" @click="saveCurrentPage" :disabled="saving">
-          {{ saving ? '保存中...' : '收藏当前页面' }}
+          {{ saving ? '收好中...' : '📥 收好当前页面' }}
         </button>
         
         <button class="btn btn-secondary" @click="openLinkManager">
-          管理链接
+          📚 查看列表
         </button>
         
         <button class="btn btn-default" @click="openSettings">
-          设置
+          ⚙️ 设置
         </button>
       </div>
 
       <div class="tips">
-        <h3>使用提示</h3>
+        <h3>💡 使用提示</h3>
         <ul>
           <li>PC端：右键点击链接</li>
           <li>安卓端：长按链接</li>
           <li>自动保存页面截图</li>
-          <li>自动提取附近图片</li>
+          <li>多设备同步随时看</li>
         </ul>
       </div>
     </main>
 
     <footer class="footer">
-      <a href="#" @click.prevent="openSettings">自定义图片提取规则 →</a>
+      <a href="#" @click.prevent="openSettings">配置 WebDAV 同步 →</a>
     </footer>
   </div>
 </template>

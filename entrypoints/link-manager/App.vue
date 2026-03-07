@@ -5,11 +5,13 @@ import {
   deleteLinks,
   searchLinks,
   exportLinks,
+  importLinks,
   getLinkCount,
   getAllDomains,
   getDomainStats,
   queryLinks,
   LinkItem,
+  ImportResult,
 } from '@/utils/storage';
 
 type SortBy = 'createdAt' | 'title' | 'domain';
@@ -39,6 +41,8 @@ const dateTo = ref<string>('');
 
 // 统计信息
 const totalCount = ref(0);
+const importInput = ref<HTMLInputElement | null>(null);
+const importing = ref(false);
 
 const totalPages = computed(() => Math.ceil(total.value / pageSize.value));
 
@@ -200,9 +204,35 @@ async function handleExport() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `urlmem-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  a.download = `readlater-backup-${new Date().toISOString().slice(0, 10)}.json`;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+function triggerImport() {
+  importInput.value?.click();
+}
+
+async function handleImport(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  if (!file) return;
+
+  importing.value = true;
+  try {
+    const text = await file.text();
+    const result = await importLinks(text, 'merge');
+    
+    // 刷新数据
+    await loadInitialData();
+    
+    alert(`导入成功！导入了 ${result.imported} 个链接，跳过了 ${result.skipped} 个重复链接。`);
+  } catch (error) {
+    alert(`导入失败: ${error instanceof Error ? error.message : '未知错误'}`);
+  } finally {
+    importing.value = false;
+    input.value = '';
+  }
 }
 
 function toggleSelection(id: string) {
@@ -261,10 +291,20 @@ onMounted(() => {
     <header class="header">
       <div class="header-content">
         <div class="logo">
-          <h1>UrlMem</h1>
+          <h1>稍后再看</h1>
           <span class="badge">{{ totalCount }} 个链接</span>
         </div>
         <div class="header-actions">
+          <input 
+            ref="importInput"
+            type="file" 
+            accept=".json" 
+            style="display: none"
+            @change="handleImport"
+          />
+          <button class="btn btn-default" @click="triggerImport" :disabled="importing">
+            {{ importing ? '导入中...' : '导入' }}
+          </button>
           <button class="btn btn-default" @click="handleExport">
             导出备份
           </button>
@@ -436,7 +476,7 @@ onMounted(() => {
           当前筛选条件下没有结果，<a href="#" @click.prevent="clearFilters">清除筛选</a>
         </p>
         <p class="hint" v-else>
-          右键点击网页中的链接，选择"收藏链接到 UrlMem"
+          右键或长按网页链接，选择"收好链接（稍后再看）"
         </p>
       </div>
 

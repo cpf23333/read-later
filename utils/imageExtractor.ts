@@ -86,7 +86,7 @@ export function executeCustomExtractor(
     
     return null;
   } catch (error) {
-    console.error('[UrlMem] Custom image extractor error:', error);
+    console.error('[ReadLater] Custom image extractor error:', error);
     return null;
   }
 }
@@ -113,7 +113,7 @@ export async function imageToBase64(url: string): Promise<string | null> {
     
     // 检查文件大小（限制5MB）
     if (blob.size > 5 * 1024 * 1024) {
-      console.warn('[UrlMem] Image too large, skipping base64 conversion');
+      console.warn('[ReadLater] Image too large, skipping base64 conversion');
       return url; // 返回原URL
     }
 
@@ -124,7 +124,7 @@ export async function imageToBase64(url: string): Promise<string | null> {
       reader.readAsDataURL(blob);
     });
   } catch (error) {
-    console.warn('[UrlMem] Failed to convert image to base64:', error);
+    console.warn('[ReadLater] Failed to convert image to base64:', error);
     return url; // 失败时返回原URL
   }
 }
@@ -142,7 +142,7 @@ export async function extractNearbyImage(
     try {
       imageUrl = executeCustomExtractor(customCode, targetElement, url);
     } catch (error) {
-      console.error('[UrlMem] Custom extractor failed:', error);
+      console.error('[ReadLater] Custom extractor failed:', error);
     }
   }
 

@@ -1,9 +1,10 @@
 // IndexedDB 存储模块 - 用于存储大量链接数据
 
-const DB_NAME = 'UrlMemDB';
-const DB_VERSION = 1;
+const DB_NAME = 'ReadLaterDB';
+const DB_VERSION = 2; // 升级数据库版本
 const STORE_NAME = 'links';
 const CONFIG_STORE = 'config';
+const SYNC_META_STORE = 'sync_meta'; // 同步元数据存储
 
 export interface LinkItem {
   id: string;
@@ -40,6 +41,7 @@ async function initDB(): Promise<IDBDatabase> {
 
     request.onupgradeneeded = (event) => {
       const database = (event.target as IDBOpenDBRequest).result;
+      const oldVersion = event.oldVersion;
       
       // 链接存储
       if (!database.objectStoreNames.contains(STORE_NAME)) {
@@ -52,6 +54,12 @@ async function initDB(): Promise<IDBDatabase> {
       // 配置存储
       if (!database.objectStoreNames.contains(CONFIG_STORE)) {
         database.createObjectStore(CONFIG_STORE, { keyPath: 'id' });
+      }
+      
+      // 同步元数据存储 (v2 新增)
+      if (!database.objectStoreNames.contains(SYNC_META_STORE)) {
+        const syncStore = database.createObjectStore(SYNC_META_STORE, { keyPath: 'id' });
+        syncStore.createIndex('deletedAt', 'deletedAt', { unique: false });
       }
     };
   });
@@ -125,17 +133,32 @@ export async function getLinkById(id: string): Promise<LinkItem | null> {
   });
 }
 
-// 删除链接
+// 删除链接（记录删除操作用于同步）
 export async function deleteLink(id: string): Promise<void> {
   const database = await initDB();
 
-  return new Promise((resolve, reject) => {
-    const transaction = database.transaction([STORE_NAME], 'readwrite');
-    const store = transaction.objectStore(STORE_NAME);
-    const request = store.delete(id);
+  // 先获取链接信息，用于记录删除
+  const link = await getLinkById(id);
 
-    request.onsuccess = () => resolve();
-    request.onerror = () => reject(request.error);
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction([STORE_NAME, SYNC_META_STORE], 'readwrite');
+    const store = transaction.objectStore(STORE_NAME);
+    const deleteRequest = store.delete(id);
+
+    deleteRequest.onsuccess = () => {
+      // 记录删除操作
+      if (link) {
+        const syncStore = transaction.objectStore(SYNC_META_STORE);
+        syncStore.put({
+          id: `delete_${link.url}`, // 使用 URL 作为键
+          url: link.url,
+          deletedAt: Date.now(),
+          normalizedUrl: normalizeUrl(link.url),
+        });
+      }
+      resolve();
+    };
+    deleteRequest.onerror = () => reject(deleteRequest.error);
   });
 }
 
@@ -217,6 +240,123 @@ export async function exportLinks(): Promise<string> {
   });
 }
 
+// 导入链接（支持合并或覆盖）
+export interface ImportResult {
+  imported: number;
+  skipped: number;
+  total: number;
+}
+
+export async function importLinks(
+  jsonString: string, 
+  mode: 'merge' | 'replace' = 'merge'
+): Promise<ImportResult> {
+  let data: LinkItem[];
+  try {
+    data = JSON.parse(jsonString);
+    if (!Array.isArray(data)) {
+      throw new Error('Invalid format: expected an array');
+    }
+  } catch (error) {
+    throw new Error('无效的JSON文件');
+  }
+
+  const database = await initDB();
+  
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction([STORE_NAME], 'readwrite');
+    const store = transaction.objectStore(STORE_NAME);
+
+    let imported = 0;
+    let skipped = 0;
+
+    // 如果是替换模式，先清空所有数据
+    const clearRequest = mode === 'replace' ? store.clear() : null;
+
+    const processItems = () => {
+      const existingUrls = new Set<string>();
+      
+      // 先获取所有现有URL
+      const cursorRequest = store.openCursor();
+      cursorRequest.onsuccess = (event) => {
+        const cursor = (event.target as IDBRequest).result;
+        if (cursor) {
+          const item = cursor.value as LinkItem;
+          existingUrls.add(normalizeUrl(item.url));
+          cursor.continue();
+        } else {
+          // 开始导入
+          importNextItem(0);
+        }
+      };
+      cursorRequest.onerror = () => reject(cursorRequest.error);
+    };
+
+    const importNextItem = (index: number) => {
+      if (index >= data.length) {
+        resolve({ imported, skipped, total: data.length });
+        return;
+      }
+
+      const item = data[index];
+      
+      // 验证数据格式
+      if (!item.url || !item.title) {
+        skipped++;
+        importNextItem(index + 1);
+        return;
+      }
+
+      // 检查是否已存在
+      const normalizedUrl = normalizeUrl(item.url);
+      const checkRequest = store.openCursor();
+      let exists = false;
+
+      checkRequest.onsuccess = (event) => {
+        const cursor = (event.target as IDBRequest).result;
+        if (cursor && !exists) {
+          const existing = cursor.value as LinkItem;
+          if (normalizeUrl(existing.url) === normalizedUrl) {
+            exists = true;
+          } else {
+            cursor.continue();
+          }
+        } else {
+          if (exists) {
+            skipped++;
+            importNextItem(index + 1);
+          } else {
+            // 添加新链接（重新生成ID和时间戳）
+            const newItem: LinkItem = {
+              ...item,
+              id: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}_${index}`,
+              createdAt: item.createdAt || Date.now(),
+            };
+
+            const addRequest = store.add(newItem);
+            addRequest.onsuccess = () => {
+              imported++;
+              importNextItem(index + 1);
+            };
+            addRequest.onerror = () => {
+              skipped++;
+              importNextItem(index + 1);
+            };
+          }
+        }
+      };
+      checkRequest.onerror = () => reject(checkRequest.error);
+    };
+
+    if (mode === 'replace') {
+      clearRequest!.onsuccess = processItems;
+      clearRequest!.onerror = () => reject(clearRequest!.error);
+    } else {
+      processItems();
+    }
+  });
+}
+
 // 保存自定义JS配置
 export async function saveCustomJsConfig(config: CustomJsConfig): Promise<void> {
   const database = await initDB();
@@ -272,6 +412,95 @@ export async function deleteCustomJsConfig(id: string): Promise<void> {
     const request = store.delete(id);
 
     request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+  });
+}
+
+// 获取删除记录（用于同步）
+export interface DeleteRecord {
+  id: string;
+  url: string;
+  deletedAt: number;
+  normalizedUrl: string;
+}
+
+export async function getDeleteRecords(since?: number): Promise<DeleteRecord[]> {
+  const database = await initDB();
+
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction([SYNC_META_STORE], 'readonly');
+    const store = transaction.objectStore(SYNC_META_STORE);
+    const request = store.openCursor();
+
+    const records: DeleteRecord[] = [];
+
+    request.onsuccess = (event) => {
+      const cursor = (event.target as IDBRequest).result;
+      if (cursor) {
+        const record = cursor.value as DeleteRecord;
+        if (!since || record.deletedAt > since) {
+          records.push(record);
+        }
+        cursor.continue();
+      } else {
+        resolve(records);
+      }
+    };
+
+    request.onerror = () => reject(request.error);
+  });
+}
+
+// 清除旧的删除记录
+export async function clearOldDeleteRecords(before: number): Promise<void> {
+  const database = await initDB();
+
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction([SYNC_META_STORE], 'readwrite');
+    const store = transaction.objectStore(SYNC_META_STORE);
+    const request = store.openCursor();
+
+    request.onsuccess = (event) => {
+      const cursor = (event.target as IDBRequest).result;
+      if (cursor) {
+        const record = cursor.value as DeleteRecord;
+        if (record.deletedAt < before) {
+          store.delete(record.id);
+        }
+        cursor.continue();
+      } else {
+        resolve();
+      }
+    };
+
+    request.onerror = () => reject(request.error);
+  });
+}
+
+// 根据URL检查是否被删除
+export async function isUrlDeleted(url: string): Promise<boolean> {
+  const database = await initDB();
+  const normalizedUrl = normalizeUrl(url);
+
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction([SYNC_META_STORE], 'readonly');
+    const store = transaction.objectStore(SYNC_META_STORE);
+    const request = store.openCursor();
+
+    request.onsuccess = (event) => {
+      const cursor = (event.target as IDBRequest).result;
+      if (cursor) {
+        const record = cursor.value as DeleteRecord;
+        if (record.normalizedUrl === normalizedUrl) {
+          resolve(true);
+          return;
+        }
+        cursor.continue();
+      } else {
+        resolve(false);
+      }
+    };
+
     request.onerror = () => reject(request.error);
   });
 }
@@ -346,7 +575,7 @@ export async function getLinkByUrl(url: string): Promise<LinkItem | null> {
 }
 
 // URL标准化函数
-function normalizeUrl(url: string): string {
+export function normalizeUrl(url: string): string {
   try {
     const urlObj = new URL(url);
     // 移除末尾斜杠

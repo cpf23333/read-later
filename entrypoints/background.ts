@@ -1,15 +1,19 @@
 import { addLink, getEnabledCustomJsConfig, isLinkExists, getLinkByUrl } from '@/utils/storage';
+import { initWebDAV } from '@/utils/webdav';
 
 // 右键菜单ID
-const CONTEXT_MENU_ID = 'url-mem-save-link';
+const CONTEXT_MENU_ID = 'read-later-save-link';
 
 export default defineBackground(() => {
-  console.log('[UrlMem] Background script started');
+  console.log('[ReadLater] Background script started');
+
+  // 初始化 WebDAV 自动同步
+  initWebDAV().catch(console.error);
 
   // 创建右键菜单
   browser.contextMenus.create({
     id: CONTEXT_MENU_ID,
-    title: '收藏链接到 UrlMem',
+    title: '收好链接（稍后再看）',
     contexts: ['link'],
   });
 
@@ -18,14 +22,14 @@ export default defineBackground(() => {
     if (info.menuItemId !== CONTEXT_MENU_ID) return;
     if (!tab?.id || !info.linkUrl) return;
 
-    console.log('[UrlMem] Save link clicked:', info.linkUrl);
+    console.log('[ReadLater] Save link clicked:', info.linkUrl);
 
     try {
       // 检查链接是否已存在
       const exists = await isLinkExists(info.linkUrl);
       if (exists) {
         const existingLink = await getLinkByUrl(info.linkUrl);
-        console.log('[UrlMem] Link already exists:', existingLink?.id);
+        console.log('[ReadLater] Link already exists:', existingLink?.id);
         
         // 通知内容脚本链接已存在
         browser.tabs.sendMessage(tab.id, {
@@ -68,7 +72,7 @@ export default defineBackground(() => {
           },
         });
 
-        console.log('[UrlMem] Link saved:', linkItem.id);
+        console.log('[ReadLater] Link saved:', linkItem.id);
         
         // 通知内容脚本保存成功
         browser.tabs.sendMessage(tab.id, {
@@ -77,7 +81,7 @@ export default defineBackground(() => {
         }).catch(() => {});
       }
     } catch (error) {
-      console.error('[UrlMem] Failed to save link:', error);
+      console.error('[ReadLater] Failed to save link:', error);
       
       // 通知内容脚本保存失败
       if (tab.id) {
@@ -172,7 +176,7 @@ async function fetchPageTitle(url: string): Promise<string | null> {
 
     return null;
   } catch (error) {
-    console.warn('[UrlMem] Failed to fetch page title:', error);
+    console.warn('[ReadLater] Failed to fetch page title:', error);
     return null;
   }
 }
@@ -186,7 +190,7 @@ async function captureTab(tabId: number): Promise<string | null> {
     });
 
     if (!hasPermission) {
-      console.warn('[UrlMem] No activeTab permission');
+      console.warn('[ReadLater] No activeTab permission');
       return null;
     }
 
@@ -198,7 +202,7 @@ async function captureTab(tabId: number): Promise<string | null> {
 
     return dataUrl;
   } catch (error) {
-    console.warn('[UrlMem] Failed to capture tab:', error);
+    console.warn('[ReadLater] Failed to capture tab:', error);
     return null;
   }
 }

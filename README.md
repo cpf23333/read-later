@@ -1,7 +1,45 @@
-# WXT + Vue 3
+# 稍后再看
 
-This template should help get you started developing with Vue 3 in WXT.
+一个强大的链接收藏管理浏览器扩展，支持右键/长按保存链接、自动截图、多设备 WebDAV 同步和历史版本管理。
 
-## Recommended IDE Setup
+## 功能特性
 
-- [VS Code](https://code.visualstudio.com/) + [Volar](https://marketplace.visualstudio.com/items?itemName=Vue.volar).
+- 🔗 **一键收藏** - 右键或长按链接快速保存
+- 📸 **自动截图** - 保存页面标题、截图和附近图片
+- 🌐 **多设备同步** - 通过 WebDAV 在多台设备间同步数据
+- 📜 **历史版本** - 自动保存历史版本，支持回溯恢复
+- 🔍 **智能搜索** - 按域名、时间等条件筛选和排序
+- ⚙️ **自定义规则** - 编写 JS 代码自定义图片提取逻辑
+
+## 支持的浏览器
+
+- Chrome / Edge / 其他 Chromium 内核浏览器
+- Firefox（需构建）
+- 支持扩展的 Android 浏览器（Kiwi、Yandex 等）
+
+## 技术栈
+
+- WXT - 浏览器扩展开发框架
+- Vue 3 - 前端框架
+- TypeScript - 类型安全
+- IndexedDB - 本地数据存储
+
+## 开发
+
+```bash
+# 安装依赖
+pnpm install
+
+# 开发模式
+pnpm dev
+
+# 构建
+pnpm build
+
+# 类型检查
+pnpm compile
+```
+
+## 许可证
+
+MIT

@@ -7,7 +7,7 @@ let lastRightClickedElement: HTMLElement | null = null;
 export default defineContentScript({
   matches: ['<all_urls>'],
   main() {
-    console.log('[UrlMem] Content script loaded');
+    console.log('[ReadLater] Content script loaded');
 
     // 监听右键点击事件
     document.addEventListener('contextmenu', handleContextMenu, true);
@@ -59,7 +59,7 @@ function handleContextMenu(e: MouseEvent) {
 
   if (linkElement) {
     lastRightClickedElement = linkElement;
-    console.log('[UrlMem] Link detected on context menu:', linkElement);
+    console.log('[ReadLater] Link detected on context menu:', linkElement);
   }
 }
 
@@ -133,7 +133,7 @@ async function extractLinkInfo(url: string): Promise<{ success: boolean; data?: 
       customJsConfig?.code || null
     );
 
-    console.log('[UrlMem] Extracted link info:', {
+    console.log('[ReadLater] Extracted link info:', {
       url,
       linkText,
       nearbyText,
@@ -151,7 +151,7 @@ async function extractLinkInfo(url: string): Promise<{ success: boolean; data?: 
       },
     };
   } catch (error) {
-    console.error('[UrlMem] Failed to extract link info:', error);
+    console.error('[ReadLater] Failed to extract link info:', error);
     return { success: false, error: String(error) };
   }
 }
@@ -203,21 +203,21 @@ function showNotification(message: string, type: 'success' | 'error' | 'warning'
     max-width: 300px;
     word-break: break-word;
     box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    animation: urlmem-slide-in 0.3s ease;
+    animation: readlater-slide-in 0.3s ease;
     ${colors[type]}
   `;
   notification.textContent = message;
 
   // 添加动画样式
-  if (!document.getElementById('urlmem-styles')) {
+  if (!document.getElementById('readlater-styles')) {
     const style = document.createElement('style');
-    style.id = 'urlmem-styles';
+    style.id = 'readlater-styles';
     style.textContent = `
-      @keyframes urlmem-slide-in {
+      @keyframes readlater-slide-in {
         from { transform: translateX(100%); opacity: 0; }
         to { transform: translateX(0); opacity: 1; }
       }
-      @keyframes urlmem-fade-out {
+      @keyframes readlater-fade-out {
         from { opacity: 1; }
         to { opacity: 0; }
       }
@@ -229,7 +229,7 @@ function showNotification(message: string, type: 'success' | 'error' | 'warning'
 
   // 3秒后自动移除
   setTimeout(() => {
-    notification.style.animation = 'urlmem-fade-out 0.3s ease forwards';
+    notification.style.animation = 'readlater-fade-out 0.3s ease forwards';
     setTimeout(() => {
       notification.remove();
     }, 300);

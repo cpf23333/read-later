@@ -5,9 +5,32 @@ import {
   saveCustomJsConfig, 
   deleteCustomJsConfig,
   CustomJsConfig,
+  exportLinks,
+  importLinks,
+  ImportResult,
 } from '@/utils/storage';
-import { EXTRACTOR_TEMPLATES } from '@/utils/imageExtractor';
+import { 
+  EXTRACTOR_TEMPLATES 
+} from '@/utils/imageExtractor';
+import {
+  getWebDAVConfig,
+  saveWebDAVConfig,
+  testWebDAVConnection,
+  syncWithWebDAV,
+  forceDownloadFromWebDAV,
+  forceUploadToWebDAV,
+  setupAutoSync,
+  getHistoryVersions,
+  restoreFromHistory,
+  deleteHistoryVersion,
+  WebDAVConfig,
+  SyncResult,
+  HistoryVersion,
+} from '@/utils/webdav';
 
+const activeTab = ref<'extractor' | 'import' | 'webdav'>('extractor');
+
+// ===== 自定义JS配置 =====
 const configs = ref<CustomJsConfig[]>([]);
 const showAddModal = ref(false);
 const editingConfig = ref<Partial<CustomJsConfig>>({
@@ -17,10 +40,41 @@ const editingConfig = ref<Partial<CustomJsConfig>>({
 });
 const isEditing = ref(false);
 
+// ===== 导入导出 =====
+const importFile = ref<File | null>(null);
+const importMode = ref<'merge' | 'replace'>('merge');
+const importResult = ref<ImportResult | null>(null);
+const importing = ref(false);
+const exporting = ref(false);
+
+// ===== WebDAV =====
+const webdavConfig = ref<WebDAVConfig>({
+  enabled: false,
+  url: '',
+  username: '',
+  password: '',
+  autoSync: false,
+  syncInterval: 30,
+  folderName: 'ReadLater',
+  keepHistory: 10,
+});
+const testingConnection = ref(false);
+const connectionStatus = ref<{ success: boolean; message: string } | null>(null);
+const syncing = ref(false);
+const syncResult = ref<SyncResult | null>(null);
+const savingWebDAV = ref(false);
+
+// 历史版本
+const historyVersions = ref<HistoryVersion[]>([]);
+const loadingHistory = ref(false);
+const showHistoryModal = ref(false);
+
 onMounted(async () => {
   await loadConfigs();
+  await loadWebDAVConfig();
 });
 
+// ===== 自定义JS配置方法 =====
 async function loadConfigs() {
   configs.value = await getCustomJsConfigs();
 }
@@ -58,7 +112,6 @@ async function saveConfig() {
     enabled: editingConfig.value.enabled ?? true,
   };
 
-  // 如果启用此配置，禁用其他配置
   if (config.enabled) {
     for (const c of configs.value) {
       if (c.id !== config.id && c.enabled) {
@@ -82,7 +135,6 @@ async function deleteConfig(id: string) {
 async function toggleConfig(config: CustomJsConfig) {
   config.enabled = !config.enabled;
   
-  // 如果启用此配置，禁用其他配置
   if (config.enabled) {
     for (const c of configs.value) {
       if (c.id !== config.id && c.enabled) {
@@ -95,17 +147,228 @@ async function toggleConfig(config: CustomJsConfig) {
   await saveCustomJsConfig(config);
   await loadConfigs();
 }
+
+// ===== 导入导出方法 =====
+async function handleExport() {
+  exporting.value = true;
+  try {
+    const json = await exportLinks();
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `readlater-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } finally {
+    exporting.value = false;
+  }
+}
+
+function handleFileSelect(event: Event) {
+  const input = event.target as HTMLInputElement;
+  if (input.files && input.files[0]) {
+    importFile.value = input.files[0];
+    importResult.value = null;
+  }
+}
+
+async function handleImport() {
+  if (!importFile.value) {
+    alert('请选择要导入的文件');
+    return;
+  }
+
+  importing.value = true;
+  importResult.value = null;
+
+  try {
+    const text = await importFile.value.text();
+    const result = await importLinks(text, importMode.value);
+    importResult.value = result;
+    
+    if (result.imported > 0) {
+      alert(`导入成功！导入了 ${result.imported} 个链接，跳过了 ${result.skipped} 个重复链接。`);
+    } else {
+      alert(`导入完成，没有新链接被导入（${result.skipped} 个重复链接被跳过）。`);
+    }
+  } catch (error) {
+    alert(`导入失败: ${error instanceof Error ? error.message : '未知错误'}`);
+  } finally {
+    importing.value = false;
+    importFile.value = null;
+    // 重置文件输入
+    const fileInput = document.getElementById('import-file') as HTMLInputElement;
+    if (fileInput) fileInput.value = '';
+  }
+}
+
+// ===== WebDAV 方法 =====
+async function loadWebDAVConfig() {
+  webdavConfig.value = await getWebDAVConfig();
+}
+
+async function testConnection() {
+  testingConnection.value = true;
+  connectionStatus.value = null;
+  
+  try {
+    const result = await testWebDAVConnection(webdavConfig.value);
+    connectionStatus.value = result;
+  } finally {
+    testingConnection.value = false;
+  }
+}
+
+async function saveWebDAV() {
+  savingWebDAV.value = true;
+  try {
+    await saveWebDAVConfig(webdavConfig.value);
+    await setupAutoSync();
+    alert('WebDAV 配置已保存');
+  } finally {
+    savingWebDAV.value = false;
+  }
+}
+
+async function syncNow() {
+  syncing.value = true;
+  syncResult.value = null;
+  
+  try {
+    const result = await syncWithWebDAV();
+    syncResult.value = result;
+    
+    if (!result.success) {
+      alert(`同步失败: ${result.message}`);
+    }
+  } catch (error) {
+    alert(`同步出错: ${error instanceof Error ? error.message : '未知错误'}`);
+  } finally {
+    syncing.value = false;
+  }
+}
+
+async function forceDownload() {
+  if (!confirm('确定要从云端下载并覆盖本地数据吗？此操作不可撤销。')) return;
+  
+  syncing.value = true;
+  syncResult.value = null;
+  
+  try {
+    const result = await forceDownloadFromWebDAV();
+    syncResult.value = result;
+    alert(result.message);
+  } catch (error) {
+    alert(`下载失败: ${error instanceof Error ? error.message : '未知错误'}`);
+  } finally {
+    syncing.value = false;
+  }
+}
+
+async function forceUpload() {
+  if (!confirm('确定要上传本地数据并覆盖云端吗？此操作不可撤销。')) return;
+  
+  syncing.value = true;
+  syncResult.value = null;
+  
+  try {
+    const result = await forceUploadToWebDAV();
+    syncResult.value = result;
+    alert(result.message);
+  } catch (error) {
+    alert(`上传失败: ${error instanceof Error ? error.message : '未知错误'}`);
+  } finally {
+    syncing.value = false;
+  }
+}
+
+function formatTime(timestamp: number | undefined): string {
+  if (!timestamp) return '从未';
+  return new Date(timestamp).toLocaleString('zh-CN');
+}
+
+// ===== 历史版本方法 =====
+async function loadHistoryVersions() {
+  loadingHistory.value = true;
+  try {
+    historyVersions.value = await getHistoryVersions(webdavConfig.value);
+  } catch (error) {
+    console.error('Failed to load history:', error);
+    historyVersions.value = [];
+  } finally {
+    loadingHistory.value = false;
+  }
+}
+
+async function openHistoryModal() {
+  showHistoryModal.value = true;
+  await loadHistoryVersions();
+}
+
+async function restoreVersion(version: HistoryVersion) {
+  if (!confirm(`确定要恢复到 ${version.date} 的版本吗？\n当前数据将被覆盖，建议先导出备份。`)) {
+    return;
+  }
+
+  const result = await restoreFromHistory(webdavConfig.value, version);
+  
+  if (result.success) {
+    alert(`✅ ${result.message}\n已恢复 ${result.imported} 个链接`);
+    showHistoryModal.value = false;
+  } else {
+    alert(`❌ ${result.message}`);
+  }
+}
+
+async function deleteVersion(version: HistoryVersion, event: Event) {
+  event.stopPropagation();
+  if (!confirm(`确定要删除 ${version.date} 的历史版本吗？`)) return;
+
+  const success = await deleteHistoryVersion(webdavConfig.value, version);
+  if (success) {
+    await loadHistoryVersions();
+  } else {
+    alert('删除失败');
+  }
+}
 </script>
 
 <template>
   <div class="settings-container">
     <header class="header">
-      <h1>UrlMem 设置</h1>
-      <p>配置自定义图片提取规则</p>
+      <h1>稍后再看 - 设置</h1>
+      <p>配置图片提取规则和同步选项</p>
     </header>
 
+    <!-- Tab 导航 -->
+    <nav class="tab-nav">
+      <button 
+        class="tab-btn" 
+        :class="{ active: activeTab === 'extractor' }"
+        @click="activeTab = 'extractor'"
+      >
+        图片提取器
+      </button>
+      <button 
+        class="tab-btn" 
+        :class="{ active: activeTab === 'import' }"
+        @click="activeTab = 'import'"
+      >
+        导入/导出
+      </button>
+      <button 
+        class="tab-btn" 
+        :class="{ active: activeTab === 'webdav' }"
+        @click="activeTab = 'webdav'"
+      >
+        WebDAV 同步
+      </button>
+    </nav>
+
     <main class="main">
-      <section class="section">
+      <!-- 图片提取器 Tab -->
+      <section v-if="activeTab === 'extractor'" class="section">
         <div class="section-header">
           <h2>自定义图片提取器</h2>
           <button class="btn btn-primary" @click="openAddModal">
@@ -148,12 +411,9 @@ async function toggleConfig(config: CustomJsConfig) {
           <p>暂无自定义配置</p>
           <p class="hint">点击"添加配置"创建图片提取规则</p>
         </div>
-      </section>
 
-      <section class="section">
-        <h2>使用说明</h2>
         <div class="help-content">
-          <h3>默认提取逻辑</h3>
+          <h3>使用说明</h3>
           <p>如果不配置自定义提取器，插件会按照以下顺序查找图片：</p>
           <ol>
             <li>链接自身的图片（如果是图片链接）</li>
@@ -162,22 +422,221 @@ async function toggleConfig(config: CustomJsConfig) {
             <li>相邻兄弟元素中的图片</li>
             <li>向上查找3层容器中的图片</li>
           </ol>
+        </div>
+      </section>
 
-          <h3>自定义提取器</h3>
-          <p>您可以编写 JavaScript 代码来自定义图片提取逻辑。代码需要定义一个 <code>extractImage</code> 函数：</p>
-          <pre><code>function extractImage(element, url) {
-  // element: 点击的链接元素
-  // url: 链接的URL
-  // 返回图片的URL字符串，或 null
-  
-  // 示例：获取父元素中的第一张图片
-  const parent = element.parentElement;
-  if (parent) {
-    const img = parent.querySelector('img');
-    if (img) return img.src;
-  }
-  return null;
-}</code></pre>
+      <!-- 导入导出 Tab -->
+      <section v-if="activeTab === 'import'" class="section">
+        <h2>导入/导出数据</h2>
+        
+        <div class="import-export-grid">
+          <!-- 导出 -->
+          <div class="card">
+            <h3>📥 导出数据</h3>
+            <p>将"稍后再看"列表导出为 JSON 文件，用于备份或迁移。</p>
+            <button class="btn btn-primary" @click="handleExport" :disabled="exporting">
+              {{ exporting ? '导出中...' : '导出备份文件' }}
+            </button>
+          </div>
+
+          <!-- 导入 -->
+          <div class="card">
+            <h3>📤 导入数据</h3>
+            <p>从 JSON 文件导入链接到"稍后再看"。</p>
+            
+            <div class="form-group">
+              <label>导入模式</label>
+              <div class="radio-group">
+                <label class="radio">
+                  <input type="radio" v-model="importMode" value="merge" />
+                  <span>合并（跳过重复链接）</span>
+                </label>
+                <label class="radio">
+                  <input type="radio" v-model="importMode" value="replace" />
+                  <span>覆盖（清空现有数据）</span>
+                </label>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label>选择文件</label>
+              <input 
+                id="import-file"
+                type="file" 
+                accept=".json"
+                @change="handleFileSelect"
+              />
+            </div>
+
+            <button 
+              class="btn btn-primary" 
+              @click="handleImport" 
+              :disabled="!importFile || importing"
+            >
+              {{ importing ? '导入中...' : '导入数据' }}
+            </button>
+
+            <div v-if="importResult" class="result-box">
+              <p>✅ 成功导入 {{ importResult.imported }} 个链接</p>
+              <p v-if="importResult.skipped > 0">⏭️ 跳过 {{ importResult.skipped }} 个重复链接</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- WebDAV Tab -->
+      <section v-if="activeTab === 'webdav'" class="section">
+        <h2>WebDAV 同步</h2>
+        <p class="section-desc">配置 WebDAV 服务器，实现多设备数据同步</p>
+
+        <div class="webdav-form">
+          <div class="form-group checkbox-group">
+            <label class="checkbox">
+              <input type="checkbox" v-model="webdavConfig.enabled" />
+              <span>启用 WebDAV 同步</span>
+            </label>
+          </div>
+
+          <div class="form-group">
+            <label>WebDAV 服务器地址</label>
+            <input 
+              v-model="webdavConfig.url" 
+              type="url" 
+              placeholder="https://example.com/dav/"
+              :disabled="!webdavConfig.enabled"
+            />
+            <span class="hint">例如：坚果云 https://dav.jianguoyun.com/dav/</span>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label>用户名</label>
+              <input 
+                v-model="webdavConfig.username" 
+                type="text" 
+                placeholder="your@email.com"
+                :disabled="!webdavConfig.enabled"
+              />
+            </div>
+            <div class="form-group">
+              <label>密码/应用密码</label>
+              <input 
+                v-model="webdavConfig.password" 
+                type="password" 
+                placeholder="••••••••"
+                :disabled="!webdavConfig.enabled"
+              />
+            </div>
+          </div>
+
+          <div class="form-group checkbox-group">
+            <label class="checkbox">
+              <input type="checkbox" v-model="webdavConfig.autoSync" :disabled="!webdavConfig.enabled" />
+              <span>自动同步</span>
+            </label>
+          </div>
+
+          <div class="form-group" v-if="webdavConfig.autoSync">
+            <label>同步间隔（分钟）</label>
+            <input 
+              v-model.number="webdavConfig.syncInterval" 
+              type="number" 
+              min="5"
+              max="1440"
+              :disabled="!webdavConfig.enabled"
+            />
+          </div>
+
+          <div class="form-group">
+            <label>存储文件夹名称</label>
+            <input 
+              v-model="webdavConfig.folderName" 
+              type="text" 
+              placeholder="ReadLater"
+              :disabled="!webdavConfig.enabled"
+            />
+            <span class="hint">数据将保存在 WebDAV 服务器的此文件夹中</span>
+          </div>
+
+          <div class="form-group">
+            <label>保留历史版本数量</label>
+            <input 
+              v-model.number="webdavConfig.keepHistory" 
+              type="number" 
+              min="0"
+              max="100"
+              :disabled="!webdavConfig.enabled"
+            />
+            <span class="hint">每次同步时自动保存历史版本，方便回溯（0 表示不保存）</span>
+          </div>
+
+          <div class="form-actions">
+            <button 
+              class="btn btn-default" 
+              @click="testConnection" 
+              :disabled="!webdavConfig.enabled || !webdavConfig.url || testingConnection"
+            >
+              {{ testingConnection ? '测试中...' : '测试连接' }}
+            </button>
+            <button 
+              class="btn btn-primary" 
+              @click="saveWebDAV" 
+              :disabled="savingWebDAV"
+            >
+              {{ savingWebDAV ? '保存中...' : '保存配置' }}
+            </button>
+          </div>
+
+          <div v-if="connectionStatus" class="connection-status" :class="connectionStatus.success ? 'success' : 'error'">
+            {{ connectionStatus.message }}
+          </div>
+
+          <div class="sync-actions" v-if="webdavConfig.enabled">
+            <h4>手动同步</h4>
+            <div class="sync-buttons">
+              <button class="btn btn-primary" @click="syncNow" :disabled="syncing">
+                {{ syncing ? '同步中...' : '🔄 双向合并同步' }}
+              </button>
+              <button class="btn btn-default" @click="forceDownload" :disabled="syncing">
+                ⬇️ 下载覆盖本地
+              </button>
+              <button class="btn btn-default" @click="forceUpload" :disabled="syncing">
+                ⬆️ 上传覆盖云端
+              </button>
+              <button class="btn btn-default" @click="openHistoryModal">
+                📜 历史版本
+              </button>
+            </div>
+            <p class="sync-hint">
+              <strong>双向合并</strong>：将本地和云端的链接合并，两边的新链接都会保留<br>
+              <strong>下载覆盖</strong>：用云端数据完全替换本地数据<br>
+              <strong>上传覆盖</strong>：用本地数据完全替换云端数据<br>
+              <strong>历史版本</strong>：查看和恢复到之前的版本<br>
+              最后同步：{{ formatTime(webdavConfig.lastSyncTime) }}
+            </p>
+          </div>
+
+          <div v-if="syncResult" class="result-box" :class="syncResult.success ? 'success' : 'error'">
+            <p>{{ syncResult.message }}</p>
+            <p v-if="syncResult.details" class="details">
+              <span v-if="syncResult.details.merged !== undefined">合并: {{ syncResult.details.merged }} 个</span>
+              <span v-if="syncResult.details.uploaded !== undefined">本地上传: {{ syncResult.details.uploaded }} 个</span>
+              <span v-if="syncResult.details.downloaded !== undefined">远程下载: {{ syncResult.details.downloaded }} 个</span>
+              <span v-if="syncResult.details.deleted !== undefined" style="color: #ef4444;">删除: {{ syncResult.details.deleted }} 个</span>
+              <span v-if="syncResult.details.totalCount !== undefined">总共: {{ syncResult.details.totalCount }} 个</span>
+            </p>
+          </div>
+        </div>
+
+        <div class="help-content">
+          <h3>支持的 WebDAV 服务</h3>
+          <ul>
+            <li><strong>坚果云</strong>：在坚果云网页版生成应用密码</li>
+            <li><strong>Nextcloud</strong>：使用个人页面的 WebDAV 地址</li>
+            <li><strong>ownCloud</strong>：类似 Nextcloud 的设置</li>
+            <li><strong>群晖 NAS</strong>：启用 WebDAV Server 套件</li>
+          </ul>
+          <p class="hint">数据将保存在服务器上的 <code>readlater-data.json</code> 文件中</p>
         </div>
       </section>
     </main>
@@ -232,6 +691,51 @@ async function toggleConfig(config: CustomJsConfig) {
         </div>
       </div>
     </div>
+
+    <!-- 历史版本模态框 -->
+    <div v-if="showHistoryModal" class="modal-overlay" @click.self="showHistoryModal = false">
+      <div class="modal history-modal">
+        <h3>📜 历史版本</h3>
+        <p class="modal-desc">选择要恢复的历史版本。恢复会覆盖当前数据。</p>
+        
+        <div v-if="loadingHistory" class="loading">
+          <div class="spinner"></div>
+          <p>加载中...</p>
+        </div>
+
+        <div v-else-if="historyVersions.length === 0" class="empty-state">
+          <p>暂无历史版本</p>
+          <p class="hint">同步数据后将自动创建历史版本</p>
+        </div>
+
+        <div v-else class="history-list">
+          <div 
+            v-for="version in historyVersions" 
+            :key="version.fileName"
+            class="history-item"
+            @click="restoreVersion(version)"
+          >
+            <div class="history-info">
+              <span class="history-date">{{ version.date }}</span>
+              <span class="history-filename">{{ version.fileName }}</span>
+            </div>
+            <button 
+              class="btn btn-sm btn-danger" 
+              @click="deleteVersion(version, $event)"
+            >
+              删除
+            </button>
+          </div>
+        </div>
+
+        <div class="modal-actions">
+          <button class="btn btn-default" @click="showHistoryModal = false">关闭</button>
+          <button class="btn btn-primary" @click="loadHistoryVersions" :disabled="loadingHistory">
+            {{ loadingHistory ? '刷新中...' : '刷新列表' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -247,7 +751,7 @@ async function toggleConfig(config: CustomJsConfig) {
   color: white;
   padding: 40px;
   border-radius: 12px;
-  margin-bottom: 30px;
+  margin-bottom: 20px;
 }
 
 .header h1 {
@@ -257,6 +761,39 @@ async function toggleConfig(config: CustomJsConfig) {
 
 .header p {
   opacity: 0.9;
+}
+
+/* Tab 导航 */
+.tab-nav {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+  background: white;
+  padding: 8px;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+.tab-btn {
+  flex: 1;
+  padding: 12px 20px;
+  border: none;
+  background: transparent;
+  color: #6b7280;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: all 0.2s;
+}
+
+.tab-btn:hover {
+  background: #f3f4f6;
+}
+
+.tab-btn.active {
+  background: #667eea;
+  color: white;
 }
 
 .main {
@@ -272,6 +809,17 @@ async function toggleConfig(config: CustomJsConfig) {
   box-shadow: 0 2px 8px rgba(0,0,0,0.08);
 }
 
+.section h2 {
+  font-size: 20px;
+  color: #333;
+  margin-bottom: 8px;
+}
+
+.section-desc {
+  color: #6b7280;
+  margin-bottom: 24px;
+}
+
 .section-header {
   display: flex;
   justify-content: space-between;
@@ -279,9 +827,8 @@ async function toggleConfig(config: CustomJsConfig) {
   margin-bottom: 20px;
 }
 
-.section h2 {
-  font-size: 20px;
-  color: #333;
+.section-header h2 {
+  margin-bottom: 0;
 }
 
 .btn {
@@ -298,7 +845,7 @@ async function toggleConfig(config: CustomJsConfig) {
   color: white;
 }
 
-.btn-primary:hover {
+.btn-primary:hover:not(:disabled) {
   background: #5568d3;
 }
 
@@ -307,7 +854,7 @@ async function toggleConfig(config: CustomJsConfig) {
   color: #374151;
 }
 
-.btn-default:hover {
+.btn-default:hover:not(:disabled) {
   background: #d1d5db;
 }
 
@@ -316,7 +863,7 @@ async function toggleConfig(config: CustomJsConfig) {
   color: white;
 }
 
-.btn-success:hover {
+.btn-success:hover:not(:disabled) {
   background: #059669;
 }
 
@@ -325,8 +872,13 @@ async function toggleConfig(config: CustomJsConfig) {
   color: white;
 }
 
-.btn-danger:hover {
+.btn-danger:hover:not(:disabled) {
   background: #dc2626;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .btn-sm {
@@ -334,6 +886,7 @@ async function toggleConfig(config: CustomJsConfig) {
   font-size: 13px;
 }
 
+/* 自定义JS配置 */
 .config-list {
   display: flex;
   flex-direction: column;
@@ -389,6 +942,186 @@ async function toggleConfig(config: CustomJsConfig) {
   gap: 8px;
 }
 
+/* 导入导出 */
+.import-export-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 20px;
+}
+
+.card {
+  background: #f9fafb;
+  padding: 24px;
+  border-radius: 12px;
+}
+
+.card h3 {
+  font-size: 18px;
+  margin-bottom: 12px;
+}
+
+.card p {
+  color: #6b7280;
+  margin-bottom: 20px;
+}
+
+/* WebDAV */
+.webdav-form {
+  max-width: 600px;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: #374151;
+}
+
+.form-group input[type="text"],
+.form-group input[type="url"],
+.form-group input[type="password"],
+.form-group input[type="number"],
+.form-group input[type="file"],
+.form-group select,
+.form-group textarea {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: inherit;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+.form-group .hint {
+  display: block;
+  margin-top: 6px;
+  font-size: 13px;
+  color: #6b7280;
+  font-weight: normal;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.checkbox-group {
+  margin-bottom: 16px;
+}
+
+.checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-weight: normal;
+}
+
+.checkbox input {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
+.radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.radio {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-weight: normal;
+}
+
+.radio input {
+  width: 16px;
+  height: 16px;
+}
+
+.form-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.connection-status {
+  margin-top: 16px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.connection-status.success {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.connection-status.error {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.sync-actions {
+  margin-top: 32px;
+  padding-top: 24px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.sync-actions h4 {
+  margin-bottom: 16px;
+}
+
+.sync-buttons {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.sync-hint {
+  margin-top: 16px;
+  font-size: 13px;
+  color: #6b7280;
+  line-height: 1.6;
+}
+
+.result-box {
+  margin-top: 16px;
+  padding: 16px;
+  border-radius: 8px;
+  background: #f0fdf4;
+  border: 1px solid #86efac;
+}
+
+.result-box.error {
+  background: #fef2f2;
+  border-color: #fca5a5;
+}
+
+.result-box .details {
+  margin-top: 8px;
+  display: flex;
+  gap: 16px;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+/* 通用 */
 .empty-state {
   text-align: center;
   padding: 40px;
@@ -401,6 +1134,9 @@ async function toggleConfig(config: CustomJsConfig) {
 }
 
 .help-content {
+  margin-top: 32px;
+  padding-top: 24px;
+  border-top: 1px solid #e5e7eb;
   color: #4b5563;
 }
 
@@ -414,17 +1150,13 @@ async function toggleConfig(config: CustomJsConfig) {
   margin-top: 0;
 }
 
-.help-content p {
-  margin-bottom: 12px;
-}
-
-.help-content ol {
+.help-content ul {
   margin-left: 20px;
   margin-bottom: 16px;
 }
 
 .help-content li {
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
 
 .help-content code {
@@ -435,21 +1167,7 @@ async function toggleConfig(config: CustomJsConfig) {
   font-size: 14px;
 }
 
-.help-content pre {
-  background: #1f2937;
-  color: #e5e7eb;
-  padding: 16px;
-  border-radius: 8px;
-  overflow-x: auto;
-  margin: 12px 0;
-}
-
-.help-content pre code {
-  background: none;
-  padding: 0;
-  color: inherit;
-}
-
+/* 模态框 */
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -476,52 +1194,109 @@ async function toggleConfig(config: CustomJsConfig) {
   font-size: 20px;
 }
 
-.form-group {
-  margin-bottom: 20px;
-}
-
-.form-group label {
-  display: block;
-  margin-bottom: 8px;
-  font-weight: 500;
-  color: #374151;
-}
-
-.form-group label.checkbox {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
-}
-
-.form-group input[type="text"],
-.form-group select,
-.form-group textarea {
-  width: 100%;
-  padding: 10px 14px;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  font-size: 14px;
-  font-family: inherit;
-}
-
-.form-group textarea {
-  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
-  resize: vertical;
-  min-height: 200px;
-}
-
-.form-group input:focus,
-.form-group select:focus,
-.form-group textarea:focus {
-  outline: none;
-  border-color: #667eea;
-}
-
 .modal-actions {
   display: flex;
   justify-content: flex-end;
   gap: 12px;
   margin-top: 24px;
+}
+
+/* 历史版本模态框 */
+.history-modal {
+  max-width: 600px;
+}
+
+.history-modal .modal-desc {
+  color: #6b7280;
+  margin-bottom: 20px;
+  font-size: 14px;
+}
+
+.history-list {
+  max-height: 400px;
+  overflow-y: auto;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+}
+
+.history-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  border-bottom: 1px solid #e5e7eb;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.history-item:last-child {
+  border-bottom: none;
+}
+
+.history-item:hover {
+  background: #f9fafb;
+}
+
+.history-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.history-date {
+  font-weight: 600;
+  color: #111827;
+  font-size: 15px;
+}
+
+.history-filename {
+  font-size: 12px;
+  color: #9ca3af;
+  font-family: 'Monaco', 'Menlo', monospace;
+}
+
+.spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid #e5e7eb;
+  border-top-color: #667eea;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 12px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.loading {
+  text-align: center;
+  padding: 40px;
+  color: #6b7280;
+}
+
+/* 响应式 */
+@media (max-width: 640px) {
+  .header {
+    padding: 24px;
+  }
+
+  .tab-nav {
+    flex-direction: column;
+  }
+
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .sync-buttons {
+    flex-direction: column;
+  }
+
+  .config-item {
+    flex-direction: column;
+    gap: 12px;
+    align-items: flex-start;
+  }
 }
 </style>
