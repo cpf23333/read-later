@@ -1,14 +1,20 @@
 <script lang="ts" setup>
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, computed, watch } from 'vue';
 import { 
-  getLinks, 
   deleteLink, 
   deleteLinks,
   searchLinks,
   exportLinks,
   getLinkCount,
+  getAllDomains,
+  getDomainStats,
+  queryLinks,
   LinkItem,
 } from '@/utils/storage';
+
+type SortBy = 'createdAt' | 'title' | 'domain';
+type SortOrder = 'asc' | 'desc';
+type ViewMode = 'grid' | 'list';
 
 const links = ref<LinkItem[]>([]);
 const total = ref(0);
@@ -17,24 +23,81 @@ const pageSize = ref(50);
 const searchQuery = ref('');
 const loading = ref(false);
 const selectedIds = ref<Set<string>>(new Set());
-const viewMode = ref<'grid' | 'list'>('grid');
+const viewMode = ref<ViewMode>('grid');
+
+// 排序和过滤状态
+const sortBy = ref<SortBy>('createdAt');
+const sortOrder = ref<SortOrder>('desc');
+const domainFilter = ref<string>('');
+const domains = ref<string[]>([]);
+const domainStats = ref<{ domain: string; count: number }[]>([]);
+const showFilters = ref(false);
+
+// 日期过滤
+const dateFrom = ref<string>('');
+const dateTo = ref<string>('');
+
+// 统计信息
+const totalCount = ref(0);
 
 const totalPages = computed(() => Math.ceil(total.value / pageSize.value));
 
-onMounted(async () => {
-  await loadLinks();
+// 当前过滤描述
+const filterDescription = computed(() => {
+  const parts: string[] = [];
+  if (domainFilter.value) parts.push(`域名: ${domainFilter.value}`);
+  if (dateFrom.value) parts.push(`从: ${dateFrom.value}`);
+  if (dateTo.value) parts.push(`到: ${dateTo.value}`);
+  if (parts.length === 0) return '';
+  return ` (${parts.join(', ')})`;
 });
 
-async function loadLinks() {
+onMounted(async () => {
+  await loadInitialData();
+});
+
+async function loadInitialData() {
   loading.value = true;
   try {
-    const result = await getLinks(currentPage.value, pageSize.value);
-    links.value = result.links;
-    total.value = result.total;
+    const [count, domainList, stats] = await Promise.all([
+      getLinkCount(),
+      getAllDomains(),
+      getDomainStats(),
+    ]);
+    totalCount.value = count;
+    domains.value = domainList;
+    domainStats.value = stats;
+    await loadLinks();
   } finally {
     loading.value = false;
   }
 }
+
+async function loadLinks() {
+  loading.value = true;
+  try {
+    const result = await queryLinks({
+      page: currentPage.value,
+      pageSize: pageSize.value,
+      sortBy: sortBy.value,
+      sortOrder: sortOrder.value,
+      domainFilter: domainFilter.value || null,
+      dateFrom: dateFrom.value ? new Date(dateFrom.value).getTime() : null,
+      dateTo: dateTo.value ? new Date(dateTo.value).getTime() + 86400000 : null, // 包含当天
+    });
+    links.value = result.links;
+    total.value = result.total;
+    selectedIds.value.clear();
+  } finally {
+    loading.value = false;
+  }
+}
+
+// 当排序或过滤条件改变时重新加载
+watch([sortBy, sortOrder, domainFilter, dateFrom, dateTo], () => {
+  currentPage.value = 1;
+  loadLinks();
+}, { deep: true });
 
 async function handleSearch() {
   if (!searchQuery.value.trim()) {
@@ -45,6 +108,29 @@ async function handleSearch() {
   loading.value = true;
   try {
     const results = await searchLinks(searchQuery.value);
+    // 对搜索结果应用当前排序
+    results.sort((a, b) => {
+      let comparison = 0;
+      switch (sortBy.value) {
+        case 'createdAt':
+          comparison = a.createdAt - b.createdAt;
+          break;
+        case 'title':
+          comparison = (a.title || '').localeCompare(b.title || '');
+          break;
+        case 'domain':
+          try {
+            const domainA = new URL(a.url).hostname;
+            const domainB = new URL(b.url).hostname;
+            comparison = domainA.localeCompare(domainB);
+          } catch {
+            comparison = a.url.localeCompare(b.url);
+          }
+          break;
+      }
+      return sortOrder.value === 'desc' ? -comparison : comparison;
+    });
+    
     links.value = results;
     total.value = results.length;
     currentPage.value = 1;
@@ -58,6 +144,29 @@ function clearSearch() {
   loadLinks();
 }
 
+function clearFilters() {
+  domainFilter.value = '';
+  dateFrom.value = '';
+  dateTo.value = '';
+  currentPage.value = 1;
+  loadLinks();
+}
+
+function setSort(field: SortBy) {
+  if (sortBy.value === field) {
+    // 切换排序方向
+    sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc';
+  } else {
+    sortBy.value = field;
+    sortOrder.value = field === 'createdAt' ? 'desc' : 'asc';
+  }
+}
+
+function getSortIcon(field: SortBy): string {
+  if (sortBy.value !== field) return '↕️';
+  return sortOrder.value === 'asc' ? '↑' : '↓';
+}
+
 async function changePage(page: number) {
   if (page < 1 || page > totalPages.value) return;
   currentPage.value = page;
@@ -69,6 +178,9 @@ async function handleDelete(id: string) {
   if (!confirm('确定要删除这个链接吗？')) return;
   await deleteLink(id);
   await loadLinks();
+  // 更新统计
+  const stats = await getDomainStats();
+  domainStats.value = stats;
 }
 
 async function handleBatchDelete() {
@@ -76,6 +188,10 @@ async function handleBatchDelete() {
   await deleteLinks(Array.from(selectedIds.value));
   selectedIds.value.clear();
   await loadLinks();
+  // 更新统计
+  const [count, stats] = await Promise.all([getLinkCount(), getDomainStats()]);
+  totalCount.value = count;
+  domainStats.value = stats;
 }
 
 async function handleExport() {
@@ -109,9 +225,21 @@ function formatDate(timestamp: number): string {
   return new Date(timestamp).toLocaleString('zh-CN');
 }
 
+function formatDateOnly(timestamp: number): string {
+  return new Date(timestamp).toLocaleDateString('zh-CN');
+}
+
 function truncate(str: string, len: number): string {
   if (!str) return '';
   return str.length > len ? str.slice(0, len) + '...' : str;
+}
+
+function getDomain(url: string): string {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return url;
+  }
 }
 
 function openLink(url: string) {
@@ -134,7 +262,7 @@ onMounted(() => {
       <div class="header-content">
         <div class="logo">
           <h1>UrlMem</h1>
-          <span class="badge">{{ total }} 个链接</span>
+          <span class="badge">{{ totalCount }} 个链接</span>
         </div>
         <div class="header-actions">
           <button class="btn btn-default" @click="handleExport">
@@ -152,7 +280,7 @@ onMounted(() => {
     </header>
 
     <main class="main">
-      <!-- 搜索栏 -->
+      <!-- 搜索和过滤工具栏 -->
       <div class="toolbar">
         <div class="search-box">
           <input 
@@ -164,22 +292,124 @@ onMounted(() => {
           <button class="btn btn-primary" @click="handleSearch">搜索</button>
           <button v-if="searchQuery" class="btn btn-default" @click="clearSearch">清除</button>
         </div>
-        <div class="view-toggle">
+        <div class="toolbar-right">
           <button 
-            class="btn btn-sm"
-            :class="viewMode === 'grid' ? 'btn-primary' : 'btn-default'"
-            @click="viewMode = 'grid'"
+            class="btn btn-default"
+            :class="{ active: showFilters }"
+            @click="showFilters = !showFilters"
           >
-            网格
+            筛选 {{ filterDescription }}
           </button>
-          <button 
-            class="btn btn-sm"
-            :class="viewMode === 'list' ? 'btn-primary' : 'btn-default'"
-            @click="viewMode = 'list'"
-          >
-            列表
-          </button>
+          <div class="view-toggle">
+            <button 
+              class="btn btn-sm"
+              :class="viewMode === 'grid' ? 'btn-primary' : 'btn-default'"
+              @click="viewMode = 'grid'"
+            >
+              网格
+            </button>
+            <button 
+              class="btn btn-sm"
+              :class="viewMode === 'list' ? 'btn-primary' : 'btn-default'"
+              @click="viewMode = 'list'"
+            >
+              列表
+            </button>
+          </div>
         </div>
+      </div>
+
+      <!-- 筛选面板 -->
+      <div v-if="showFilters" class="filter-panel">
+        <div class="filter-section">
+          <h4>排序方式</h4>
+          <div class="sort-options">
+            <button 
+              class="btn btn-sm"
+              :class="sortBy === 'createdAt' ? 'btn-primary' : 'btn-default'"
+              @click="setSort('createdAt')"
+            >
+              添加时间 {{ getSortIcon('createdAt') }}
+            </button>
+            <button 
+              class="btn btn-sm"
+              :class="sortBy === 'title' ? 'btn-primary' : 'btn-default'"
+              @click="setSort('title')"
+            >
+              标题 {{ getSortIcon('title') }}
+            </button>
+            <button 
+              class="btn btn-sm"
+              :class="sortBy === 'domain' ? 'btn-primary' : 'btn-default'"
+              @click="setSort('domain')"
+            >
+              域名 {{ getSortIcon('domain') }}
+            </button>
+          </div>
+        </div>
+
+        <div class="filter-section">
+          <h4>域名筛选</h4>
+          <div class="domain-tags">
+            <button 
+              class="tag"
+              :class="{ active: domainFilter === '' }"
+              @click="domainFilter = ''"
+            >
+              全部 ({{ totalCount }})
+            </button>
+            <button 
+              v-for="stat in domainStats.slice(0, 20)" 
+              :key="stat.domain"
+              class="tag"
+              :class="{ active: domainFilter === stat.domain }"
+              @click="domainFilter = stat.domain"
+            >
+              {{ truncate(stat.domain, 25) }} ({{ stat.count }})
+            </button>
+          </div>
+          <select v-if="domains.length > 20" v-model="domainFilter" class="domain-select">
+            <option value="">选择域名...</option>
+            <option v-for="domain in domains" :key="domain" :value="domain">
+              {{ domain }}
+            </option>
+          </select>
+        </div>
+
+        <div class="filter-section">
+          <h4>日期范围</h4>
+          <div class="date-range">
+            <input 
+              type="date" 
+              v-model="dateFrom"
+              :max="dateTo || undefined"
+            />
+            <span>至</span>
+            <input 
+              type="date" 
+              v-model="dateTo"
+              :min="dateFrom || undefined"
+            />
+          </div>
+        </div>
+
+        <div class="filter-actions">
+          <button class="btn btn-default" @click="clearFilters">清除筛选</button>
+          <button class="btn btn-primary" @click="showFilters = false">应用</button>
+        </div>
+      </div>
+
+      <!-- 结果信息 -->
+      <div class="results-info" v-if="!searchQuery">
+        <span v-if="total !== totalCount">
+          显示 {{ total }} 个结果（共 {{ totalCount }} 个）
+        </span>
+        <span v-else>
+          共 {{ total }} 个链接
+        </span>
+        <span v-if="filterDescription" class="filter-desc">
+          {{ filterDescription }}
+        </span>
       </div>
 
       <!-- 全选 -->
@@ -190,7 +420,7 @@ onMounted(() => {
             :checked="selectedIds.size === links.length && links.length > 0"
             @change="selectAll"
           />
-          <span>全选本页</span>
+          <span>全选本页（{{ links.length }} 个）</span>
         </label>
       </div>
 
@@ -202,7 +432,12 @@ onMounted(() => {
 
       <div v-else-if="links.length === 0" class="empty-state">
         <p>暂无链接</p>
-        <p class="hint">右键点击网页中的链接，选择"收藏链接到 UrlMem"</p>
+        <p class="hint" v-if="filterDescription">
+          当前筛选条件下没有结果，<a href="#" @click.prevent="clearFilters">清除筛选</a>
+        </p>
+        <p class="hint" v-else>
+          右键点击网页中的链接，选择"收藏链接到 UrlMem"
+        </p>
       </div>
 
       <div v-else :class="['links-container', viewMode]">
@@ -236,8 +471,8 @@ onMounted(() => {
               {{ truncate(link.url, 80) }}
             </p>
             <div class="card-meta">
-              <span class="source">{{ truncate(link.sourcePage, 40) }}</span>
-              <span class="date">{{ formatDate(link.createdAt) }}</span>
+              <span class="domain">{{ getDomain(link.url) }}</span>
+              <span class="date">{{ formatDateOnly(link.createdAt) }}</span>
             </div>
           </div>
 
@@ -331,7 +566,7 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+  margin-bottom: 16px;
   gap: 16px;
   flex-wrap: wrap;
 }
@@ -356,11 +591,179 @@ onMounted(() => {
   border-color: #667eea;
 }
 
+.toolbar-right {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
 .view-toggle {
   display: flex;
   gap: 4px;
 }
 
+.btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.btn-primary {
+  background: #667eea;
+  color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #5568d3;
+}
+
+.btn-default {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.btn-default:hover:not(:disabled) {
+  background: #d1d5db;
+}
+
+.btn-default.active {
+  background: #667eea;
+  color: white;
+}
+
+.btn-danger {
+  background: #ef4444;
+  color: white;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: #dc2626;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-sm {
+  padding: 6px 14px;
+  font-size: 13px;
+}
+
+/* 筛选面板 */
+.filter-panel {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+
+.filter-section {
+  margin-bottom: 20px;
+}
+
+.filter-section:last-of-type {
+  margin-bottom: 0;
+}
+
+.filter-section h4 {
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 12px;
+}
+
+.sort-options {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.domain-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.tag {
+  padding: 6px 12px;
+  border-radius: 20px;
+  border: 1px solid #e5e7eb;
+  background: #f9fafb;
+  color: #374151;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.tag:hover {
+  background: #e5e7eb;
+}
+
+.tag.active {
+  background: #667eea;
+  color: white;
+  border-color: #667eea;
+}
+
+.domain-select {
+  margin-top: 12px;
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 14px;
+  width: 100%;
+  max-width: 400px;
+}
+
+.date-range {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.date-range input {
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.date-range span {
+  color: #6b7280;
+}
+
+.filter-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid #e5e7eb;
+  margin-top: 16px;
+}
+
+/* 结果信息 */
+.results-info {
+  margin-bottom: 12px;
+  font-size: 14px;
+  color: #6b7280;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.filter-desc {
+  color: #667eea;
+}
+
+/* 全选 */
 .select-all-bar {
   margin-bottom: 16px;
   padding: 12px 16px;
@@ -383,52 +786,7 @@ onMounted(() => {
   cursor: pointer;
 }
 
-.btn {
-  padding: 10px 20px;
-  border: none;
-  border-radius: 8px;
-  font-size: 14px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.btn-primary {
-  background: #667eea;
-  color: white;
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: #5568d3;
-}
-
-.btn-default {
-  background: #e5e7eb;
-  color: #374151;
-}
-
-.btn-default:hover:not(:disabled) {
-  background: #d1d5db;
-}
-
-.btn-danger {
-  background: #ef4444;
-  color: white;
-}
-
-.btn-danger:hover:not(:disabled) {
-  background: #dc2626;
-}
-
-.btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-sm {
-  padding: 6px 14px;
-  font-size: 13px;
-}
-
+/* 加载和空状态 */
 .loading {
   text-align: center;
   padding: 60px;
@@ -460,6 +818,11 @@ onMounted(() => {
   margin-top: 12px;
 }
 
+.empty-state a {
+  color: #667eea;
+}
+
+/* 链接列表 */
 .links-container {
   display: grid;
   gap: 16px;
@@ -573,11 +936,11 @@ onMounted(() => {
   color: #9ca3af;
 }
 
-.card-meta .source {
-  max-width: 60%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.card-meta .domain {
+  color: #667eea;
+  background: #eef2ff;
+  padding: 2px 8px;
+  border-radius: 4px;
 }
 
 .card-actions {
@@ -587,6 +950,7 @@ onMounted(() => {
   gap: 8px;
 }
 
+/* 分页 */
 .pagination {
   display: flex;
   justify-content: center;
@@ -601,6 +965,7 @@ onMounted(() => {
   color: #6b7280;
 }
 
+/* 响应式 */
 @media (max-width: 768px) {
   .header-content {
     flex-direction: column;
@@ -608,12 +973,34 @@ onMounted(() => {
     text-align: center;
   }
 
-  .links-container.grid {
-    grid-template-columns: 1fr;
+  .toolbar {
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .search-box {
     max-width: 100%;
+  }
+
+  .toolbar-right {
+    justify-content: space-between;
+  }
+
+  .filter-panel {
+    padding: 16px;
+  }
+
+  .sort-options {
+    flex-direction: column;
+  }
+
+  .date-range {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .links-container.grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>

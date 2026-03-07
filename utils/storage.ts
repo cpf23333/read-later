@@ -289,3 +289,169 @@ export async function getLinkCount(): Promise<number> {
     request.onerror = () => reject(request.error);
   });
 }
+
+// 获取所有域名列表
+export async function getAllDomains(): Promise<string[]> {
+  const database = await initDB();
+
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction([STORE_NAME], 'readonly');
+    const store = transaction.objectStore(STORE_NAME);
+    const request = store.openCursor();
+
+    const domains = new Set<string>();
+
+    request.onsuccess = (event) => {
+      const cursor = (event.target as IDBRequest).result;
+      if (cursor) {
+        const item = cursor.value as LinkItem;
+        try {
+          const domain = new URL(item.url).hostname;
+          if (domain) domains.add(domain);
+        } catch {
+          // 无效URL忽略
+        }
+        cursor.continue();
+      } else {
+        resolve(Array.from(domains).sort());
+      }
+    };
+
+    request.onerror = () => reject(request.error);
+  });
+}
+
+// 高级查询链接（支持排序、筛选、分页）
+export interface LinkQueryOptions {
+  page?: number;
+  pageSize?: number;
+  sortBy?: 'createdAt' | 'title' | 'domain';
+  sortOrder?: 'asc' | 'desc';
+  domainFilter?: string | null;
+  dateFrom?: number | null;
+  dateTo?: number | null;
+}
+
+export async function queryLinks(
+  options: LinkQueryOptions = {}
+): Promise<{ links: LinkItem[]; total: number }> {
+  const {
+    page = 1,
+    pageSize = 50,
+    sortBy = 'createdAt',
+    sortOrder = 'desc',
+    domainFilter = null,
+    dateFrom = null,
+    dateTo = null,
+  } = options;
+
+  const database = await initDB();
+
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction([STORE_NAME], 'readonly');
+    const store = transaction.objectStore(STORE_NAME);
+    const request = store.openCursor();
+
+    let allLinks: LinkItem[] = [];
+
+    request.onsuccess = (event) => {
+      const cursor = (event.target as IDBRequest).result;
+      if (cursor) {
+        const item = cursor.value as LinkItem;
+        
+        // 应用过滤器
+        let match = true;
+        
+        // 域名过滤
+        if (domainFilter) {
+          try {
+            const itemDomain = new URL(item.url).hostname;
+            if (itemDomain !== domainFilter) match = false;
+          } catch {
+            match = false;
+          }
+        }
+        
+        // 日期范围过滤
+        if (dateFrom && item.createdAt < dateFrom) match = false;
+        if (dateTo && item.createdAt > dateTo) match = false;
+        
+        if (match) {
+          allLinks.push(item);
+        }
+        
+        cursor.continue();
+      } else {
+        // 排序
+        allLinks.sort((a, b) => {
+          let comparison = 0;
+          
+          switch (sortBy) {
+            case 'createdAt':
+              comparison = a.createdAt - b.createdAt;
+              break;
+            case 'title':
+              comparison = (a.title || '').localeCompare(b.title || '');
+              break;
+            case 'domain':
+              try {
+                const domainA = new URL(a.url).hostname;
+                const domainB = new URL(b.url).hostname;
+                comparison = domainA.localeCompare(domainB);
+              } catch {
+                comparison = a.url.localeCompare(b.url);
+              }
+              break;
+          }
+          
+          return sortOrder === 'desc' ? -comparison : comparison;
+        });
+        
+        // 分页
+        const total = allLinks.length;
+        const start = (page - 1) * pageSize;
+        const paginatedLinks = allLinks.slice(start, start + pageSize);
+        
+        resolve({ links: paginatedLinks, total });
+      }
+    };
+
+    request.onerror = () => reject(request.error);
+  });
+}
+
+// 按域名统计链接数量
+export async function getDomainStats(): Promise<{ domain: string; count: number }[]> {
+  const database = await initDB();
+
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction([STORE_NAME], 'readonly');
+    const store = transaction.objectStore(STORE_NAME);
+    const request = store.openCursor();
+
+    const domainCounts = new Map<string, number>();
+
+    request.onsuccess = (event) => {
+      const cursor = (event.target as IDBRequest).result;
+      if (cursor) {
+        const item = cursor.value as LinkItem;
+        try {
+          const domain = new URL(item.url).hostname;
+          if (domain) {
+            domainCounts.set(domain, (domainCounts.get(domain) || 0) + 1);
+          }
+        } catch {
+          // 无效URL忽略
+        }
+        cursor.continue();
+      } else {
+        const stats = Array.from(domainCounts.entries())
+          .map(([domain, count]) => ({ domain, count }))
+          .sort((a, b) => b.count - a.count);
+        resolve(stats);
+      }
+    };
+
+    request.onerror = () => reject(request.error);
+  });
+}
