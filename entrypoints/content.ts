@@ -88,11 +88,16 @@ async function handleMessage(message: any) {
       return await extractLinkInfo(message.url);
 
     case 'SAVE_SUCCESS':
-      showNotification(`链接已保存: ${message.data.title.substring(0, 30)}...`, 'success');
+      showNotification(`✅ 链接已保存: ${message.data.title.substring(0, 30)}...`, 'success');
+      return { success: true };
+
+    case 'SAVE_DUPLICATE':
+      const date = message.data.createdAt ? new Date(message.data.createdAt).toLocaleDateString('zh-CN') : '';
+      showNotification(`⚠️ 链接已存在 (${date})`, 'warning');
       return { success: true };
 
     case 'SAVE_ERROR':
-      showNotification(`保存失败: ${message.error}`, 'error');
+      showNotification(`❌ 保存失败: ${message.error}`, 'error');
       return { success: true };
 
     default:
@@ -177,8 +182,15 @@ function getNearbyText(element: HTMLElement): string {
 }
 
 // 显示通知
-function showNotification(message: string, type: 'success' | 'error' = 'success') {
+function showNotification(message: string, type: 'success' | 'error' | 'warning' = 'success') {
   const notification = document.createElement('div');
+  
+  const colors = {
+    success: 'background: #10b981; color: white;',
+    error: 'background: #ef4444; color: white;',
+    warning: 'background: #f59e0b; color: white;',
+  };
+  
   notification.style.cssText = `
     position: fixed;
     top: 20px;
@@ -192,9 +204,7 @@ function showNotification(message: string, type: 'success' | 'error' = 'success'
     word-break: break-word;
     box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     animation: urlmem-slide-in 0.3s ease;
-    ${type === 'success' 
-      ? 'background: #10b981; color: white;' 
-      : 'background: #ef4444; color: white;'}
+    ${colors[type]}
   `;
   notification.textContent = message;
 

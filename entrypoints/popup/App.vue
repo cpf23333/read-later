@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import { ref, onMounted } from 'vue';
-import { getLinkCount } from '@/utils/storage';
+import { getLinkCount, isLinkExists, addLink } from '@/utils/storage';
 
 const linkCount = ref(0);
 const saving = ref(false);
@@ -27,13 +27,14 @@ async function saveCurrentPage() {
   saving.value = true;
   try {
     const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
-    if (!tab?.id) return;
+    if (!tab?.id || !tab.url) return;
 
-    // 向内容脚本发送消息，模拟右键点击
-    await browser.tabs.sendMessage(tab.id, {
-      type: 'EXTRACT_LINK_INFO',
-      url: tab.url,
-    });
+    // 检查是否已存在
+    const exists = await isLinkExists(tab.url);
+    if (exists) {
+      alert('⚠️ 该页面已经在收藏夹中了！');
+      return;
+    }
 
     // 获取页面标题
     const titleResult = await browser.runtime.sendMessage({
@@ -47,22 +48,21 @@ async function saveCurrentPage() {
     });
 
     // 保存链接
-    const { addLink } = await import('@/utils/storage');
     await addLink({
-      url: tab.url || '',
-      title: titleResult.data || tab.title || tab.url || '',
+      url: tab.url,
+      title: titleResult.data || tab.title || tab.url,
       nearbyImage: null,
       screenshot: screenshotResult.data,
-      sourcePage: tab.url || '',
+      sourcePage: tab.url,
     });
 
     await loadLinkCount();
     
     // 显示成功提示
-    alert('当前页面已保存！');
+    alert('✅ 当前页面已保存！');
   } catch (error) {
     console.error('Failed to save current page:', error);
-    alert('保存失败，请重试');
+    alert('❌ 保存失败，请重试');
   } finally {
     saving.value = false;
   }

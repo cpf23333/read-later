@@ -1,4 +1,4 @@
-import { addLink, getEnabledCustomJsConfig } from '@/utils/storage';
+import { addLink, getEnabledCustomJsConfig, isLinkExists, getLinkByUrl } from '@/utils/storage';
 
 // 右键菜单ID
 const CONTEXT_MENU_ID = 'url-mem-save-link';
@@ -21,6 +21,24 @@ export default defineBackground(() => {
     console.log('[UrlMem] Save link clicked:', info.linkUrl);
 
     try {
+      // 检查链接是否已存在
+      const exists = await isLinkExists(info.linkUrl);
+      if (exists) {
+        const existingLink = await getLinkByUrl(info.linkUrl);
+        console.log('[UrlMem] Link already exists:', existingLink?.id);
+        
+        // 通知内容脚本链接已存在
+        browser.tabs.sendMessage(tab.id, {
+          type: 'SAVE_DUPLICATE',
+          data: { 
+            id: existingLink?.id,
+            title: existingLink?.title,
+            createdAt: existingLink?.createdAt,
+          },
+        }).catch(() => {});
+        return;
+      }
+
       // 向内容脚本发送消息，获取链接信息
       const result = await browser.tabs.sendMessage(tab.id, {
         type: 'EXTRACT_LINK_INFO',

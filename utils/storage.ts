@@ -290,6 +290,83 @@ export async function getLinkCount(): Promise<number> {
   });
 }
 
+// 检查链接是否已存在（根据URL判断）
+export async function isLinkExists(url: string): Promise<boolean> {
+  const database = await initDB();
+
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction([STORE_NAME], 'readonly');
+    const store = transaction.objectStore(STORE_NAME);
+    const request = store.openCursor();
+
+    request.onsuccess = (event) => {
+      const cursor = (event.target as IDBRequest).result;
+      if (cursor) {
+        const item = cursor.value as LinkItem;
+        // 标准化URL后比较（忽略末尾斜杠、hash、部分参数等）
+        if (normalizeUrl(item.url) === normalizeUrl(url)) {
+          resolve(true);
+          return;
+        }
+        cursor.continue();
+      } else {
+        resolve(false);
+      }
+    };
+
+    request.onerror = () => reject(request.error);
+  });
+}
+
+// 根据URL查找已存在的链接
+export async function getLinkByUrl(url: string): Promise<LinkItem | null> {
+  const database = await initDB();
+
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction([STORE_NAME], 'readonly');
+    const store = transaction.objectStore(STORE_NAME);
+    const request = store.openCursor();
+
+    request.onsuccess = (event) => {
+      const cursor = (event.target as IDBRequest).result;
+      if (cursor) {
+        const item = cursor.value as LinkItem;
+        if (normalizeUrl(item.url) === normalizeUrl(url)) {
+          resolve(item);
+          return;
+        }
+        cursor.continue();
+      } else {
+        resolve(null);
+      }
+    };
+
+    request.onerror = () => reject(request.error);
+  });
+}
+
+// URL标准化函数
+function normalizeUrl(url: string): string {
+  try {
+    const urlObj = new URL(url);
+    // 移除末尾斜杠
+    let pathname = urlObj.pathname;
+    if (pathname.length > 1 && pathname.endsWith('/')) {
+      pathname = pathname.slice(0, -1);
+    }
+    // 忽略hash
+    // 可选：忽略常见的tracking参数
+    const trackingParams = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'fbclid', 'gclid'];
+    const searchParams = new URLSearchParams(urlObj.search);
+    trackingParams.forEach(param => searchParams.delete(param));
+    const search = searchParams.toString();
+    
+    return `${urlObj.protocol}//${urlObj.hostname}${pathname}${search ? '?' + search : ''}`;
+  } catch {
+    return url.toLowerCase().trim();
+  }
+}
+
 // 获取所有域名列表
 export async function getAllDomains(): Promise<string[]> {
   const database = await initDB();
