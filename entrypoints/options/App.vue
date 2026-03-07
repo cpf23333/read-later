@@ -556,6 +556,9 @@ async function deleteVersion(version: HistoryVersion, event: Event) {
               :disabled="!webdavConfig.enabled"
             />
             <span class="hint">数据将保存在 WebDAV 服务器的此文件夹中</span>
+            <span class="warning-hint">
+              ⚠️ 更改文件夹名称不会自动迁移旧数据。如需迁移，请先在旧文件夹导出备份，改配置后再导入。
+            </span>
           </div>
 
           <div class="form-group">
@@ -1008,6 +1011,14 @@ async function deleteVersion(version: HistoryVersion, event: Event) {
   margin-top: 6px;
   font-size: 13px;
   color: #6b7280;
+  font-weight: normal;
+}
+
+.form-group .warning-hint {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+  color: #dc2626;
   font-weight: normal;
 }
 
