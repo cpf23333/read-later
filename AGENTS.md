@@ -9,7 +9,7 @@
 - **框架**: WXT (浏览器扩展开发框架)
 - **前端**: Vue 3 + TypeScript
 - **样式**: 原生 CSS (Scoped)
-- **本地存储**: IndexedDB (utils/storage.ts)
+- **存储**: 服务器 SQLite 数据库（通过 HTTP API）
 - **服务器**: Express + SQLite (server/)
 - **构建**: Vite
 
@@ -24,8 +24,9 @@
 │   ├── options/           # 设置页面
 │   └── link-manager/      # 链接管理页面
 ├── utils/                 # 工具模块
-│   ├── storage.ts         # IndexedDB 本地存储
+│   ├── storage.ts         # 类型定义
 │   ├── apiStorage.ts      # 服务器 API 存储
+│   ├── hybridStorage.ts   # 统一存储接口
 │   └── imageExtractor.ts  # 图片提取逻辑
 ├── server/                # 后端服务器
 │   ├── server.js          # Express + SQLite 服务
@@ -42,23 +43,18 @@
 - 自动提取页面截图、附近图片
 - 自定义 JS 提取规则
 
-### 2. 本地存储 (utils/storage.ts)
-- IndexedDB 数据库
-- LinkItem 结构: id, url, title, nearbyImage, screenshot, sourcePage, createdAt
-- 回收站机制（软删除）
+### 2. 存储层 (utils/)
+- **storage.ts**: 仅包含类型定义（LinkItem, CustomJsConfig, DeleteRecord 等）
+- **apiStorage.ts**: 服务器 API 调用（链接增删改查、图片上传、导入导出）
+- **hybridStorage.ts**: 统一存储接口，直接调用服务器 API
 
-### 3. 服务器同步 (utils/apiStorage.ts)
-- 替代已移除的 WebDAV
-- Express + SQLite 后端
-- 支持分页查询、回收站、图片上传
-
-### 4. 链接管理 (link-manager/App.vue)
+### 3. 链接管理 (link-manager/App.vue)
 - 网格/列表视图
 - 搜索、域名筛选、排序
 - 批量操作
 - 回收站管理
 
-### 5. 设置页面 (options/App.vue)
+### 4. 设置页面 (options/App.vue)
 - 图片提取器配置
 - 服务器配置
 - 导入/导出 JSON
@@ -68,40 +64,57 @@
 ```
 用户操作 → hybridStorage.ts (统一存储接口)
                 ↓
-    ┌──────────┴──────────┐
-    ↓                     ↓
-服务器可用?          服务器不可用?
-    ↓                     ↓
-apiStorage.ts      storage.ts (IndexedDB)
-    ↓                     ↓
-server.js (SQLite)   [待同步队列]
-                           ↓
-                    服务器恢复时自动同步
+         apiStorage.ts
+                ↓
+         server.js (SQLite)
 ```
 
-## 混合存储策略
+## 存储策略
 
 ### 核心原则
-1. **优先服务器** - 服务器可用时，优先从服务器读写数据
-2. **离线降级** - 服务器不可用时，自动降级到本地 IndexedDB
-3. **自动同步** - 后台每分钟检查待同步项目，自动同步到服务器
-4. **始终本地** - 所有数据始终先写入本地，再异步同步到服务器
+1. **纯服务器存储** - 所有数据直接同步到服务器 SQLite 数据库
+2. **服务器必须配置** - 使用前必须配置并连接服务器
+3. **图片自动上传** - Base64 图片自动上传到服务器并转换为文件路径
 
 ### 使用方式
 ```typescript
-// 直接导入混合存储接口
+// 直接导入统一存储接口
 import { getLinks, addLink, deleteLink } from '@/utils/hybridStorage';
 
-// 所有操作自动处理服务器/本地切换
+// 所有操作直接同步到服务器
 const result = await getLinks(1, 50);
 await addLink({ url, title, ... });
 ```
 
-### 待同步队列
-- 存储在 `browser.storage.local` 中
-- 包含操作类型: 'add', 'delete', 'restore', 'permanent_delete'
-- 后台脚本每分钟自动尝试同步
-- 支持批量同步以提高效率
+### API 功能列表
+- `apiGetLinks()` - 分页获取链接列表
+- `apiSearchLinks()` - 搜索链接
+- `apiAddLink()` - 添加新链接
+- `apiDeleteLink()` - 删除链接（移入回收站）
+- `apiGetTrash()` - 获取回收站列表
+- `apiRestoreFromTrash()` - 从回收站还原
+- `apiPermanentlyDelete()` - 永久删除
+- `apiUploadImage()` - 上传图片
+- `apiGetStats()` - 获取统计数据
+- `apiGetDomainStats()` - 获取域名统计
+- `apiExport()` / `apiImport()` - 导入导出
+
+## 服务器 API 端点
+
+- `GET /api/links` - 获取链接列表（支持分页、搜索、域名过滤）
+- `POST /api/links` - 添加链接
+- `DELETE /api/links/:id` - 删除链接
+- `POST /api/links/batch` - 批量添加
+- `GET /api/search?q=xxx` - 搜索链接
+- `GET /api/domains` - 获取域名统计
+- `GET /api/trash` - 获取回收站
+- `POST /api/trash/:id/restore` - 还原链接
+- `DELETE /api/trash/:id` - 永久删除
+- `GET /api/stats` - 获取统计
+- `GET /api/export` - 导出数据
+- `POST /api/import` - 导入数据
+- `POST /api/upload` - 上传图片
+- `GET /api/health` - 健康检查
 
 ## 服务器部署
 
@@ -127,17 +140,10 @@ pnpm compile    # TypeScript 类型检查
 
 ## 注意事项
 
-1. **WebDAV 已移除**: 之前使用 WebDAV 同步，现改用 SQLite 服务器
-2. **服务器优先**: 如果配置了服务器，扩展优先使用服务器数据
+1. **IndexedDB 已移除**: 之前使用 IndexedDB 作为本地缓存，现在直接使用服务器存储
+2. **服务器必须配置**: 如果没有配置服务器，扩展将无法保存数据
 3. **回收站**: 删除操作是软删除，可在回收站还原
-4. **图片存储**: 服务器模式下图片作为独立文件存储
-
-## 待办事项
-
-- [ ] 服务器同步的增量同步优化
-- [ ] 图片压缩功能
-- [ ] 标签系统
-- [ ] 全文搜索
+4. **图片存储**: 图片作为独立文件存储在服务器的 `data/images` 目录
 
 ## 相关文件
 

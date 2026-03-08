@@ -1,6 +1,6 @@
 // HTTP API 存储适配器 - 连接 SQLite 后端
 
-import { LinkItem, DeleteRecord } from './storage';
+import { LinkItem, DeleteRecord, CustomJsConfig, ImportResult } from './storage';
 
 export interface ServerConfig {
   enabled: boolean;
@@ -8,6 +8,7 @@ export interface ServerConfig {
 }
 
 const CONFIG_KEY = 'server_config';
+const CUSTOM_JS_KEY = 'custom_js_configs';
 
 // 获取服务器配置
 export async function getServerConfig(): Promise<ServerConfig> {
@@ -92,13 +93,30 @@ async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promi
 }
 
 // 转换数据库格式到 LinkItem
-function dbToLinkItem(item: any): LinkItem {
+async function dbToLinkItem(item: any): Promise<LinkItem> {
+  const config = await getServerConfig();
+  const baseUrl = config.url || '';
+  
+  // 辅助函数：确保图片路径是完整URL
+  const resolveImageUrl = (imgPath: string | null): string | null => {
+    if (!imgPath) return null;
+    // 如果已经是完整URL，直接返回
+    if (imgPath.startsWith('http://') || imgPath.startsWith('https://')) {
+      return imgPath;
+    }
+    // 如果是相对路径，拼接 baseUrl
+    if (imgPath.startsWith('/')) {
+      return `${baseUrl}${imgPath}`;
+    }
+    return imgPath;
+  };
+  
   return {
     id: item.id,
     url: item.url,
     title: item.title,
-    nearbyImage: item.nearby_image,
-    screenshot: item.screenshot,
+    nearbyImage: resolveImageUrl(item.nearby_image),
+    screenshot: resolveImageUrl(item.screenshot),
     sourcePage: item.source_page,
     createdAt: item.created_at,
     customData: item.custom_data ? JSON.parse(item.custom_data) : undefined,
@@ -107,12 +125,61 @@ function dbToLinkItem(item: any): LinkItem {
 
 // ===== 链接 API =====
 
-export async function apiGetLinks(page: number = 1, pageSize: number = 50): Promise<{ links: LinkItem[]; total: number }> {
-  const data = await apiRequest<{ data: any[]; total: number }>(`/api/links?page=${page}&pageSize=${pageSize}`);
+export async function apiGetLinks(
+  page: number = 1, 
+  pageSize: number = 50,
+  options?: {
+    search?: string;
+    domain?: string;
+    sortBy?: 'created_at' | 'title';
+    sortOrder?: 'asc' | 'desc';
+  }
+): Promise<{ links: LinkItem[]; total: number }> {
+  const config = await getServerConfig();
+  if (!config.enabled || !config.url) {
+    throw new Error('服务器未配置');
+  }
+  
+  let url = `${config.url}/api/links?page=${page}&pageSize=${pageSize}`;
+  if (options?.search) url += `&search=${encodeURIComponent(options.search)}`;
+  if (options?.domain) url += `&domain=${encodeURIComponent(options.domain)}`;
+  if (options?.sortBy) url += `&sortBy=${options.sortBy}`;
+  if (options?.sortOrder) url += `&sortOrder=${options.sortOrder}`;
+  
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`API 错误: ${response.status}`);
+  }
+  
+  const result = await response.json();
+  if (!result.success) {
+    throw new Error(result.error || '未知错误');
+  }
+  
+  const links = await Promise.all(result.data.map(dbToLinkItem));
   return {
-    links: data.data.map(dbToLinkItem),
-    total: data.total,
+    links,
+    total: result.total,
   };
+}
+
+export async function apiSearchLinks(query: string): Promise<LinkItem[]> {
+  const config = await getServerConfig();
+  if (!config.enabled || !config.url) {
+    throw new Error('服务器未配置');
+  }
+  
+  const response = await fetch(`${config.url}/api/search?q=${encodeURIComponent(query)}`);
+  if (!response.ok) {
+    throw new Error(`API 错误: ${response.status}`);
+  }
+  
+  const result = await response.json();
+  if (!result.success) {
+    throw new Error(result.error || '未知错误');
+  }
+  
+  return await Promise.all(result.data.map(dbToLinkItem));
 }
 
 export async function apiAddLink(link: LinkItem): Promise<void> {
@@ -146,13 +213,28 @@ export async function apiBatchAddLinks(links: LinkItem[]): Promise<void> {
 
 export async function apiGetTrash(): Promise<DeleteRecord[]> {
   const data = await apiRequest<any[]>('/api/trash');
+  const config = await getServerConfig();
+  const baseUrl = config.url || '';
+  
+  // 辅助函数：确保图片路径是完整URL
+  const resolveImageUrl = (imgPath: string | null): string | null => {
+    if (!imgPath) return null;
+    if (imgPath.startsWith('http://') || imgPath.startsWith('https://')) {
+      return imgPath;
+    }
+    if (imgPath.startsWith('/')) {
+      return `${baseUrl}${imgPath}`;
+    }
+    return imgPath;
+  };
+  
   return data.map(item => ({
     id: item.id,
     linkId: item.link_id,
     url: item.url,
     title: item.title,
-    nearbyImage: item.nearby_image,
-    screenshot: item.screenshot,
+    nearbyImage: resolveImageUrl(item.nearby_image),
+    screenshot: resolveImageUrl(item.screenshot),
     sourcePage: item.source_page,
     createdAt: item.created_at,
     deletedAt: item.deleted_at,
@@ -192,11 +274,35 @@ export async function apiGetStats(): Promise<{ linkCount: number; trashCount: nu
   return await apiRequest<{ linkCount: number; trashCount: number }>('/api/stats');
 }
 
+export async function apiGetDomainStats(): Promise<{ domain: string; count: number }[]> {
+  const config = await getServerConfig();
+  if (!config.enabled || !config.url) {
+    throw new Error('服务器未配置');
+  }
+  
+  const response = await fetch(`${config.url}/api/domains`);
+  if (!response.ok) {
+    throw new Error(`API 错误: ${response.status}`);
+  }
+  
+  const result = await response.json();
+  if (!result.success) {
+    throw new Error(result.error || '未知错误');
+  }
+  
+  return result.data;
+}
+
+export async function apiGetAllDomains(): Promise<string[]> {
+  const stats = await apiGetDomainStats();
+  return stats.map(s => s.domain).sort();
+}
+
 // ===== 导入/导出 =====
 
 export async function apiExport(): Promise<LinkItem[]> {
   const data = await apiRequest<any[]>('/api/export');
-  return data.map(dbToLinkItem);
+  return await Promise.all(data.map(dbToLinkItem));
 }
 
 export async function apiImport(links: LinkItem[], mode: 'merge' | 'replace' = 'merge'): Promise<{ imported: number; total: number }> {
@@ -210,4 +316,36 @@ export async function apiImport(links: LinkItem[], mode: 'merge' | 'replace' = '
 export async function isUsingServer(): Promise<boolean> {
   const config = await getServerConfig();
   return config.enabled && !!config.url;
+}
+
+// ===== 自定义 JS 配置（使用 browser.storage）=====
+
+export async function getCustomJsConfigs(): Promise<CustomJsConfig[]> {
+  const result = await browser.storage.sync.get(CUSTOM_JS_KEY);
+  const configs = result[CUSTOM_JS_KEY];
+  return Array.isArray(configs) ? configs : [];
+}
+
+export async function saveCustomJsConfig(config: CustomJsConfig): Promise<void> {
+  const configs = await getCustomJsConfigs();
+  const index = configs.findIndex(c => c.id === config.id);
+  
+  if (index >= 0) {
+    configs[index] = config;
+  } else {
+    configs.push(config);
+  }
+  
+  await browser.storage.sync.set({ [CUSTOM_JS_KEY]: configs });
+}
+
+export async function deleteCustomJsConfig(id: string): Promise<void> {
+  const configs = await getCustomJsConfigs();
+  const filtered = configs.filter(c => c.id !== id);
+  await browser.storage.sync.set({ [CUSTOM_JS_KEY]: filtered });
+}
+
+export async function getEnabledCustomJsConfig(): Promise<CustomJsConfig | null> {
+  const configs = await getCustomJsConfigs();
+  return configs.find(c => c.enabled) || null;
 }

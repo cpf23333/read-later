@@ -1,21 +1,12 @@
-import { 
-  getEnabledCustomJsConfig, 
-  getLinkByUrl 
-} from '@/utils/storage';
+import { getEnabledCustomJsConfig } from '@/utils/apiStorage';
 import {
-  addLinkHybrid,
-  isLinkExistsHybrid,
-  syncPendingItemsHybrid,
-  checkServerHealthHybrid,
-  getSyncStatusHybrid,
+  addLink,
+  isLinkExists,
+  checkServerHealth,
 } from '@/utils/hybridStorage';
 
 // 右键菜单ID
 const CONTEXT_MENU_ID = 'read-later-save-link';
-
-// 同步定时器
-let syncIntervalId: ReturnType<typeof setInterval> | null = null;
-const SYNC_INTERVAL = 60 * 1000; // 每分钟检查一次同步
 
 export default defineBackground(() => {
   console.log('[ReadLater] Background script started');
@@ -35,20 +26,22 @@ export default defineBackground(() => {
     console.log('[ReadLater] Save link clicked:', info.linkUrl);
 
     try {
+      // 检查服务器是否可用
+      const serverAvailable = await checkServerHealth();
+      if (!serverAvailable) {
+        browser.tabs.sendMessage(tab.id, {
+          type: 'SAVE_ERROR',
+          error: '服务器未配置或不可用，请先配置服务器',
+        }).catch(() => {});
+        return;
+      }
+
       // 检查链接是否已存在
-      const exists = await isLinkExistsHybrid(info.linkUrl);
+      const exists = await isLinkExists(info.linkUrl);
       if (exists) {
-        const existingLink = await getLinkByUrl(info.linkUrl);
-        console.log('[ReadLater] Link already exists:', existingLink?.id);
-        
-        // 通知内容脚本链接已存在
         browser.tabs.sendMessage(tab.id, {
           type: 'SAVE_DUPLICATE',
-          data: { 
-            id: existingLink?.id,
-            title: existingLink?.title,
-            createdAt: existingLink?.createdAt,
-          },
+          data: { message: '该链接已存在' },
         }).catch(() => {});
         return;
       }
@@ -60,7 +53,7 @@ export default defineBackground(() => {
       });
 
       if (result.success) {
-        // 获取页面标题（通过打开链接）
+        // 获取页面标题
         const pageTitle = await fetchPageTitle(info.linkUrl);
         
         // 尝试获取页面截图
@@ -69,8 +62,8 @@ export default defineBackground(() => {
         // 获取自定义JS配置
         const customJsConfig = await getEnabledCustomJsConfig();
 
-        // 保存链接（会自动处理服务器同步）
-        const linkItem = await addLinkHybrid({
+        // 保存链接到服务器
+        const linkItem = await addLink({
           url: info.linkUrl,
           title: pageTitle || result.data.nearbyText || info.linkUrl,
           nearbyImage: result.data.nearbyImage,
@@ -110,58 +103,7 @@ export default defineBackground(() => {
       .catch((error) => sendResponse({ success: false, error: error.message }));
     return true; // 保持消息通道开放
   });
-
-  // 启动定期同步任务
-  startPeriodicSync();
-
-  // 监听在线状态变化
-  browser.runtime.onConnect.addListener((port) => {
-    if (port.name === 'sync-status') {
-      port.onMessage.addListener(async (message) => {
-        if (message.type === 'GET_SYNC_STATUS') {
-          const status = await getSyncStatusHybrid();
-          port.postMessage({ type: 'SYNC_STATUS', data: status });
-        } else if (message.type === 'TRIGGER_SYNC') {
-          const result = await syncPendingItemsHybrid();
-          port.postMessage({ type: 'SYNC_RESULT', data: result });
-        }
-      });
-    }
-  });
 });
-
-// 启动定期同步
-function startPeriodicSync() {
-  // 立即执行一次同步
-  performSync();
-  
-  // 设置定时器
-  syncIntervalId = setInterval(performSync, SYNC_INTERVAL);
-  console.log('[ReadLater] Periodic sync started');
-}
-
-// 执行同步
-async function performSync() {
-  try {
-    const status = await getSyncStatusHybrid();
-    
-    // 只有有待同步项目时才执行
-    if (status.pendingCount > 0) {
-      console.log(`[ReadLater] Syncing ${status.pendingCount} pending items...`);
-      const result = await syncPendingItemsHybrid();
-      
-      if (result.synced > 0) {
-        console.log(`[ReadLater] Synced ${result.synced} items, ${result.failed} failed`);
-      }
-      
-      if (result.errors.length > 0) {
-        console.warn('[ReadLater] Sync errors:', result.errors);
-      }
-    }
-  } catch (error) {
-    console.error('[ReadLater] Sync failed:', error);
-  }
-}
 
 // 处理消息
 async function handleMessage(message: any, sender: any) {
@@ -190,16 +132,8 @@ async function handleMessage(message: any, sender: any) {
       return { success: true };
 
     case 'CHECK_SERVER_HEALTH':
-      const isOnline = await checkServerHealthHybrid();
+      const isOnline = await checkServerHealth();
       return { success: true, data: { isOnline } };
-
-    case 'SYNC_NOW':
-      const syncResult = await syncPendingItemsHybrid();
-      return { success: syncResult.success, data: syncResult };
-
-    case 'GET_SYNC_STATUS':
-      const status = await getSyncStatusHybrid();
-      return { success: true, data: status };
 
     default:
       return { success: false, error: 'Unknown message type' };

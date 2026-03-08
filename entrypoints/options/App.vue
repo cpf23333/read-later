@@ -1,22 +1,23 @@
 <script lang="ts" setup>
 import { ref, onMounted } from 'vue';
 import { 
-  getCustomJsConfigs, 
-  saveCustomJsConfig, 
-  deleteCustomJsConfig,
   CustomJsConfig,
-  exportLinks,
-  importLinks,
-  ImportResult,
 } from '@/utils/storage';
 import { 
   EXTRACTOR_TEMPLATES 
 } from '@/utils/imageExtractor';
-import {
-  getServerConfigHybrid,
-  saveServerConfigHybrid,
-  testServerConnectionHybrid,
+import{
+  exportLinks,
+  importLinks,
 } from '@/utils/hybridStorage';
+import {
+  getServerConfig,
+  saveServerConfig,
+  testServerConnection,
+  getCustomJsConfigs,
+  saveCustomJsConfig,
+  deleteCustomJsConfig,
+} from '@/utils/apiStorage';
 
 type TabType = 'extractor' | 'import' | 'server';
 const activeTab = ref<TabType>('server');
@@ -34,7 +35,7 @@ const isEditing = ref(false);
 // ===== 导入导出 =====
 const importFile = ref<File | null>(null);
 const importMode = ref<'merge' | 'replace'>('merge');
-const importResult = ref<ImportResult | null>(null);
+const importResult = ref<{ imported: number; skipped: number; total: number } | null>(null);
 const importing = ref(false);
 const exporting = ref(false);
 
@@ -187,7 +188,7 @@ async function handleImport() {
 
 // ===== 服务器配置方法 =====
 async function loadServerConfig() {
-  serverConfig.value = await getServerConfigHybrid();
+  serverConfig.value = await getServerConfig();
 }
 
 async function testServer() {
@@ -195,7 +196,7 @@ async function testServer() {
   serverStatus.value = null;
   
   try {
-    const result = await testServerConnectionHybrid(serverConfig.value.url);
+    const result = await testServerConnection(serverConfig.value.url);
     serverStatus.value = result;
   } finally {
     testingServer.value = false;
@@ -205,7 +206,7 @@ async function testServer() {
 async function saveServer() {
   savingServer.value = true;
   try {
-    await saveServerConfigHybrid(serverConfig.value);
+    await saveServerConfig(serverConfig.value);
     alert('服务器配置已保存');
     serverStatus.value = null;
   } finally {

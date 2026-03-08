@@ -1,5 +1,5 @@
 import { extractNearbyImage, ImageExtractionResult } from '@/utils/imageExtractor';
-import { getEnabledCustomJsConfig } from '@/utils/storage';
+import { getEnabledCustomJsConfig } from '@/utils/apiStorage';
 
 // 记录最后右键点击的元素
 let lastRightClickedElement: HTMLElement | null = null;

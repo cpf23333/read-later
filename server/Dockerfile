@@ -5,7 +5,7 @@
 #                -t read-later-server .
 # 注意：REGISTRY 不要 ?https:// 协议前缀
 
-ARG REGISTRY=""
+ARG REGISTRY="docker.xuanyuan.me/"
 FROM ${REGISTRY}node:20-alpine
 
 WORKDIR /app

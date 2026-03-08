@@ -1,28 +1,23 @@
 <script lang="ts" setup>
 import { ref, onMounted, computed, watch } from 'vue';
 import { 
-  searchLinks,
-  exportLinks,
-  importLinks,
-  getAllDomains,
-  getDomainStats,
-  queryLinks,
-  clearTrash,
   LinkItem,
   ImportResult,
   DeleteRecord,
 } from '@/utils/storage';
 
 import {
-  getLinksHybrid,
-  deleteLinkHybrid,
-  getTrashItemsHybrid,
-  restoreFromTrashHybrid,
-  permanentlyDeleteFromTrashHybrid,
-  getStatsHybrid,
-  getSyncStatusHybrid,
-  syncPendingItemsHybrid,
-  checkServerHealthHybrid,
+  getLinks,
+  deleteLink,
+  getTrashItems,
+  restoreFromTrash,
+  permanentlyDeleteFromTrash,
+  getStats,
+  searchLinks,
+  exportLinks,
+  importLinks,
+  getAllDomains,
+  getDomainStats,
 } from '@/utils/hybridStorage';
 
 type SortBy = 'createdAt' | 'title' | 'domain';
@@ -81,9 +76,8 @@ onMounted(async () => {
 async function loadInitialData() {
   loading.value = true;
   try {
-    // 使用混合存储获取数据
     const [stats, domainList, domainStatsResult] = await Promise.all([
-      getStatsHybrid(),
+      getStats(),
       getAllDomains(),
       getDomainStats(),
     ]);
@@ -99,8 +93,7 @@ async function loadInitialData() {
 async function loadLinks() {
   loading.value = true;
   try {
-    // 使用混合存储获取链接
-    const result = await getLinksHybrid(currentPage.value, pageSize.value, {
+    const result = await getLinks(currentPage.value, pageSize.value, {
       sortBy: sortBy.value,
       sortDesc: sortOrder.value === 'desc',
     });
@@ -220,11 +213,18 @@ async function changePage(page: number) {
 
 async function handleDelete(id: string) {
   if (!confirm('确定要删除这个链接吗？（删除后可在回收站还原）')) return;
-  await deleteLinkHybrid(id);
-  await loadLinks();
-  // 更新统计
-  const stats = await getDomainStats();
-  domainStats.value = stats;
+  console.log('[LinkManager] Deleting link:', id);
+  try {
+    const result = await deleteLink(id);
+    console.log('[LinkManager] Delete result:', result);
+    await loadLinks();
+    // 更新统计
+    const stats = await getDomainStats();
+    domainStats.value = stats;
+  } catch (error) {
+    console.error('[LinkManager] Delete failed:', error);
+    alert('删除失败: ' + (error instanceof Error ? error.message : '未知错误'));
+  }
 }
 
 async function handleBatchDelete() {
@@ -233,7 +233,7 @@ async function handleBatchDelete() {
   const ids = Array.from(selectedIds.value);
   
   for (const id of ids) {
-    await deleteLinkHybrid(id);
+    await deleteLink(id);
   }
   
   selectedIds.value.clear();
@@ -247,7 +247,7 @@ async function handleBatchDelete() {
 async function loadTrash() {
   trashLoading.value = true;
   try {
-    trashItems.value = await getTrashItemsHybrid();
+    trashItems.value = await getTrashItems();
   } finally {
     trashLoading.value = false;
   }
@@ -263,7 +263,7 @@ function switchTab(tab: TabView) {
 async function restoreItem(recordId: string) {
   if (!confirm('确定要还原这个链接吗？')) return;
   
-  await restoreFromTrashHybrid(recordId);
+  await restoreFromTrash(recordId);
   await loadTrash();
   await updateStats();
 }
@@ -271,7 +271,7 @@ async function restoreItem(recordId: string) {
 async function permanentlyDeleteItem(recordId: string) {
   if (!confirm('确定要永久删除这个链接吗？此操作不可撤销！')) return;
   
-  await permanentlyDeleteFromTrashHybrid(recordId);
+  await permanentlyDeleteFromTrash(recordId);
   await loadTrash();
 }
 
@@ -279,7 +279,7 @@ async function emptyTrash() {
   if (!confirm('确定要清空回收站吗？所有项目将被永久删除！')) return;
   
   for (const item of trashItems.value) {
-    await permanentlyDeleteFromTrashHybrid(item.id);
+    await permanentlyDeleteFromTrash(item.id);
   }
   
   await loadTrash();
@@ -297,7 +297,7 @@ async function restoreSelected() {
   if (!confirm(`确定要还原选中的 ${selectedTrashIds.value.size} 个链接吗？`)) return;
   
   for (const id of selectedTrashIds.value) {
-    await restoreFromTrashHybrid(id);
+    await restoreFromTrash(id);
   }
   
   selectedTrashIds.value.clear();
@@ -309,7 +309,7 @@ async function deleteSelected() {
   if (!confirm(`确定要永久删除选中的 ${selectedTrashIds.value.size} 个链接吗？此操作不可撤销！`)) return;
   
   for (const id of selectedTrashIds.value) {
-    await permanentlyDeleteFromTrashHybrid(id);
+    await permanentlyDeleteFromTrash(id);
   }
   
   selectedTrashIds.value.clear();
@@ -317,7 +317,7 @@ async function deleteSelected() {
 }
 
 async function updateStats() {
-  const stats = await getStatsHybrid();
+  const stats = await getStats();
   totalCount.value = stats.linkCount;
 }
 

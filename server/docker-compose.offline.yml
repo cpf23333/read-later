@@ -1,5 +1,3 @@
-version: '3'
-
 services:
   readlater:
     # 离线模式：直接使用已加载的镜像（通过 docker load）

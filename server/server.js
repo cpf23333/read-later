@@ -65,6 +65,28 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_trash_deleted ON trash(deleted_at);
 `);
 
+
+
+// 辅助函数：将 Base64 保存为文件
+function saveBase64ToFile(base64Data, prefix) {
+  try {
+    const cleanBase64 = base64Data.replace(/^data:image\/\w+;base64,/, '');
+    const buffer = Buffer.from(cleanBase64, 'base64');
+    
+    // 根据 prefix 选择扩展名
+    const ext = prefix === 'screenshot' ? 'jpg' : 'png';
+    const filename = `${Date.now()}_${prefix}_${Math.random().toString(36).substr(2, 9)}.${ext}`;
+    const filepath = path.join(IMAGES_DIR, filename);
+    
+    fs.writeFileSync(filepath, buffer);
+    return filename;
+  } catch (error) {
+    console.error('[Migrate] Failed to save image:', error.message);
+    return null;
+  }
+}
+
+
 // 中间件
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
@@ -75,16 +97,43 @@ app.use('/images', express.static(IMAGES_DIR));
 // 获取所有链接
 app.get('/api/links', (req, res) => {
   try {
-    const { page = 1, pageSize = 50, sortBy = 'created_at', sortOrder = 'desc' } = req.query;
+    const { page = 1, pageSize = 50, sortBy = 'created_at', sortOrder = 'desc', search, domain } = req.query;
     
     let sql = 'SELECT * FROM links';
-    sql += ` ORDER BY ${sortBy} ${sortOrder === 'asc' ? 'ASC' : 'DESC'}`;
+    let countSql = 'SELECT COUNT(*) as count FROM links';
+    const params = [];
+    const conditions = [];
     
+    // 搜索条件
+    if (search) {
+      conditions.push('(url LIKE ? OR title LIKE ? OR source_page LIKE ?)');
+      const searchParam = `%${search}%`;
+      params.push(searchParam, searchParam, searchParam);
+    }
+    
+    // 域名过滤
+    if (domain) {
+      conditions.push('source_page LIKE ?');
+      params.push(`%${domain}%`);
+    }
+    
+    // 添加 WHERE 子句
+    if (conditions.length > 0) {
+      const whereClause = ' WHERE ' + conditions.join(' AND ');
+      sql += whereClause;
+      countSql += whereClause;
+    }
+    
+    // 排序和分页
+    sql += ` ORDER BY ${sortBy} ${sortOrder === 'asc' ? 'ASC' : 'DESC'}`;
     const offset = (page - 1) * pageSize;
     sql += ' LIMIT ? OFFSET ?';
+    params.push(parseInt(pageSize), parseInt(offset));
     
-    const links = db.prepare(sql).all(parseInt(pageSize), parseInt(offset));
-    const total = db.prepare('SELECT COUNT(*) as count FROM links').get().count;
+    const links = db.prepare(sql).all(...params.slice(0, -2).concat(params.slice(-2)));
+    const total = conditions.length > 0 
+      ? db.prepare(countSql).all(...params.slice(0, -2))[0].count
+      : db.prepare(countSql).get().count;
     
     res.json({ success: true, data: links, total });
   } catch (error) {
@@ -92,10 +141,80 @@ app.get('/api/links', (req, res) => {
   }
 });
 
+// 搜索链接
+app.get('/api/search', (req, res) => {
+  try {
+    const { q } = req.query;
+    if (!q) {
+      return res.json({ success: true, data: [] });
+    }
+    
+    const searchParam = `%${q}%`;
+    const links = db.prepare(`
+      SELECT * FROM links 
+      WHERE url LIKE ? OR title LIKE ? OR source_page LIKE ?
+      ORDER BY created_at DESC
+    `).all(searchParam, searchParam, searchParam);
+    
+    res.json({ success: true, data: links });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 获取域名统计
+app.get('/api/domains', (req, res) => {
+  try {
+    const links = db.prepare('SELECT source_page FROM links').all();
+    const domainCounts = new Map();
+    
+    for (const link of links) {
+      try {
+        const domain = new URL(link.source_page).hostname;
+        if (domain) {
+          domainCounts.set(domain, (domainCounts.get(domain) || 0) + 1);
+        }
+      } catch {
+        // 忽略无效URL
+      }
+    }
+    
+    const result = Array.from(domainCounts.entries())
+      .map(([domain, count]) => ({ domain, count }))
+      .sort((a, b) => b.count - a.count);
+    
+    res.json({ success: true, data: result });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 辅助函数：保存图片并返回路径
+function processImage(imageData, prefix) {
+  if (!imageData) return null;
+  
+  // 如果已经是路径，直接返回
+  if (imageData.startsWith('/images/')) {
+    return imageData;
+  }
+  
+  // 如果是 Base64，保存为文件
+  if (imageData.startsWith('data:image')) {
+    const filename = saveBase64ToFile(imageData, prefix);
+    return filename ? `/images/${filename}` : null;
+  }
+  
+  return null;
+}
+
 // 添加链接
 app.post('/api/links', (req, res) => {
   try {
     const { id, url, title, nearby_image, screenshot, source_page, created_at, custom_data } = req.body;
+    
+    // 处理图片：如果是 Base64 则保存为文件
+    const nearbyImagePath = processImage(nearby_image, 'nearby');
+    const screenshotPath = processImage(screenshot, 'screenshot');
     
     const now = Date.now();
     db.prepare(`
@@ -105,8 +224,8 @@ app.post('/api/links', (req, res) => {
       id || `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       url,
       title || '',
-      nearby_image || null,
-      screenshot || null,
+      nearbyImagePath,
+      screenshotPath,
       source_page || '',
       created_at || now,
       now,
@@ -130,12 +249,16 @@ app.post('/api/links/batch', (req, res) => {
     
     const insertMany = db.transaction((items) => {
       for (const item of items) {
+        // 处理图片
+        const nearbyImagePath = processImage(item.nearby_image || item.nearbyImage, 'nearby');
+        const screenshotPath = processImage(item.screenshot, 'screenshot');
+        
         insert.run(
           item.id,
           item.url,
           item.title || '',
-          item.nearby_image || item.nearbyImage || null,
-          item.screenshot || null,
+          nearbyImagePath,
+          screenshotPath,
           item.source_page || item.sourcePage || '',
           item.created_at || item.createdAt || Date.now(),
           Date.now(),
@@ -175,7 +298,7 @@ app.delete('/api/links/:id', (req, res) => {
     // 移动图片到 deleted 文件夹
     const timestamp = new Date().toISOString().slice(0, 10);
     [link.nearby_image, link.screenshot].forEach(imgPath => {
-      if (imgPath) {
+      if (imgPath && imgPath.startsWith('/images/')) {
         const filename = path.basename(imgPath);
         const oldPath = path.join(IMAGES_DIR, filename);
         const newPath = path.join(DELETED_IMAGES_DIR, `${timestamp}_${filename}`);
@@ -222,7 +345,7 @@ app.post('/api/trash/:id/restore', (req, res) => {
     // 还原图片
     const files = fs.readdirSync(DELETED_IMAGES_DIR);
     [item.nearby_image, item.screenshot].forEach(imgPath => {
-      if (imgPath) {
+      if (imgPath && imgPath.startsWith('/images/')) {
         const filename = path.basename(imgPath);
         const match = files.find(f => f.endsWith(filename));
         if (match) {
@@ -247,7 +370,7 @@ app.delete('/api/trash/:id', (req, res) => {
       // 删除图片
       const files = fs.readdirSync(DELETED_IMAGES_DIR);
       [item.nearby_image, item.screenshot].forEach(imgPath => {
-        if (imgPath) {
+        if (imgPath && imgPath.startsWith('/images/')) {
           const filename = path.basename(imgPath);
           const match = files.find(f => f.endsWith(filename));
           if (match) fs.unlinkSync(path.join(DELETED_IMAGES_DIR, match));
@@ -262,20 +385,19 @@ app.delete('/api/trash/:id', (req, res) => {
   }
 });
 
-// ===== 图片上传 API =====
+// ===== 图片上传 API（保留兼容）=====
 
 app.post('/api/upload', (req, res) => {
   try {
     const { image, filename } = req.body;
     if (!image) return res.status(400).json({ success: false, error: 'No image' });
     
-    const base64Data = image.replace(/^data:image\/\w+;base64,/, '');
-    const buffer = Buffer.from(base64Data, 'base64');
+    const result = processImage(image, 'upload');
+    if (!result) {
+      return res.status(400).json({ success: false, error: 'Invalid image data' });
+    }
     
-    const finalFilename = filename || `${Date.now()}_${Math.random().toString(36).substr(2, 9)}.png`;
-    fs.writeFileSync(path.join(IMAGES_DIR, finalFilename), buffer);
-    
-    res.json({ success: true, data: { url: `/images/${finalFilename}` } });
+    res.json({ success: true, data: { url: result } });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -322,10 +444,14 @@ app.post('/api/import', (req, res) => {
     const insertMany = db.transaction((items) => {
       for (const item of items) {
         try {
+          // 处理图片
+          const nearbyImagePath = processImage(item.nearby_image || item.nearbyImage, 'nearby');
+          const screenshotPath = processImage(item.screenshot, 'screenshot');
+          
           stmt.run(
             item.id || `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-            item.url, item.title || '', item.nearby_image || item.nearbyImage || null,
-            item.screenshot || null, item.source_page || item.sourcePage || '',
+            item.url, item.title || '', nearbyImagePath,
+            screenshotPath, item.source_page || item.sourcePage || '',
             item.created_at || item.createdAt || Date.now(), Date.now(),
             JSON.stringify(item.custom_data || item.customData || {})
           );
