@@ -15,40 +15,66 @@ async function loadLinkCount() {
 }
 
 async function openLinkManager() {
-  await browser.runtime.sendMessage({ type: 'OPEN_LINK_MANAGER' });
-  window.close();
+  console.log('[Popup] Opening link manager...');
+  try {
+    await browser.runtime.sendMessage({ type: 'OPEN_LINK_MANAGER' });
+    console.log('[Popup] Link manager opened');
+    window.close();
+  } catch (error) {
+    console.error('[Popup] Failed to open link manager:', error);
+    alert('打开失败: ' + (error instanceof Error ? error.message : '未知错误'));
+  }
 }
 
 async function openSettings() {
-  await browser.runtime.sendMessage({ type: 'OPEN_SETTINGS' });
-  window.close();
+  console.log('[Popup] Opening settings...');
+  try {
+    await browser.runtime.sendMessage({ type: 'OPEN_SETTINGS' });
+    console.log('[Popup] Settings opened');
+    window.close();
+  } catch (error) {
+    console.error('[Popup] Failed to open settings:', error);
+    alert('打开失败: ' + (error instanceof Error ? error.message : '未知错误'));
+  }
 }
 
 async function saveCurrentPage() {
   saving.value = true;
   try {
+    console.log('[Popup] Starting saveCurrentPage...');
     const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
-    if (!tab?.id || !tab.url) return;
+    console.log('[Popup] Got tab:', tab?.id, tab?.url);
+    if (!tab?.id || !tab.url) {
+      console.warn('[Popup] No tab or URL found');
+      return;
+    }
 
     // 检查是否已存在
+    console.log('[Popup] Checking if link exists...');
     const exists = await isLinkExistsHybrid(tab.url);
+    console.log('[Popup] Link exists:', exists);
     if (exists) {
       alert('⚠️ 该页面已经在"稍后再看"列表中了！');
       return;
     }
 
     // 获取页面标题
+    console.log('[Popup] Fetching title...');
     const titleResult = await browser.runtime.sendMessage({
       type: 'FETCH_TITLE',
       url: tab.url,
     });
+    console.log('[Popup] Title result:', titleResult);
 
     // 获取截图
+    console.log('[Popup] Capturing tab...');
     const screenshotResult = await browser.runtime.sendMessage({
       type: 'CAPTURE_TAB',
     });
+    console.log('[Popup] Screenshot result:', screenshotResult?.success);
 
     // 保存链接
+    console.log('[Popup] Adding link...');
     await addLinkHybrid({
       url: tab.url,
       title: titleResult.data || tab.title || tab.url,
@@ -56,14 +82,15 @@ async function saveCurrentPage() {
       screenshot: screenshotResult.data,
       sourcePage: tab.url,
     });
+    console.log('[Popup] Link added successfully');
 
     await loadLinkCount();
     
     // 显示成功提示
     alert('✅ 已收好！稍后记得来看哦~');
   } catch (error) {
-    console.error('Failed to save current page:', error);
-    alert('❌ 保存失败，请重试');
+    console.error('[Popup] Failed to save current page:', error);
+    alert('❌ 保存失败: ' + (error instanceof Error ? error.message : '未知错误'));
   } finally {
     saving.value = false;
   }

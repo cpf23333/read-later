@@ -27,13 +27,25 @@ export async function saveServerConfig(config: ServerConfig): Promise<void> {
 // 测试连接
 export async function testServerConnection(url: string): Promise<{ success: boolean; message: string }> {
   try {
-    const response = await fetch(`${url}/api/health`, { method: 'GET' });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5秒超时
+    
+    const response = await fetch(`${url}/api/health`, { 
+      method: 'GET',
+      signal: controller.signal,
+    });
+    
+    clearTimeout(timeoutId);
+    
     if (response.ok) {
       return { success: true, message: '连接成功' };
     } else {
       return { success: false, message: `连接失败: HTTP ${response.status}` };
     }
   } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      return { success: false, message: '连接超时' };
+    }
     return { success: false, message: `连接失败: ${error instanceof Error ? error.message : '未知错误'}` };
   }
 }
@@ -45,24 +57,38 @@ async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promi
     throw new Error('服务器未配置');
   }
   
-  const response = await fetch(`${config.url}${endpoint}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10000); // 10秒超时
   
-  if (!response.ok) {
-    throw new Error(`API 错误: ${response.status}`);
+  try {
+    const response = await fetch(`${config.url}${endpoint}`, {
+      ...options,
+      signal: controller.signal,
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+    });
+    
+    clearTimeout(timeoutId);
+    
+    if (!response.ok) {
+      throw new Error(`API 错误: ${response.status}`);
+    }
+    
+    const result = await response.json();
+    if (!result.success) {
+      throw new Error(result.error || '未知错误');
+    }
+    
+    return result.data;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error('请求超时');
+    }
+    throw error;
   }
-  
-  const result = await response.json();
-  if (!result.success) {
-    throw new Error(result.error || '未知错误');
-  }
-  
-  return result.data;
 }
 
 // 转换数据库格式到 LinkItem

@@ -14,7 +14,7 @@ import {
 const CONTEXT_MENU_ID = 'read-later-save-link';
 
 // 同步定时器
-let syncIntervalId: number | null = null;
+let syncIntervalId: ReturnType<typeof setInterval> | null = null;
 const SYNC_INTERVAL = 60 * 1000; // 每分钟检查一次同步
 
 export default defineBackground(() => {
@@ -119,10 +119,10 @@ export default defineBackground(() => {
     if (port.name === 'sync-status') {
       port.onMessage.addListener(async (message) => {
         if (message.type === 'GET_SYNC_STATUS') {
-          const status = await getSyncStatus();
+          const status = await getSyncStatusHybrid();
           port.postMessage({ type: 'SYNC_STATUS', data: status });
         } else if (message.type === 'TRIGGER_SYNC') {
-          const result = await syncPendingItems();
+          const result = await syncPendingItemsHybrid();
           port.postMessage({ type: 'SYNC_RESULT', data: result });
         }
       });
@@ -136,7 +136,7 @@ function startPeriodicSync() {
   performSync();
   
   // 设置定时器
-  syncIntervalId = window.setInterval(performSync, SYNC_INTERVAL);
+  syncIntervalId = setInterval(performSync, SYNC_INTERVAL);
   console.log('[ReadLater] Periodic sync started');
 }
 
