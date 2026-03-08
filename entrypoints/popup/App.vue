@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import { ref, onMounted } from 'vue';
-import { getLinkCount, isLinkExists, addLink } from '@/utils/storage';
+import { getLinkCount } from '@/utils/storage';
+import { isLinkExistsHybrid, addLinkHybrid } from '@/utils/hybridStorage';
 
 const linkCount = ref(0);
 const saving = ref(false);
@@ -30,7 +31,7 @@ async function saveCurrentPage() {
     if (!tab?.id || !tab.url) return;
 
     // 检查是否已存在
-    const exists = await isLinkExists(tab.url);
+    const exists = await isLinkExistsHybrid(tab.url);
     if (exists) {
       alert('⚠️ 该页面已经在"稍后再看"列表中了！');
       return;
@@ -48,7 +49,7 @@ async function saveCurrentPage() {
     });
 
     // 保存链接
-    await addLink({
+    await addLinkHybrid({
       url: tab.url,
       title: titleResult.data || tab.title || tab.url,
       nearbyImage: null,

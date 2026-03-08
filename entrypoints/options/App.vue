@@ -13,10 +13,10 @@ import {
   EXTRACTOR_TEMPLATES 
 } from '@/utils/imageExtractor';
 import {
-  getServerConfig,
-  saveServerConfig,
-  testServerConnection,
-} from '@/utils/apiStorage';
+  getServerConfigHybrid,
+  saveServerConfigHybrid,
+  testServerConnectionHybrid,
+} from '@/utils/hybridStorage';
 
 type TabType = 'extractor' | 'import' | 'server';
 const activeTab = ref<TabType>('server');
@@ -187,7 +187,7 @@ async function handleImport() {
 
 // ===== 服务器配置方法 =====
 async function loadServerConfig() {
-  serverConfig.value = await getServerConfig();
+  serverConfig.value = await getServerConfigHybrid();
 }
 
 async function testServer() {
@@ -195,7 +195,7 @@ async function testServer() {
   serverStatus.value = null;
   
   try {
-    const result = await testServerConnection(serverConfig.value.url);
+    const result = await testServerConnectionHybrid(serverConfig.value.url);
     serverStatus.value = result;
   } finally {
     testingServer.value = false;
@@ -205,7 +205,7 @@ async function testServer() {
 async function saveServer() {
   savingServer.value = true;
   try {
-    await saveServerConfig(serverConfig.value);
+    await saveServerConfigHybrid(serverConfig.value);
     alert('服务器配置已保存');
     serverStatus.value = null;
   } finally {

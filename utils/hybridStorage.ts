@@ -1,7 +1,10 @@
 // 混合存储模块 - 优先服务器，离线时本地暂存，恢复后自动同步
 
-import { LinkItem, DeleteRecord, addLink as localAddLink, getLinks as localGetLinks, deleteLink as localDeleteLink, restoreFromTrash as localRestoreFromTrash, permanentlyDeleteFromTrash as localPermanentlyDeleteFromTrash, getTrashItems as localGetTrashItems, getLinkCount as localGetLinkCount, getLinkById as localGetLinkById, isLinkExists as localIsLinkExists } from './storage';
-import { apiGetLinks, apiAddLink, apiDeleteLink, apiGetTrash, apiRestoreFromTrash, apiPermanentlyDelete, apiGetStats, isUsingServer, testServerConnection, getServerConfig, apiBatchAddLinks } from './apiStorage';
+import { LinkItem, DeleteRecord, addLink as localAddLink, getLinks as localGetLinks, deleteLink as localDeleteLink, restoreFromTrash as localRestoreFromTrash, permanentlyDeleteFromTrash as localPermanentlyDeleteFromTrash, getTrashItems as localGetTrashItems, getLinkCount as localGetLinkCount, isLinkExists as localIsLinkExists } from './storage';
+import { apiGetLinks, apiAddLink, apiDeleteLink, apiGetTrash, apiRestoreFromTrash, apiPermanentlyDelete, apiGetStats, isUsingServer, testServerConnection as apiTestServerConnection, getServerConfig as apiGetServerConfig, apiBatchAddLinks } from './apiStorage';
+
+// 重新导出配置函数（带 Hybrid 后缀避免冲突）
+export { getServerConfig as getServerConfigHybrid, saveServerConfig as saveServerConfigHybrid, testServerConnection as testServerConnectionHybrid } from './apiStorage';
 
 // 同步状态
 interface SyncState {
@@ -72,21 +75,21 @@ interface PendingItem {
 }
 
 // 检查服务器是否可用
-export async function checkServerHealth(): Promise<boolean> {
-  const config = await getServerConfig();
+export async function checkServerHealthHybrid(): Promise<boolean> {
+  const config = await apiGetServerConfig();
   if (!config.enabled || !config.url) {
     return false;
   }
-  const result = await testServerConnection(config.url);
+  const result = await apiTestServerConnection(config.url);
   const isOnline = result.success;
   await saveSyncState({ isOnline });
   return isOnline;
 }
 
-// ===== 统一存储接口 =====
+// ===== 统一存储接口（带 Hybrid 后缀） =====
 
 // 获取链接列表
-export async function getLinks(
+export async function getLinksHybrid(
   page: number = 1,
   pageSize: number = 50,
   options?: { 
@@ -96,13 +99,12 @@ export async function getLinks(
     search?: string;
   }
 ): Promise<{ links: LinkItem[]; total: number }> {
-  const serverAvailable = await checkServerHealth();
+  const serverAvailable = await checkServerHealthHybrid();
   
   if (serverAvailable) {
     try {
       // 服务器可用，从服务器获取
       const result = await apiGetLinks(page, pageSize);
-      // 同时更新本地缓存（后台同步会处理）
       return result;
     } catch (error) {
       console.warn('[HybridStorage] Server error, falling back to local:', error);
@@ -116,9 +118,9 @@ export async function getLinks(
 }
 
 // 添加链接
-export async function addLink(link: Omit<LinkItem, 'id' | 'createdAt'>): Promise<LinkItem> {
-  const serverAvailable = await checkServerHealth();
-  const config = await getServerConfig();
+export async function addLinkHybrid(link: Omit<LinkItem, 'id' | 'createdAt'>): Promise<LinkItem> {
+  const serverAvailable = await checkServerHealthHybrid();
+  const config = await apiGetServerConfig();
   
   // 始终先保存到本地
   const localItem = await localAddLink(link);
@@ -151,9 +153,9 @@ export async function addLink(link: Omit<LinkItem, 'id' | 'createdAt'>): Promise
 }
 
 // 删除链接
-export async function deleteLink(id: string): Promise<{ success: boolean; record?: DeleteRecord }> {
-  const serverAvailable = await checkServerHealth();
-  const config = await getServerConfig();
+export async function deleteLinkHybrid(id: string): Promise<{ success: boolean; record?: DeleteRecord }> {
+  const serverAvailable = await checkServerHealthHybrid();
+  const config = await apiGetServerConfig();
   
   // 始终先操作本地
   const result = await localDeleteLink(id);
@@ -188,9 +190,9 @@ export async function deleteLink(id: string): Promise<{ success: boolean; record
 }
 
 // 从回收站还原
-export async function restoreFromTrash(recordId: string): Promise<{ success: boolean; link?: LinkItem }> {
-  const serverAvailable = await checkServerHealth();
-  const config = await getServerConfig();
+export async function restoreFromTrashHybrid(recordId: string): Promise<{ success: boolean; link?: LinkItem }> {
+  const serverAvailable = await checkServerHealthHybrid();
+  const config = await apiGetServerConfig();
   
   // 先操作本地
   const result = await localRestoreFromTrash(recordId);
@@ -224,9 +226,9 @@ export async function restoreFromTrash(recordId: string): Promise<{ success: boo
 }
 
 // 永久删除
-export async function permanentlyDeleteFromTrash(recordId: string): Promise<boolean> {
-  const serverAvailable = await checkServerHealth();
-  const config = await getServerConfig();
+export async function permanentlyDeleteFromTrashHybrid(recordId: string): Promise<boolean> {
+  const serverAvailable = await checkServerHealthHybrid();
+  const config = await apiGetServerConfig();
   
   // 先操作本地
   const result = await localPermanentlyDeleteFromTrash(recordId);
@@ -256,8 +258,8 @@ export async function permanentlyDeleteFromTrash(recordId: string): Promise<bool
 }
 
 // 获取回收站列表
-export async function getTrashItems(): Promise<DeleteRecord[]> {
-  const serverAvailable = await checkServerHealth();
+export async function getTrashItemsHybrid(): Promise<DeleteRecord[]> {
+  const serverAvailable = await checkServerHealthHybrid();
   
   if (serverAvailable) {
     try {
@@ -271,8 +273,8 @@ export async function getTrashItems(): Promise<DeleteRecord[]> {
 }
 
 // 获取统计信息
-export async function getStats(): Promise<{ linkCount: number; trashCount: number }> {
-  const serverAvailable = await checkServerHealth();
+export async function getStatsHybrid(): Promise<{ linkCount: number; trashCount: number }> {
+  const serverAvailable = await checkServerHealthHybrid();
   
   if (serverAvailable) {
     try {
@@ -289,8 +291,8 @@ export async function getStats(): Promise<{ linkCount: number; trashCount: numbe
 }
 
 // 检查链接是否已存在
-export async function isLinkExists(url: string): Promise<boolean> {
-  const serverAvailable = await checkServerHealth();
+export async function isLinkExistsHybrid(url: string): Promise<boolean> {
+  const serverAvailable = await checkServerHealthHybrid();
   
   if (serverAvailable) {
     try {
@@ -308,18 +310,18 @@ export async function isLinkExists(url: string): Promise<boolean> {
 // ===== 同步功能 =====
 
 // 执行同步
-export async function syncPendingItems(): Promise<{ 
+export async function syncPendingItemsHybrid(): Promise<{ 
   success: boolean; 
   synced: number; 
   failed: number;
   errors: string[];
 }> {
-  const config = await getServerConfig();
+  const config = await apiGetServerConfig();
   if (!config.enabled || !config.url) {
     return { success: true, synced: 0, failed: 0, errors: [] };
   }
   
-  const serverAvailable = await checkServerHealth();
+  const serverAvailable = await checkServerHealthHybrid();
   if (!serverAvailable) {
     return { success: false, synced: 0, failed: 0, errors: ['服务器不可用'] };
   }
@@ -384,7 +386,7 @@ export async function syncPendingItems(): Promise<{
 }
 
 // 获取同步状态
-export async function getSyncStatus(): Promise<{
+export async function getSyncStatusHybrid(): Promise<{
   isOnline: boolean;
   pendingCount: number;
   lastSyncTime: number;
@@ -396,6 +398,3 @@ export async function getSyncStatus(): Promise<{
     lastSyncTime: state.lastSyncTime,
   };
 }
-
-// 导出接口
-export { getServerConfig, testServerConnection } from './apiStorage';

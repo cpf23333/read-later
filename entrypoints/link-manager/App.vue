@@ -14,15 +14,15 @@ import {
 } from '@/utils/storage';
 
 import {
-  getLinks,
-  deleteLink,
-  getTrashItems,
-  restoreFromTrash,
-  permanentlyDeleteFromTrash,
-  getStats,
-  getSyncStatus,
-  syncPendingItems,
-  checkServerHealth,
+  getLinksHybrid,
+  deleteLinkHybrid,
+  getTrashItemsHybrid,
+  restoreFromTrashHybrid,
+  permanentlyDeleteFromTrashHybrid,
+  getStatsHybrid,
+  getSyncStatusHybrid,
+  syncPendingItemsHybrid,
+  checkServerHealthHybrid,
 } from '@/utils/hybridStorage';
 
 type SortBy = 'createdAt' | 'title' | 'domain';
@@ -83,7 +83,7 @@ async function loadInitialData() {
   try {
     // 使用混合存储获取数据
     const [stats, domainList, domainStatsResult] = await Promise.all([
-      getStats(),
+      getStatsHybrid(),
       getAllDomains(),
       getDomainStats(),
     ]);
@@ -100,7 +100,7 @@ async function loadLinks() {
   loading.value = true;
   try {
     // 使用混合存储获取链接
-    const result = await getLinks(currentPage.value, pageSize.value, {
+    const result = await getLinksHybrid(currentPage.value, pageSize.value, {
       sortBy: sortBy.value,
       sortDesc: sortOrder.value === 'desc',
     });
@@ -220,7 +220,7 @@ async function changePage(page: number) {
 
 async function handleDelete(id: string) {
   if (!confirm('确定要删除这个链接吗？（删除后可在回收站还原）')) return;
-  await deleteLink(id);
+  await deleteLinkHybrid(id);
   await loadLinks();
   // 更新统计
   const stats = await getDomainStats();
@@ -233,7 +233,7 @@ async function handleBatchDelete() {
   const ids = Array.from(selectedIds.value);
   
   for (const id of ids) {
-    await deleteLink(id);
+    await deleteLinkHybrid(id);
   }
   
   selectedIds.value.clear();
@@ -247,7 +247,7 @@ async function handleBatchDelete() {
 async function loadTrash() {
   trashLoading.value = true;
   try {
-    trashItems.value = await getTrashItems();
+    trashItems.value = await getTrashItemsHybrid();
   } finally {
     trashLoading.value = false;
   }
@@ -263,7 +263,7 @@ function switchTab(tab: TabView) {
 async function restoreItem(recordId: string) {
   if (!confirm('确定要还原这个链接吗？')) return;
   
-  await restoreFromTrash(recordId);
+  await restoreFromTrashHybrid(recordId);
   await loadTrash();
   await updateStats();
 }
@@ -271,7 +271,7 @@ async function restoreItem(recordId: string) {
 async function permanentlyDeleteItem(recordId: string) {
   if (!confirm('确定要永久删除这个链接吗？此操作不可撤销！')) return;
   
-  await permanentlyDeleteFromTrash(recordId);
+  await permanentlyDeleteFromTrashHybrid(recordId);
   await loadTrash();
 }
 
@@ -279,7 +279,7 @@ async function emptyTrash() {
   if (!confirm('确定要清空回收站吗？所有项目将被永久删除！')) return;
   
   for (const item of trashItems.value) {
-    await permanentlyDeleteFromTrash(item.id);
+    await permanentlyDeleteFromTrashHybrid(item.id);
   }
   
   await loadTrash();
@@ -297,7 +297,7 @@ async function restoreSelected() {
   if (!confirm(`确定要还原选中的 ${selectedTrashIds.value.size} 个链接吗？`)) return;
   
   for (const id of selectedTrashIds.value) {
-    await restoreFromTrash(id);
+    await restoreFromTrashHybrid(id);
   }
   
   selectedTrashIds.value.clear();
@@ -309,7 +309,7 @@ async function deleteSelected() {
   if (!confirm(`确定要永久删除选中的 ${selectedTrashIds.value.size} 个链接吗？此操作不可撤销！`)) return;
   
   for (const id of selectedTrashIds.value) {
-    await permanentlyDeleteFromTrash(id);
+    await permanentlyDeleteFromTrashHybrid(id);
   }
   
   selectedTrashIds.value.clear();
@@ -317,7 +317,7 @@ async function deleteSelected() {
 }
 
 async function updateStats() {
-  const stats = await getStats();
+  const stats = await getStatsHybrid();
   totalCount.value = stats.linkCount;
 }
 

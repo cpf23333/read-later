@@ -1,13 +1,13 @@
 import { 
-  addLink, 
   getEnabledCustomJsConfig, 
-  isLinkExists, 
   getLinkByUrl 
 } from '@/utils/storage';
 import {
-  syncPendingItems,
-  checkServerHealth,
-  getSyncStatus,
+  addLinkHybrid,
+  isLinkExistsHybrid,
+  syncPendingItemsHybrid,
+  checkServerHealthHybrid,
+  getSyncStatusHybrid,
 } from '@/utils/hybridStorage';
 
 // 右键菜单ID
@@ -36,7 +36,7 @@ export default defineBackground(() => {
 
     try {
       // 检查链接是否已存在
-      const exists = await isLinkExists(info.linkUrl);
+      const exists = await isLinkExistsHybrid(info.linkUrl);
       if (exists) {
         const existingLink = await getLinkByUrl(info.linkUrl);
         console.log('[ReadLater] Link already exists:', existingLink?.id);
@@ -70,7 +70,7 @@ export default defineBackground(() => {
         const customJsConfig = await getEnabledCustomJsConfig();
 
         // 保存链接（会自动处理服务器同步）
-        const linkItem = await addLink({
+        const linkItem = await addLinkHybrid({
           url: info.linkUrl,
           title: pageTitle || result.data.nearbyText || info.linkUrl,
           nearbyImage: result.data.nearbyImage,
@@ -143,12 +143,12 @@ function startPeriodicSync() {
 // 执行同步
 async function performSync() {
   try {
-    const status = await getSyncStatus();
+    const status = await getSyncStatusHybrid();
     
     // 只有有待同步项目时才执行
     if (status.pendingCount > 0) {
       console.log(`[ReadLater] Syncing ${status.pendingCount} pending items...`);
-      const result = await syncPendingItems();
+      const result = await syncPendingItemsHybrid();
       
       if (result.synced > 0) {
         console.log(`[ReadLater] Synced ${result.synced} items, ${result.failed} failed`);
@@ -190,15 +190,15 @@ async function handleMessage(message: any, sender: any) {
       return { success: true };
 
     case 'CHECK_SERVER_HEALTH':
-      const isOnline = await checkServerHealth();
+      const isOnline = await checkServerHealthHybrid();
       return { success: true, data: { isOnline } };
 
     case 'SYNC_NOW':
-      const syncResult = await syncPendingItems();
+      const syncResult = await syncPendingItemsHybrid();
       return { success: syncResult.success, data: syncResult };
 
     case 'GET_SYNC_STATUS':
-      const status = await getSyncStatus();
+      const status = await getSyncStatusHybrid();
       return { success: true, data: status };
 
     default:
