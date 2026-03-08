@@ -70,15 +70,19 @@ async function saveCurrentPage() {
     const screenshotResult = await browser.runtime.sendMessage({
       type: 'CAPTURE_TAB',
     });
-    console.log('[Popup] Screenshot result:', screenshotResult?.success);
+    console.log('[Popup] Screenshot result:', screenshotResult);
+    console.log('[Popup] Screenshot data length:', screenshotResult?.data?.length || 0);
 
     // 保存链接
-    console.log('[Popup] Adding link...');
+    console.log('[Popup] Adding link with data:', {
+      url: tab.url,
+      screenshot: screenshotResult?.data ? `${screenshotResult.data.substring(0, 50)}...` : null,
+    });
     await addLink({
       url: tab.url,
-      title: titleResult.data || tab.title || tab.url,
+      title: titleResult?.data || tab.title || tab.url,
       nearbyImage: null,
-      screenshot: screenshotResult.data,
+      screenshot: screenshotResult?.data || null,
       sourcePage: tab.url,
     });
     console.log('[Popup] Link added successfully');

@@ -138,6 +138,7 @@ async function extractLinkInfo(url: string): Promise<{ success: boolean; data?: 
       linkText,
       nearbyText,
       imageUrl: imageResult.url,
+      imageBase64: imageResult.base64 ? `${imageResult.base64.substring(0, 50)}...` : null,
     });
 
     return {

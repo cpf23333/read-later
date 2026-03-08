@@ -1,5 +1,3 @@
-version: '3'
-
 services:
   readlater:
     # 在线模式：从 Dockerfile 构建，并指定镜像名

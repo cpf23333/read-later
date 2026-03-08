@@ -99,6 +99,42 @@ export async function imageToBase64(url: string): Promise<string | null> {
       return url;
     }
 
+    // 检查是否是blob URL
+    if (url.startsWith('blob:')) {
+      console.log('[ReadLater] Converting blob URL:', url);
+      try {
+        // 在内容脚本中可以直接fetch blob URL
+        const response = await fetch(url);
+        console.log('[ReadLater] Blob fetch response:', response.status, response.type);
+        const blob = await response.blob();
+        console.log('[ReadLater] Blob size:', blob.size, 'type:', blob.type);
+        
+        // 检查文件大小
+        if (blob.size > 5 * 1024 * 1024) {
+          console.warn('[ReadLater] Blob image too large');
+          return null;
+        }
+        
+        const result = await new Promise<string | null>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const base64 = reader.result as string;
+            console.log('[ReadLater] Blob converted to base64, length:', base64.length);
+            resolve(base64);
+          };
+          reader.onerror = (e) => {
+            console.error('[ReadLater] FileReader error:', e);
+            reject(e);
+          };
+          reader.readAsDataURL(blob);
+        });
+        return result;
+      } catch (e) {
+        console.warn('[ReadLater] Failed to fetch blob URL:', e);
+        return null; // blob URL 无法转换，直接返回 null
+      }
+    }
+
     // 使用fetch获取图片
     const response = await fetch(url, {
       mode: 'cors',

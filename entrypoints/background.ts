@@ -11,11 +11,15 @@ const CONTEXT_MENU_ID = 'read-later-save-link';
 export default defineBackground(() => {
   console.log('[ReadLater] Background script started');
 
-  // 创建右键菜单
-  browser.contextMenus.create({
-    id: CONTEXT_MENU_ID,
-    title: '收好链接（稍后再看）',
-    contexts: ['link'],
+  // 创建右键菜单（先移除已存在的，避免重复 ID 错误）
+  browser.contextMenus.removeAll().then(() => {
+    browser.contextMenus.create({
+      id: CONTEXT_MENU_ID,
+      title: '收好链接（稍后再看）',
+      contexts: ['link'],
+    });
+  }).catch((err) => {
+    console.warn('[ReadLater] Failed to create context menu:', err);
   });
 
   // 监听菜单点击
@@ -58,6 +62,17 @@ export default defineBackground(() => {
         
         // 尝试获取页面截图
         const screenshot = await captureTab(tab.id);
+        
+        console.log('[ReadLater] Background received data:', {
+          nearbyImage: result.data.nearbyImage ? `${result.data.nearbyImage.substring(0, 50)}...` : null,
+          isNearbyImageBase64: result.data.nearbyImage?.startsWith('data:'),
+          screenshot: screenshot ? `${screenshot.substring(0, 50)}...` : null,
+        });
+
+        console.log('[ReadLater] Full result.data:', {
+          ...result.data,
+          nearbyImage: result.data.nearbyImage ? '【base64 data】' : null,
+        });
 
         // 获取自定义JS配置
         const customJsConfig = await getEnabledCustomJsConfig();
@@ -109,8 +124,14 @@ export default defineBackground(() => {
 async function handleMessage(message: any, sender: any) {
   switch (message.type) {
     case 'CAPTURE_TAB':
-      if (sender.tab?.id) {
-        const screenshot = await captureTab(sender.tab.id);
+      // 从 sender.tab 获取或查询当前活动标签页
+      let tabId = sender.tab?.id;
+      if (!tabId) {
+        const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+        tabId = tab?.id;
+      }
+      if (tabId) {
+        const screenshot = await captureTab(tabId);
         return { success: true, data: screenshot };
       }
       return { success: false, error: 'No active tab' };

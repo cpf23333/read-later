@@ -111,7 +111,7 @@ async function dbToLinkItem(item: any): Promise<LinkItem> {
     return imgPath;
   };
   
-  return {
+  const result = {
     id: item.id,
     url: item.url,
     title: item.title,
@@ -121,6 +121,14 @@ async function dbToLinkItem(item: any): Promise<LinkItem> {
     createdAt: item.created_at,
     customData: item.custom_data ? JSON.parse(item.custom_data) : undefined,
   };
+  
+  console.log('[dbToLinkItem] Converted:', {
+    url: result.url,
+    nearbyImage: result.nearbyImage,
+    screenshot: result.screenshot,
+  });
+  
+  return result;
 }
 
 // ===== 链接 API =====
@@ -183,6 +191,11 @@ export async function apiSearchLinks(query: string): Promise<LinkItem[]> {
 }
 
 export async function apiAddLink(link: LinkItem): Promise<void> {
+  console.log('[apiAddLink] Sending link to server:', {
+    url: link.url,
+    nearbyImage: link.nearbyImage ? `${link.nearbyImage.substring(0, 50)}...` : null,
+    screenshot: link.screenshot ? `${link.screenshot.substring(0, 50)}...` : null,
+  });
   await apiRequest('/api/links', {
     method: 'POST',
     body: JSON.stringify({

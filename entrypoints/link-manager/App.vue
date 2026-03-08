@@ -672,8 +672,8 @@ onMounted(() => {
             />
           </div>
 
-          <div class="card-image" v-if="link.nearbyImage">
-            <img :src="link.nearbyImage" :alt="link.title" loading="lazy" />
+          <div class="card-image" v-if="link.nearbyImage || link.screenshot">
+            <img :src="link.nearbyImage || link.screenshot || ''" :alt="link.title" loading="lazy" />
           </div>
           <div v-else class="card-image empty">
             <span>无图片</span>
@@ -777,6 +777,12 @@ onMounted(() => {
                 :checked="selectedTrashIds.has(item.id)"
                 @change="toggleTrashSelection(item.id)"
               />
+            </div>
+            <div class="trash-image" v-if="item.nearbyImage || item.screenshot">
+              <img :src="item.nearbyImage || item.screenshot || ''" :alt="item.title" loading="lazy" />
+            </div>
+            <div v-else class="trash-image empty">
+              <span>无图片</span>
             </div>
             <div class="trash-content">
               <h4 class="trash-title">{{ item.title }}</h4>
@@ -1327,6 +1333,29 @@ onMounted(() => {
 .trash-checkbox input {
   width: 20px;
   height: 20px;
+}
+
+.trash-image {
+  width: 80px;
+  height: 60px;
+  background: #f3f4f6;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.trash-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.trash-image.empty {
+  color: #9ca3af;
+  font-size: 12px;
 }
 
 .trash-content {

@@ -95,13 +95,10 @@ export async function addLink(link: Omit<LinkItem, 'id' | 'createdAt'>): Promise
     createdAt: Date.now(),
   };
   
-  // 上传图片到服务器
-  const itemWithImages = await uploadImagesIfNeeded(item);
+  // 直接发送数据到服务器，由服务器处理图片保存
+  await apiAddLink(item);
   
-  // 保存到服务器
-  await apiAddLink(itemWithImages);
-  
-  return itemWithImages;
+  return item;
 }
 
 // 删除链接
