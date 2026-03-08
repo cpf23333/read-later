@@ -25,6 +25,15 @@ import {
   getWebDAVConfig,
   getDeletedImages,
 } from '@/utils/webdav';
+import {
+  isUsingServer,
+  apiGetLinks,
+  apiDeleteLink,
+  apiGetTrash,
+  apiRestoreFromTrash,
+  apiPermanentlyDelete,
+  apiGetStats,
+} from '@/utils/apiStorage';
 
 type SortBy = 'createdAt' | 'title' | 'domain';
 type SortOrder = 'asc' | 'desc';
@@ -82,15 +91,25 @@ onMounted(async () => {
 async function loadInitialData() {
   loading.value = true;
   try {
-    const [count, domainList, stats] = await Promise.all([
-      getLinkCount(),
-      getAllDomains(),
-      getDomainStats(),
-    ]);
-    totalCount.value = count;
-    domains.value = domainList;
-    domainStats.value = stats;
-    await loadLinks();
+    const usingServer = await isUsingServer();
+    
+    if (usingServer) {
+      // 服务器模式
+      const stats = await apiGetStats();
+      totalCount.value = stats.linkCount;
+      await loadLinks();
+    } else {
+      // 本地模式
+      const [count, domainList, stats] = await Promise.all([
+        getLinkCount(),
+        getAllDomains(),
+        getDomainStats(),
+      ]);
+      totalCount.value = count;
+      domains.value = domainList;
+      domainStats.value = stats;
+      await loadLinks();
+    }
   } finally {
     loading.value = false;
   }
@@ -99,17 +118,27 @@ async function loadInitialData() {
 async function loadLinks() {
   loading.value = true;
   try {
-    const result = await queryLinks({
-      page: currentPage.value,
-      pageSize: pageSize.value,
-      sortBy: sortBy.value,
-      sortOrder: sortOrder.value,
-      domainFilter: domainFilter.value || null,
-      dateFrom: dateFrom.value ? new Date(dateFrom.value).getTime() : null,
-      dateTo: dateTo.value ? new Date(dateTo.value).getTime() + 86400000 : null, // 包含当天
-    });
-    links.value = result.links;
-    total.value = result.total;
+    const usingServer = await isUsingServer();
+    
+    if (usingServer) {
+      // 服务器模式
+      const result = await apiGetLinks(currentPage.value, pageSize.value);
+      links.value = result.links;
+      total.value = result.total;
+    } else {
+      // 本地模式
+      const result = await queryLinks({
+        page: currentPage.value,
+        pageSize: pageSize.value,
+        sortBy: sortBy.value,
+        sortOrder: sortOrder.value,
+        domainFilter: domainFilter.value || null,
+        dateFrom: dateFrom.value ? new Date(dateFrom.value).getTime() : null,
+        dateTo: dateTo.value ? new Date(dateTo.value).getTime() + 86400000 : null,
+      });
+      links.value = result.links;
+      total.value = result.total;
+    }
     selectedIds.value.clear();
   } finally {
     loading.value = false;
@@ -250,7 +279,12 @@ async function handleBatchDelete() {
 async function loadTrash() {
   trashLoading.value = true;
   try {
-    trashItems.value = await getTrashItems();
+    const usingServer = await isUsingServer();
+    if (usingServer) {
+      trashItems.value = await apiGetTrash();
+    } else {
+      trashItems.value = await getTrashItems();
+    }
   } finally {
     trashLoading.value = false;
   }
@@ -266,13 +300,16 @@ function switchTab(tab: TabView) {
 async function restoreItem(recordId: string) {
   if (!confirm('确定要还原这个链接吗？')) return;
   
-  // 获取记录信息用于还原图片
-  const record = trashItems.value.find(r => r.id === recordId);
+  const usingServer = await isUsingServer();
   
-  const result = await restoreFromTrash(recordId);
-  if (result.success) {
-    // 如果启用了 WebDAV，尝试还原图片
-    if (record) {
+  if (usingServer) {
+    // 服务器模式
+    await apiRestoreFromTrash(recordId);
+  } else {
+    // 本地/WebDAV 模式
+    const record = trashItems.value.find(r => r.id === recordId);
+    const result = await restoreFromTrash(recordId);
+    if (result.success && record) {
       const webdavConfig = await getWebDAVConfig();
       if (webdavConfig.enabled) {
         const deletedDate = new Date(record.deletedAt).toISOString().slice(0, 10);
@@ -291,13 +328,16 @@ async function restoreItem(recordId: string) {
 async function permanentlyDeleteItem(recordId: string) {
   if (!confirm('确定要永久删除这个链接吗？此操作不可撤销！')) return;
   
-  // 获取记录信息用于删除图片
-  const record = trashItems.value.find(r => r.id === recordId);
+  const usingServer = await isUsingServer();
   
-  const success = await permanentlyDeleteFromTrash(recordId);
-  if (success) {
-    // 如果启用了 WebDAV，永久删除图片
-    if (record) {
+  if (usingServer) {
+    // 服务器模式
+    await apiPermanentlyDelete(recordId);
+  } else {
+    // 本地/WebDAV 模式
+    const record = trashItems.value.find(r => r.id === recordId);
+    const success = await permanentlyDeleteFromTrash(recordId);
+    if (success && record) {
       const webdavConfig = await getWebDAVConfig();
       if (webdavConfig.enabled) {
         const deletedDate = new Date(record.deletedAt).toISOString().slice(0, 10);
@@ -308,8 +348,8 @@ async function permanentlyDeleteItem(recordId: string) {
         }
       }
     }
-    await loadTrash();
   }
+  await loadTrash();
 }
 
 async function emptyTrash() {

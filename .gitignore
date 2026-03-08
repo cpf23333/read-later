@@ -24,3 +24,8 @@ web-ext.config.ts
 *.njsproj
 *.sln
 *.sw?
+server-deploy.zip
+server/readlater-offline.zip
+server/read-later-server.tar
+
+.temp

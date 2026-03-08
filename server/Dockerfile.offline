@@ -1,0 +1,26 @@
+# 完全离线版本 - 使用本地 node_modules
+# 在有网络的机器上先执行：npm install 并打包
+
+FROM registry.cn-hangzhou.aliyuncs.com/nodejs/node:20-alpine
+
+WORKDIR /app
+
+# 安装 Python 和构建工具（better-sqlite3 需要编译）
+RUN apk add --no-cache python3 make g++
+
+# 复制已下载的依赖（需要在有网络的环境中预先下载）
+COPY node_modules ./node_modules
+COPY package.json .
+
+# 复制代码
+COPY server.js .
+
+# 创建数据目录
+RUN mkdir -p /app/data
+
+# 数据卷
+VOLUME ["/app/data"]
+
+EXPOSE 3000
+
+CMD ["node", "server.js"]

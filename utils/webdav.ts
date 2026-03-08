@@ -174,67 +174,43 @@ function getFilePath(config: WebDAVConfig, fileName: string): string {
   return `${baseUrl}/${folder}/${fileName}`;
 }
 
-// 确保文件夹存在
+// 创建文件夹（如果服务器支持 MKCOL）
+async function tryCreateFolder(url: string, config: WebDAVConfig): Promise<boolean> {
+  try {
+    const response = await fetch(url, {
+      method: 'MKCOL',
+      headers: {
+        'Authorization': 'Basic ' + btoa(config.username + ':' + config.password),
+      },
+    });
+    // 201 成功创建，405 已存在，都算是成功
+    return response.status === 201 || response.status === 405;
+  } catch (error) {
+    return false;
+  }
+}
+
+// 确保文件夹存在（兼容不支持 MKCOL 的服务器）
 async function ensureFolderExists(config: WebDAVConfig): Promise<void> {
   const folder = config.folderName || DEFAULT_FOLDER;
   const baseUrl = config.url.endsWith('/') ? config.url.slice(0, -1) : config.url;
   const folderUrl = `${baseUrl}/${folder}`;
 
-  try {
-    // 尝试创建文件夹（MKCOL）
-    const response = await fetch(folderUrl, {
-      method: 'MKCOL',
-      headers: {
-        'Authorization': 'Basic ' + btoa(config.username + ':' + config.password),
-      },
-    });
+  // 尝试创建主文件夹
+  const mainCreated = await tryCreateFolder(folderUrl, config);
+  if (!mainCreated) {
+    console.warn('[ReadLater] Could not create main folder, server may not support MKCOL');
+  }
 
-    // 201 创建成功，405 已存在，都是正常情况
-    if (response.status !== 201 && response.status !== 405) {
-      throw new Error(`创建文件夹失败: HTTP ${response.status}`);
+  // 尝试创建子文件夹（如果服务器不支持 MKCOL，这些会失败，但我们继续）
+  const subFolders = [HISTORY_FOLDER, IMAGES_FOLDER, DELETED_IMAGES_FOLDER];
+  
+  for (const subFolder of subFolders) {
+    const subUrl = `${folderUrl}/${subFolder}`;
+    const created = await tryCreateFolder(subUrl, config);
+    if (!created) {
+      console.warn(`[ReadLater] Could not create ${subFolder} folder`);
     }
-
-    // 创建 history 子文件夹
-    const historyUrl = `${folderUrl}/${HISTORY_FOLDER}`;
-    const historyResponse = await fetch(historyUrl, {
-      method: 'MKCOL',
-      headers: {
-        'Authorization': 'Basic ' + btoa(config.username + ':' + config.password),
-      },
-    });
-
-    if (historyResponse.status !== 201 && historyResponse.status !== 405) {
-      console.warn('[ReadLater] History folder creation warning:', historyResponse.status);
-    }
-
-    // 创建 images 子文件夹
-    const imagesUrl = `${folderUrl}/${IMAGES_FOLDER}`;
-    const imagesResponse = await fetch(imagesUrl, {
-      method: 'MKCOL',
-      headers: {
-        'Authorization': 'Basic ' + btoa(config.username + ':' + config.password),
-      },
-    });
-
-    if (imagesResponse.status !== 201 && imagesResponse.status !== 405) {
-      console.warn('[ReadLater] Images folder creation warning:', imagesResponse.status);
-    }
-
-    // 创建 images/deleted 子文件夹（存放已删除的图片）
-    const deletedImagesUrl = `${folderUrl}/${DELETED_IMAGES_FOLDER}`;
-    const deletedImagesResponse = await fetch(deletedImagesUrl, {
-      method: 'MKCOL',
-      headers: {
-        'Authorization': 'Basic ' + btoa(config.username + ':' + config.password),
-      },
-    });
-
-    if (deletedImagesResponse.status !== 201 && deletedImagesResponse.status !== 405) {
-      console.warn('[ReadLater] Deleted images folder creation warning:', deletedImagesResponse.status);
-    }
-  } catch (error) {
-    console.error('[ReadLater] Failed to create folder:', error);
-    throw error;
   }
 }
 
@@ -501,18 +477,62 @@ async function syncImages(
   return result;
 }
 
+// 确保 deleted 文件夹存在
+// 注意：某些 WebDAV 服务器（如群晖）不支持 MKCOL，我们尝试多种方法
+async function ensureDeletedFolderExists(config: WebDAVConfig): Promise<boolean> {
+  try {
+    const folder = config.folderName || DEFAULT_FOLDER;
+    const baseUrl = config.url.endsWith('/') ? config.url.slice(0, -1) : config.url;
+    const deletedUrl = `${baseUrl}/${folder}/${DELETED_IMAGES_FOLDER}`;
+    
+    // 方法1: 尝试 MKCOL（标准 WebDAV）
+    const response = await fetch(deletedUrl, {
+      method: 'MKCOL',
+      headers: {
+        'Authorization': 'Basic ' + btoa(config.username + ':' + config.password),
+      },
+    });
+    
+    // 201 创建成功，405 已存在，都是正常情况
+    if (response.status === 201 || response.status === 405) {
+      return true;
+    }
+    
+    // 方法2: 如果 MKCOL 被禁止 (405)，尝试 PUT 一个空文件再删除
+    // 某些服务器允许通过 PUT 创建父文件夹
+    if (response.status === 405) {
+      console.warn('[ReadLater] MKCOL not supported, trying alternative method');
+      
+      // 尝试直接移动文件，如果目标文件夹不存在，某些服务器会自动创建
+      return false; // 返回 false 表示可能不存在，但让移动操作自己处理
+    }
+    
+    return false;
+  } catch (error) {
+    console.warn('[ReadLater] Error creating deleted folder:', error);
+    return false;
+  }
+}
+
 // 将图片移动到 images/deleted 文件夹（而不是直接删除）
 export async function deleteRemoteImage(
   config: WebDAVConfig,
   linkId: string
-): Promise<void> {
+): Promise<{ moved: number; failed: number; skipped: number }> {
+  const result = { moved: 0, failed: 0, skipped: 0 };
+  
   try {
+    // 尝试创建目标文件夹（某些服务器不支持 MKCOL）
+    const folderCreated = await ensureDeletedFolderExists(config);
+    
     const timestamp = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
     
     for (const imageType of ['screenshot', 'nearby']) {
       const fileName = `${linkId}_${imageType}.png`;
       const sourceUrl = getFilePath(config, `${IMAGES_FOLDER}/${fileName}`);
       const destUrl = getFilePath(config, `${DELETED_IMAGES_FOLDER}/${timestamp}_${fileName}`);
+      
+      console.log('[ReadLater] Moving image:', sourceUrl, '->', destUrl);
       
       // 使用 MOVE 方法将图片移动到 images/deleted 文件夹
       const response = await fetch(sourceUrl, {
@@ -524,14 +544,37 @@ export async function deleteRemoteImage(
         },
       });
       
-      // 如果 MOVE 失败（如文件不存在），忽略错误
-      if (!response.ok && response.status !== 404) {
+      if (response.ok) {
+        console.log(`[ReadLater] Successfully moved image ${fileName}`);
+        result.moved++;
+      } else if (response.status === 404) {
+        // 源文件不存在，跳过
+        console.log(`[ReadLater] Source image not found ${fileName}`);
+        result.skipped++;
+      } else if (response.status === 409) {
+        // 409 Conflict - 目标文件夹不存在且无法自动创建
+        console.warn(`[ReadLater] Target folder may not exist for ${fileName}:`, response.status);
+        result.failed++;
+        
+        // 尝试回退方案：复制到新位置然后删除原文件
+        // 如果服务器不支持 MOVE 或文件夹不存在，我们只能保留原处
+      } else {
         console.warn(`[ReadLater] Failed to move image ${fileName}:`, response.status);
+        result.failed++;
       }
     }
+    
+    // 如果移动失败且文件夹未创建，给出警告
+    if (result.failed > 0 && !folderCreated) {
+      console.warn('[ReadLater] WebDAV server may not support MKCOL. Images remain in original location.');
+    }
+    
   } catch (error) {
     console.warn(`[ReadLater] Failed to move remote images for ${linkId}:`, error);
+    result.failed++;
   }
+  
+  return result;
 }
 
 // 从回收站还原图片（移回 images 文件夹）
@@ -1148,7 +1191,7 @@ export async function forceUploadToWebDAV(config?: WebDAVConfig): Promise<SyncRe
 }
 
 // 设置自动同步
-let syncIntervalId: number | null = null;
+let syncIntervalId: NodeJS.Timeout | null = null;
 
 export async function setupAutoSync(): Promise<void> {
   if (syncIntervalId) {
@@ -1162,7 +1205,7 @@ export async function setupAutoSync(): Promise<void> {
     return;
   }
 
-  syncIntervalId = window.setInterval(async () => {
+  syncIntervalId = setInterval(async () => {
     console.log('[ReadLater] Auto sync started');
     const result = await syncWithWebDAV(config);
     console.log('[ReadLater] Auto sync result:', result);

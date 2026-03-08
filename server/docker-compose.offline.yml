@@ -1,0 +1,18 @@
+version: '3'
+
+services:
+  readlater:
+    # 离线模式：直接使用已加载的镜像（通过 docker load）
+    image: read-later-server:latest
+    container_name: readlater
+    ports:
+      - "3000:3000"
+    volumes:
+      # fnOS 用户请修改为实际路径，例如：
+      # - /vol1/backup/readlater:/app/data
+      - ./data:/app/data
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DATA_DIR=/app/data
+    restart: unless-stopped

@@ -27,8 +27,14 @@ import {
   SyncResult,
   HistoryVersion,
 } from '@/utils/webdav';
+import {
+  getServerConfig,
+  saveServerConfig,
+  testServerConnection,
+} from '@/utils/apiStorage';
 
-const activeTab = ref<'extractor' | 'import' | 'webdav'>('extractor');
+type TabType = 'extractor' | 'import' | 'webdav' | 'server';
+const activeTab = ref<TabType>('server');
 
 // ===== 自定义JS配置 =====
 const configs = ref<CustomJsConfig[]>([]);
@@ -69,9 +75,23 @@ const historyVersions = ref<HistoryVersion[]>([]);
 const loadingHistory = ref(false);
 const showHistoryModal = ref(false);
 
+// ===== 服务器配置 =====
+interface ServerConfig {
+  enabled: boolean;
+  url: string;
+}
+const serverConfig = ref<ServerConfig>({
+  enabled: false,
+  url: '',
+});
+const testingServer = ref(false);
+const savingServer = ref(false);
+const serverStatus = ref<{ success: boolean; message: string } | null>(null);
+
 onMounted(async () => {
   await loadConfigs();
   await loadWebDAVConfig();
+  await loadServerConfig();
 });
 
 // ===== 自定义JS配置方法 =====
@@ -206,6 +226,34 @@ async function handleImport() {
 // ===== WebDAV 方法 =====
 async function loadWebDAVConfig() {
   webdavConfig.value = await getWebDAVConfig();
+}
+
+// ===== 服务器配置方法 =====
+async function loadServerConfig() {
+  serverConfig.value = await getServerConfig();
+}
+
+async function testServer() {
+  testingServer.value = true;
+  serverStatus.value = null;
+  
+  try {
+    const result = await testServerConnection(serverConfig.value.url);
+    serverStatus.value = result;
+  } finally {
+    testingServer.value = false;
+  }
+}
+
+async function saveServer() {
+  savingServer.value = true;
+  try {
+    await saveServerConfig(serverConfig.value);
+    alert('服务器配置已保存');
+    serverStatus.value = null;
+  } finally {
+    savingServer.value = false;
+  }
 }
 
 async function testConnection() {
@@ -363,6 +411,13 @@ async function deleteVersion(version: HistoryVersion, event: Event) {
         @click="activeTab = 'webdav'"
       >
         WebDAV 同步
+      </button>
+      <button 
+        class="tab-btn" 
+        :class="{ active: activeTab === 'server' }"
+        @click="activeTab = 'server'"
+      >
+        🖥️ 服务器
       </button>
     </nav>
 
@@ -640,6 +695,64 @@ async function deleteVersion(version: HistoryVersion, event: Event) {
             <li><strong>群晖 NAS</strong>：启用 WebDAV Server 套件</li>
           </ul>
           <p class="hint">数据将保存在服务器上的 <code>readlater-data.json</code> 文件中</p>
+        </div>
+      </section>
+
+      <!-- 服务器配置 Tab -->
+      <section v-if="activeTab === 'server'" class="section">
+        <h2>🖥️ SQLite 服务器</h2>
+        <p class="section-desc">配置自建后端服务器，使用 SQLite 存储数据</p>
+
+        <div class="webdav-form">
+          <div class="form-group checkbox-group">
+            <label class="checkbox">
+              <input type="checkbox" v-model="serverConfig.enabled" />
+              <span>启用服务器存储</span>
+            </label>
+          </div>
+
+          <div class="form-group">
+            <label>服务器地址</label>
+            <input 
+              v-model="serverConfig.url" 
+              type="url" 
+              placeholder="http://192.168.1.100:3000"
+              :disabled="!serverConfig.enabled"
+            />
+            <span class="hint">例如：http://localhost:3000 或 http://NAS_IP:3000</span>
+          </div>
+
+          <div class="form-actions">
+            <button 
+              class="btn btn-default" 
+              @click="testServer" 
+              :disabled="!serverConfig.enabled || !serverConfig.url || testingServer"
+            >
+              {{ testingServer ? '测试中...' : '测试连接' }}
+            </button>
+            <button 
+              class="btn btn-primary" 
+              @click="saveServer" 
+              :disabled="savingServer"
+            >
+              {{ savingServer ? '保存中...' : '保存配置' }}
+            </button>
+          </div>
+
+          <div v-if="serverStatus" class="connection-status" :class="serverStatus.success ? 'success' : 'error'">
+            {{ serverStatus.message }}
+          </div>
+
+          <div class="help-content" style="margin-top: 24px;">
+            <h3>部署指南</h3>
+            <ol>
+              <li>在 NAS/服务器上安装 Docker</li>
+              <li>下载 server 文件夹到服务器</li>
+              <li>运行：<code>docker-compose up -d</code></li>
+              <li>数据将保存在 <code>./data</code> 目录</li>
+            </ol>
+            <p class="hint">相比 WebDAV，服务器模式支持真正的回收站和更快的查询</p>
+          </div>
         </div>
       </section>
     </main>
