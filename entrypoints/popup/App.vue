@@ -107,7 +107,7 @@ async function saveCurrentPage() {
     </main>
 
     <footer class="footer">
-      <a href="#" @click.prevent="openSettings">配置 WebDAV 同步 →</a>
+      <a href="#" @click.prevent="openSettings">配置服务器同步 →</a>
     </footer>
   </div>
 </template>

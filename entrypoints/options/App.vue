@@ -13,27 +13,12 @@ import {
   EXTRACTOR_TEMPLATES 
 } from '@/utils/imageExtractor';
 import {
-  getWebDAVConfig,
-  saveWebDAVConfig,
-  testWebDAVConnection,
-  syncWithWebDAV,
-  forceDownloadFromWebDAV,
-  forceUploadToWebDAV,
-  setupAutoSync,
-  getHistoryVersions,
-  restoreFromHistory,
-  deleteHistoryVersion,
-  WebDAVConfig,
-  SyncResult,
-  HistoryVersion,
-} from '@/utils/webdav';
-import {
   getServerConfig,
   saveServerConfig,
   testServerConnection,
 } from '@/utils/apiStorage';
 
-type TabType = 'extractor' | 'import' | 'webdav' | 'server';
+type TabType = 'extractor' | 'import' | 'server';
 const activeTab = ref<TabType>('server');
 
 // ===== 自定义JS配置 =====
@@ -53,28 +38,6 @@ const importResult = ref<ImportResult | null>(null);
 const importing = ref(false);
 const exporting = ref(false);
 
-// ===== WebDAV =====
-const webdavConfig = ref<WebDAVConfig>({
-  enabled: false,
-  url: '',
-  username: '',
-  password: '',
-  autoSync: false,
-  syncInterval: 30,
-  folderName: 'ReadLater',
-  keepHistory: 10,
-});
-const testingConnection = ref(false);
-const connectionStatus = ref<{ success: boolean; message: string } | null>(null);
-const syncing = ref(false);
-const syncResult = ref<SyncResult | null>(null);
-const savingWebDAV = ref(false);
-
-// 历史版本
-const historyVersions = ref<HistoryVersion[]>([]);
-const loadingHistory = ref(false);
-const showHistoryModal = ref(false);
-
 // ===== 服务器配置 =====
 interface ServerConfig {
   enabled: boolean;
@@ -90,7 +53,6 @@ const serverStatus = ref<{ success: boolean; message: string } | null>(null);
 
 onMounted(async () => {
   await loadConfigs();
-  await loadWebDAVConfig();
   await loadServerConfig();
 });
 
@@ -223,11 +185,6 @@ async function handleImport() {
   }
 }
 
-// ===== WebDAV 方法 =====
-async function loadWebDAVConfig() {
-  webdavConfig.value = await getWebDAVConfig();
-}
-
 // ===== 服务器配置方法 =====
 async function loadServerConfig() {
   serverConfig.value = await getServerConfig();
@@ -256,130 +213,7 @@ async function saveServer() {
   }
 }
 
-async function testConnection() {
-  testingConnection.value = true;
-  connectionStatus.value = null;
-  
-  try {
-    const result = await testWebDAVConnection(webdavConfig.value);
-    connectionStatus.value = result;
-  } finally {
-    testingConnection.value = false;
-  }
-}
 
-async function saveWebDAV() {
-  savingWebDAV.value = true;
-  try {
-    await saveWebDAVConfig(webdavConfig.value);
-    await setupAutoSync();
-    alert('WebDAV 配置已保存');
-  } finally {
-    savingWebDAV.value = false;
-  }
-}
-
-async function syncNow() {
-  syncing.value = true;
-  syncResult.value = null;
-  
-  try {
-    const result = await syncWithWebDAV();
-    syncResult.value = result;
-    
-    if (!result.success) {
-      alert(`同步失败: ${result.message}`);
-    }
-  } catch (error) {
-    alert(`同步出错: ${error instanceof Error ? error.message : '未知错误'}`);
-  } finally {
-    syncing.value = false;
-  }
-}
-
-async function forceDownload() {
-  if (!confirm('确定要从云端下载并覆盖本地数据吗？此操作不可撤销。')) return;
-  
-  syncing.value = true;
-  syncResult.value = null;
-  
-  try {
-    const result = await forceDownloadFromWebDAV();
-    syncResult.value = result;
-    alert(result.message);
-  } catch (error) {
-    alert(`下载失败: ${error instanceof Error ? error.message : '未知错误'}`);
-  } finally {
-    syncing.value = false;
-  }
-}
-
-async function forceUpload() {
-  if (!confirm('确定要上传本地数据并覆盖云端吗？此操作不可撤销。')) return;
-  
-  syncing.value = true;
-  syncResult.value = null;
-  
-  try {
-    const result = await forceUploadToWebDAV();
-    syncResult.value = result;
-    alert(result.message);
-  } catch (error) {
-    alert(`上传失败: ${error instanceof Error ? error.message : '未知错误'}`);
-  } finally {
-    syncing.value = false;
-  }
-}
-
-function formatTime(timestamp: number | undefined): string {
-  if (!timestamp) return '从未';
-  return new Date(timestamp).toLocaleString('zh-CN');
-}
-
-// ===== 历史版本方法 =====
-async function loadHistoryVersions() {
-  loadingHistory.value = true;
-  try {
-    historyVersions.value = await getHistoryVersions(webdavConfig.value);
-  } catch (error) {
-    console.error('Failed to load history:', error);
-    historyVersions.value = [];
-  } finally {
-    loadingHistory.value = false;
-  }
-}
-
-async function openHistoryModal() {
-  showHistoryModal.value = true;
-  await loadHistoryVersions();
-}
-
-async function restoreVersion(version: HistoryVersion) {
-  if (!confirm(`确定要恢复到 ${version.date} 的版本吗？\n当前数据将被覆盖，建议先导出备份。`)) {
-    return;
-  }
-
-  const result = await restoreFromHistory(webdavConfig.value, version);
-  
-  if (result.success) {
-    alert(`✅ ${result.message}\n已恢复 ${result.imported} 个链接`);
-    showHistoryModal.value = false;
-  } else {
-    alert(`❌ ${result.message}`);
-  }
-}
-
-async function deleteVersion(version: HistoryVersion, event: Event) {
-  event.stopPropagation();
-  if (!confirm(`确定要删除 ${version.date} 的历史版本吗？`)) return;
-
-  const success = await deleteHistoryVersion(webdavConfig.value, version);
-  if (success) {
-    await loadHistoryVersions();
-  } else {
-    alert('删除失败');
-  }
-}
 </script>
 
 <template>
@@ -404,13 +238,6 @@ async function deleteVersion(version: HistoryVersion, event: Event) {
         @click="activeTab = 'import'"
       >
         导入/导出
-      </button>
-      <button 
-        class="tab-btn" 
-        :class="{ active: activeTab === 'webdav' }"
-        @click="activeTab = 'webdav'"
-      >
-        WebDAV 同步
       </button>
       <button 
         class="tab-btn" 
@@ -539,165 +366,6 @@ async function deleteVersion(version: HistoryVersion, event: Event) {
         </div>
       </section>
 
-      <!-- WebDAV Tab -->
-      <section v-if="activeTab === 'webdav'" class="section">
-        <h2>WebDAV 同步</h2>
-        <p class="section-desc">配置 WebDAV 服务器，实现多设备数据同步</p>
-
-        <div class="webdav-form">
-          <div class="form-group checkbox-group">
-            <label class="checkbox">
-              <input type="checkbox" v-model="webdavConfig.enabled" />
-              <span>启用 WebDAV 同步</span>
-            </label>
-          </div>
-
-          <div class="form-group">
-            <label>WebDAV 服务器地址</label>
-            <input 
-              v-model="webdavConfig.url" 
-              type="url" 
-              placeholder="https://example.com/dav/"
-              :disabled="!webdavConfig.enabled"
-            />
-            <span class="hint">例如：坚果云 https://dav.jianguoyun.com/dav/</span>
-          </div>
-
-          <div class="form-row">
-            <div class="form-group">
-              <label>用户名</label>
-              <input 
-                v-model="webdavConfig.username" 
-                type="text" 
-                placeholder="your@email.com"
-                :disabled="!webdavConfig.enabled"
-              />
-            </div>
-            <div class="form-group">
-              <label>密码/应用密码</label>
-              <input 
-                v-model="webdavConfig.password" 
-                type="password" 
-                placeholder="••••••••"
-                :disabled="!webdavConfig.enabled"
-              />
-            </div>
-          </div>
-
-          <div class="form-group checkbox-group">
-            <label class="checkbox">
-              <input type="checkbox" v-model="webdavConfig.autoSync" :disabled="!webdavConfig.enabled" />
-              <span>自动同步</span>
-            </label>
-          </div>
-
-          <div class="form-group" v-if="webdavConfig.autoSync">
-            <label>同步间隔（分钟）</label>
-            <input 
-              v-model.number="webdavConfig.syncInterval" 
-              type="number" 
-              min="5"
-              max="1440"
-              :disabled="!webdavConfig.enabled"
-            />
-          </div>
-
-          <div class="form-group">
-            <label>存储文件夹名称</label>
-            <input 
-              v-model="webdavConfig.folderName" 
-              type="text" 
-              placeholder="ReadLater"
-              :disabled="!webdavConfig.enabled"
-            />
-            <span class="hint">数据将保存在 WebDAV 服务器的此文件夹中</span>
-            <span class="warning-hint">
-              ⚠️ 更改文件夹名称不会自动迁移旧数据。如需迁移，请先在旧文件夹导出备份，改配置后再导入。
-            </span>
-          </div>
-
-          <div class="form-group">
-            <label>保留历史版本数量</label>
-            <input 
-              v-model.number="webdavConfig.keepHistory" 
-              type="number" 
-              min="0"
-              max="100"
-              :disabled="!webdavConfig.enabled"
-            />
-            <span class="hint">每次同步时自动保存历史版本，方便回溯（0 表示不保存）</span>
-          </div>
-
-          <div class="form-actions">
-            <button 
-              class="btn btn-default" 
-              @click="testConnection" 
-              :disabled="!webdavConfig.enabled || !webdavConfig.url || testingConnection"
-            >
-              {{ testingConnection ? '测试中...' : '测试连接' }}
-            </button>
-            <button 
-              class="btn btn-primary" 
-              @click="saveWebDAV" 
-              :disabled="savingWebDAV"
-            >
-              {{ savingWebDAV ? '保存中...' : '保存配置' }}
-            </button>
-          </div>
-
-          <div v-if="connectionStatus" class="connection-status" :class="connectionStatus.success ? 'success' : 'error'">
-            {{ connectionStatus.message }}
-          </div>
-
-          <div class="sync-actions" v-if="webdavConfig.enabled">
-            <h4>手动同步</h4>
-            <div class="sync-buttons">
-              <button class="btn btn-primary" @click="syncNow" :disabled="syncing">
-                {{ syncing ? '同步中...' : '🔄 双向合并同步' }}
-              </button>
-              <button class="btn btn-default" @click="forceDownload" :disabled="syncing">
-                ⬇️ 下载覆盖本地
-              </button>
-              <button class="btn btn-default" @click="forceUpload" :disabled="syncing">
-                ⬆️ 上传覆盖云端
-              </button>
-              <button class="btn btn-default" @click="openHistoryModal">
-                📜 历史版本
-              </button>
-            </div>
-            <p class="sync-hint">
-              <strong>双向合并</strong>：将本地和云端的链接合并，两边的新链接都会保留<br>
-              <strong>下载覆盖</strong>：用云端数据完全替换本地数据<br>
-              <strong>上传覆盖</strong>：用本地数据完全替换云端数据<br>
-              <strong>历史版本</strong>：查看和恢复到之前的版本<br>
-              最后同步：{{ formatTime(webdavConfig.lastSyncTime) }}
-            </p>
-          </div>
-
-          <div v-if="syncResult" class="result-box" :class="syncResult.success ? 'success' : 'error'">
-            <p>{{ syncResult.message }}</p>
-            <p v-if="syncResult.details" class="details">
-              <span v-if="syncResult.details.merged !== undefined">合并: {{ syncResult.details.merged }} 个</span>
-              <span v-if="syncResult.details.uploaded !== undefined">本地上传: {{ syncResult.details.uploaded }} 个</span>
-              <span v-if="syncResult.details.downloaded !== undefined">远程下载: {{ syncResult.details.downloaded }} 个</span>
-              <span v-if="syncResult.details.deleted !== undefined" style="color: #ef4444;">删除: {{ syncResult.details.deleted }} 个</span>
-              <span v-if="syncResult.details.totalCount !== undefined">总共: {{ syncResult.details.totalCount }} 个</span>
-            </p>
-          </div>
-        </div>
-
-        <div class="help-content">
-          <h3>支持的 WebDAV 服务</h3>
-          <ul>
-            <li><strong>坚果云</strong>：在坚果云网页版生成应用密码</li>
-            <li><strong>Nextcloud</strong>：使用个人页面的 WebDAV 地址</li>
-            <li><strong>ownCloud</strong>：类似 Nextcloud 的设置</li>
-            <li><strong>群晖 NAS</strong>：启用 WebDAV Server 套件</li>
-          </ul>
-          <p class="hint">数据将保存在服务器上的 <code>readlater-data.json</code> 文件中</p>
-        </div>
-      </section>
-
       <!-- 服务器配置 Tab -->
       <section v-if="activeTab === 'server'" class="section">
         <h2>🖥️ SQLite 服务器</h2>
@@ -808,50 +476,7 @@ async function deleteVersion(version: HistoryVersion, event: Event) {
       </div>
     </div>
 
-    <!-- 历史版本模态框 -->
-    <div v-if="showHistoryModal" class="modal-overlay" @click.self="showHistoryModal = false">
-      <div class="modal history-modal">
-        <h3>📜 历史版本</h3>
-        <p class="modal-desc">选择要恢复的历史版本。恢复会覆盖当前数据。</p>
-        
-        <div v-if="loadingHistory" class="loading">
-          <div class="spinner"></div>
-          <p>加载中...</p>
-        </div>
 
-        <div v-else-if="historyVersions.length === 0" class="empty-state">
-          <p>暂无历史版本</p>
-          <p class="hint">同步数据后将自动创建历史版本</p>
-        </div>
-
-        <div v-else class="history-list">
-          <div 
-            v-for="version in historyVersions" 
-            :key="version.fileName"
-            class="history-item"
-            @click="restoreVersion(version)"
-          >
-            <div class="history-info">
-              <span class="history-date">{{ version.date }}</span>
-              <span class="history-filename">{{ version.fileName }}</span>
-            </div>
-            <button 
-              class="btn btn-sm btn-danger" 
-              @click="deleteVersion(version, $event)"
-            >
-              删除
-            </button>
-          </div>
-        </div>
-
-        <div class="modal-actions">
-          <button class="btn btn-default" @click="showHistoryModal = false">关闭</button>
-          <button class="btn btn-primary" @click="loadHistoryVersions" :disabled="loadingHistory">
-            {{ loadingHistory ? '刷新中...' : '刷新列表' }}
-          </button>
-        </div>
-      </div>
-    </div>
   </div>
 </template>
 
@@ -1323,60 +948,6 @@ async function deleteVersion(version: HistoryVersion, event: Event) {
   justify-content: flex-end;
   gap: 12px;
   margin-top: 24px;
-}
-
-/* 历史版本模态框 */
-.history-modal {
-  max-width: 600px;
-}
-
-.history-modal .modal-desc {
-  color: #6b7280;
-  margin-bottom: 20px;
-  font-size: 14px;
-}
-
-.history-list {
-  max-height: 400px;
-  overflow-y: auto;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-}
-
-.history-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px;
-  border-bottom: 1px solid #e5e7eb;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.history-item:last-child {
-  border-bottom: none;
-}
-
-.history-item:hover {
-  background: #f9fafb;
-}
-
-.history-info {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.history-date {
-  font-weight: 600;
-  color: #111827;
-  font-size: 15px;
-}
-
-.history-filename {
-  font-size: 12px;
-  color: #9ca3af;
-  font-family: 'Monaco', 'Menlo', monospace;
 }
 
 .spinner {

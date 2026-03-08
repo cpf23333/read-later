@@ -1,14 +1,24 @@
-import { addLink, getEnabledCustomJsConfig, isLinkExists, getLinkByUrl } from '@/utils/storage';
-import { initWebDAV } from '@/utils/webdav';
+import { 
+  addLink, 
+  getEnabledCustomJsConfig, 
+  isLinkExists, 
+  getLinkByUrl 
+} from '@/utils/storage';
+import {
+  syncPendingItems,
+  checkServerHealth,
+  getSyncStatus,
+} from '@/utils/hybridStorage';
 
 // 右键菜单ID
 const CONTEXT_MENU_ID = 'read-later-save-link';
 
+// 同步定时器
+let syncIntervalId: number | null = null;
+const SYNC_INTERVAL = 60 * 1000; // 每分钟检查一次同步
+
 export default defineBackground(() => {
   console.log('[ReadLater] Background script started');
-
-  // 初始化 WebDAV 自动同步
-  initWebDAV().catch(console.error);
 
   // 创建右键菜单
   browser.contextMenus.create({
@@ -59,7 +69,7 @@ export default defineBackground(() => {
         // 获取自定义JS配置
         const customJsConfig = await getEnabledCustomJsConfig();
 
-        // 保存链接
+        // 保存链接（会自动处理服务器同步）
         const linkItem = await addLink({
           url: info.linkUrl,
           title: pageTitle || result.data.nearbyText || info.linkUrl,
@@ -100,7 +110,58 @@ export default defineBackground(() => {
       .catch((error) => sendResponse({ success: false, error: error.message }));
     return true; // 保持消息通道开放
   });
+
+  // 启动定期同步任务
+  startPeriodicSync();
+
+  // 监听在线状态变化
+  browser.runtime.onConnect.addListener((port) => {
+    if (port.name === 'sync-status') {
+      port.onMessage.addListener(async (message) => {
+        if (message.type === 'GET_SYNC_STATUS') {
+          const status = await getSyncStatus();
+          port.postMessage({ type: 'SYNC_STATUS', data: status });
+        } else if (message.type === 'TRIGGER_SYNC') {
+          const result = await syncPendingItems();
+          port.postMessage({ type: 'SYNC_RESULT', data: result });
+        }
+      });
+    }
+  });
 });
+
+// 启动定期同步
+function startPeriodicSync() {
+  // 立即执行一次同步
+  performSync();
+  
+  // 设置定时器
+  syncIntervalId = window.setInterval(performSync, SYNC_INTERVAL);
+  console.log('[ReadLater] Periodic sync started');
+}
+
+// 执行同步
+async function performSync() {
+  try {
+    const status = await getSyncStatus();
+    
+    // 只有有待同步项目时才执行
+    if (status.pendingCount > 0) {
+      console.log(`[ReadLater] Syncing ${status.pendingCount} pending items...`);
+      const result = await syncPendingItems();
+      
+      if (result.synced > 0) {
+        console.log(`[ReadLater] Synced ${result.synced} items, ${result.failed} failed`);
+      }
+      
+      if (result.errors.length > 0) {
+        console.warn('[ReadLater] Sync errors:', result.errors);
+      }
+    }
+  } catch (error) {
+    console.error('[ReadLater] Sync failed:', error);
+  }
+}
 
 // 处理消息
 async function handleMessage(message: any, sender: any) {
@@ -127,6 +188,18 @@ async function handleMessage(message: any, sender: any) {
         url: browser.runtime.getURL('/options.html'),
       });
       return { success: true };
+
+    case 'CHECK_SERVER_HEALTH':
+      const isOnline = await checkServerHealth();
+      return { success: true, data: { isOnline } };
+
+    case 'SYNC_NOW':
+      const syncResult = await syncPendingItems();
+      return { success: syncResult.success, data: syncResult };
+
+    case 'GET_SYNC_STATUS':
+      const status = await getSyncStatus();
+      return { success: true, data: status };
 
     default:
       return { success: false, error: 'Unknown message type' };

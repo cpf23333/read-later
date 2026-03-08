@@ -1,39 +1,29 @@
 <script lang="ts" setup>
 import { ref, onMounted, computed, watch } from 'vue';
 import { 
-  deleteLink, 
-  deleteLinks,
   searchLinks,
   exportLinks,
   importLinks,
-  getLinkCount,
   getAllDomains,
   getDomainStats,
   queryLinks,
-  getTrashItems,
-  restoreFromTrash,
-  permanentlyDeleteFromTrash,
   clearTrash,
   LinkItem,
   ImportResult,
   DeleteRecord,
 } from '@/utils/storage';
-import { 
-  deleteRemoteImage, 
-  restoreRemoteImage,
-  permanentlyDeleteRemoteImage,
-  getWebDAVConfig,
-  getDeletedImages,
-} from '@/utils/webdav';
+
 import {
-  isUsingServer,
-  apiGetLinks,
-  apiDeleteLink,
-  apiGetTrash,
-  apiRestoreFromTrash,
-  apiPermanentlyDelete,
-  apiGetStats,
-} from '@/utils/apiStorage';
+  getLinks,
+  deleteLink,
+  getTrashItems,
+  restoreFromTrash,
+  permanentlyDeleteFromTrash,
+  getStats,
+  getSyncStatus,
+  syncPendingItems,
+  checkServerHealth,
+} from '@/utils/hybridStorage';
 
 type SortBy = 'createdAt' | 'title' | 'domain';
 type SortOrder = 'asc' | 'desc';
@@ -91,25 +81,16 @@ onMounted(async () => {
 async function loadInitialData() {
   loading.value = true;
   try {
-    const usingServer = await isUsingServer();
-    
-    if (usingServer) {
-      // 服务器模式
-      const stats = await apiGetStats();
-      totalCount.value = stats.linkCount;
-      await loadLinks();
-    } else {
-      // 本地模式
-      const [count, domainList, stats] = await Promise.all([
-        getLinkCount(),
-        getAllDomains(),
-        getDomainStats(),
-      ]);
-      totalCount.value = count;
-      domains.value = domainList;
-      domainStats.value = stats;
-      await loadLinks();
-    }
+    // 使用混合存储获取数据
+    const [stats, domainList, domainStatsResult] = await Promise.all([
+      getStats(),
+      getAllDomains(),
+      getDomainStats(),
+    ]);
+    totalCount.value = stats.linkCount;
+    domains.value = domainList;
+    domainStats.value = domainStatsResult;
+    await loadLinks();
   } finally {
     loading.value = false;
   }
@@ -118,27 +99,38 @@ async function loadInitialData() {
 async function loadLinks() {
   loading.value = true;
   try {
-    const usingServer = await isUsingServer();
+    // 使用混合存储获取链接
+    const result = await getLinks(currentPage.value, pageSize.value, {
+      sortBy: sortBy.value,
+      sortDesc: sortOrder.value === 'desc',
+    });
     
-    if (usingServer) {
-      // 服务器模式
-      const result = await apiGetLinks(currentPage.value, pageSize.value);
-      links.value = result.links;
-      total.value = result.total;
-    } else {
-      // 本地模式
-      const result = await queryLinks({
-        page: currentPage.value,
-        pageSize: pageSize.value,
-        sortBy: sortBy.value,
-        sortOrder: sortOrder.value,
-        domainFilter: domainFilter.value || null,
-        dateFrom: dateFrom.value ? new Date(dateFrom.value).getTime() : null,
-        dateTo: dateTo.value ? new Date(dateTo.value).getTime() + 86400000 : null,
+    // 在客户端进行域名和日期过滤
+    let filteredLinks = result.links;
+    
+    if (domainFilter.value) {
+      filteredLinks = filteredLinks.filter(link => {
+        try {
+          const domain = new URL(link.url).hostname;
+          return domain === domainFilter.value;
+        } catch {
+          return false;
+        }
       });
-      links.value = result.links;
-      total.value = result.total;
     }
+    
+    if (dateFrom.value) {
+      const fromTime = new Date(dateFrom.value).getTime();
+      filteredLinks = filteredLinks.filter(link => link.createdAt >= fromTime);
+    }
+    
+    if (dateTo.value) {
+      const toTime = new Date(dateTo.value).getTime() + 86400000;
+      filteredLinks = filteredLinks.filter(link => link.createdAt <= toTime);
+    }
+    
+    links.value = filteredLinks;
+    total.value = result.total;
     selectedIds.value.clear();
   } finally {
     loading.value = false;
@@ -228,20 +220,7 @@ async function changePage(page: number) {
 
 async function handleDelete(id: string) {
   if (!confirm('确定要删除这个链接吗？（删除后可在回收站还原）')) return;
-  const result = await deleteLink(id);
-  
-  // 如果删除成功且配置了 WebDAV，移动云端图片到 deleted 文件夹
-  if (result.success && result.record) {
-    const webdavConfig = await getWebDAVConfig();
-    if (webdavConfig.enabled) {
-      try {
-        await deleteRemoteImage(webdavConfig, id);
-      } catch (error) {
-        console.warn('Failed to move remote image:', error);
-      }
-    }
-  }
-  
+  await deleteLink(id);
   await loadLinks();
   // 更新统计
   const stats = await getDomainStats();
@@ -252,26 +231,15 @@ async function handleBatchDelete() {
   if (!confirm(`确定要删除选中的 ${selectedIds.value.size} 个链接吗？（删除后可在回收站还原）`)) return;
   
   const ids = Array.from(selectedIds.value);
-  const webdavConfig = await getWebDAVConfig();
   
-  // 逐个删除，同时移动云端图片到 deleted 文件夹
   for (const id of ids) {
-    const result = await deleteLink(id);
-    if (result.success && result.record && webdavConfig.enabled) {
-      try {
-        await deleteRemoteImage(webdavConfig, id);
-      } catch (error) {
-        console.warn('Failed to move remote image:', error);
-      }
-    }
+    await deleteLink(id);
   }
   
   selectedIds.value.clear();
   await loadLinks();
   // 更新统计
-  const [count, stats] = await Promise.all([getLinkCount(), getDomainStats()]);
-  totalCount.value = count;
-  domainStats.value = stats;
+  await updateStats();
 }
 
 // ========== 回收站功能 ==========
@@ -279,12 +247,7 @@ async function handleBatchDelete() {
 async function loadTrash() {
   trashLoading.value = true;
   try {
-    const usingServer = await isUsingServer();
-    if (usingServer) {
-      trashItems.value = await apiGetTrash();
-    } else {
-      trashItems.value = await getTrashItems();
-    }
+    trashItems.value = await getTrashItems();
   } finally {
     trashLoading.value = false;
   }
@@ -300,75 +263,23 @@ function switchTab(tab: TabView) {
 async function restoreItem(recordId: string) {
   if (!confirm('确定要还原这个链接吗？')) return;
   
-  const usingServer = await isUsingServer();
-  
-  if (usingServer) {
-    // 服务器模式
-    await apiRestoreFromTrash(recordId);
-  } else {
-    // 本地/WebDAV 模式
-    const record = trashItems.value.find(r => r.id === recordId);
-    const result = await restoreFromTrash(recordId);
-    if (result.success && record) {
-      const webdavConfig = await getWebDAVConfig();
-      if (webdavConfig.enabled) {
-        const deletedDate = new Date(record.deletedAt).toISOString().slice(0, 10);
-        try {
-          await restoreRemoteImage(webdavConfig, record.linkId, deletedDate);
-        } catch (error) {
-          console.warn('Failed to restore remote image:', error);
-        }
-      }
-    }
-    await loadTrash();
-    await loadLinkCount();
-  }
+  await restoreFromTrash(recordId);
+  await loadTrash();
+  await updateStats();
 }
 
 async function permanentlyDeleteItem(recordId: string) {
   if (!confirm('确定要永久删除这个链接吗？此操作不可撤销！')) return;
   
-  const usingServer = await isUsingServer();
-  
-  if (usingServer) {
-    // 服务器模式
-    await apiPermanentlyDelete(recordId);
-  } else {
-    // 本地/WebDAV 模式
-    const record = trashItems.value.find(r => r.id === recordId);
-    const success = await permanentlyDeleteFromTrash(recordId);
-    if (success && record) {
-      const webdavConfig = await getWebDAVConfig();
-      if (webdavConfig.enabled) {
-        const deletedDate = new Date(record.deletedAt).toISOString().slice(0, 10);
-        try {
-          await permanentlyDeleteRemoteImage(webdavConfig, record.linkId, deletedDate);
-        } catch (error) {
-          console.warn('Failed to permanently delete remote image:', error);
-        }
-      }
-    }
-  }
+  await permanentlyDeleteFromTrash(recordId);
   await loadTrash();
 }
 
 async function emptyTrash() {
   if (!confirm('确定要清空回收站吗？所有项目将被永久删除！')) return;
   
-  const webdavConfig = await getWebDAVConfig();
-  
-  // 逐个永久删除，同时删除云端图片
   for (const item of trashItems.value) {
     await permanentlyDeleteFromTrash(item.id);
-    
-    if (webdavConfig.enabled) {
-      const deletedDate = new Date(item.deletedAt).toISOString().slice(0, 10);
-      try {
-        await permanentlyDeleteRemoteImage(webdavConfig, item.linkId, deletedDate);
-      } catch (error) {
-        console.warn('Failed to permanently delete remote image:', error);
-      }
-    }
   }
   
   await loadTrash();
@@ -385,55 +296,29 @@ function toggleTrashSelection(id: string) {
 async function restoreSelected() {
   if (!confirm(`确定要还原选中的 ${selectedTrashIds.value.size} 个链接吗？`)) return;
   
-  const webdavConfig = await getWebDAVConfig();
-  
   for (const id of selectedTrashIds.value) {
-    const record = trashItems.value.find(r => r.id === id);
-    if (record) {
-      const result = await restoreFromTrash(id);
-      if (result.success && webdavConfig.enabled) {
-        const deletedDate = new Date(record.deletedAt).toISOString().slice(0, 10);
-        try {
-          await restoreRemoteImage(webdavConfig, record.linkId, deletedDate);
-        } catch (error) {
-          console.warn('Failed to restore remote image:', error);
-        }
-      }
-    }
+    await restoreFromTrash(id);
   }
   
   selectedTrashIds.value.clear();
   await loadTrash();
-  await loadLinkCount();
+  await updateStats();
 }
 
 async function deleteSelected() {
   if (!confirm(`确定要永久删除选中的 ${selectedTrashIds.value.size} 个链接吗？此操作不可撤销！`)) return;
   
-  const webdavConfig = await getWebDAVConfig();
-  
   for (const id of selectedTrashIds.value) {
-    const record = trashItems.value.find(r => r.id === id);
-    if (record) {
-      await permanentlyDeleteFromTrash(id);
-      
-      if (webdavConfig.enabled) {
-        const deletedDate = new Date(record.deletedAt).toISOString().slice(0, 10);
-        try {
-          await permanentlyDeleteRemoteImage(webdavConfig, record.linkId, deletedDate);
-        } catch (error) {
-          console.warn('Failed to permanently delete remote image:', error);
-        }
-      }
-    }
+    await permanentlyDeleteFromTrash(id);
   }
   
   selectedTrashIds.value.clear();
   await loadTrash();
 }
 
-async function loadLinkCount() {
-  totalCount.value = await getLinkCount();
+async function updateStats() {
+  const stats = await getStats();
+  totalCount.value = stats.linkCount;
 }
 
 async function handleExport() {
