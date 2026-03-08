@@ -10,13 +10,26 @@ import {
   getAllDomains,
   getDomainStats,
   queryLinks,
+  getTrashItems,
+  restoreFromTrash,
+  permanentlyDeleteFromTrash,
+  clearTrash,
   LinkItem,
   ImportResult,
+  DeleteRecord,
 } from '@/utils/storage';
+import { 
+  deleteRemoteImage, 
+  restoreRemoteImage,
+  permanentlyDeleteRemoteImage,
+  getWebDAVConfig,
+  getDeletedImages,
+} from '@/utils/webdav';
 
 type SortBy = 'createdAt' | 'title' | 'domain';
 type SortOrder = 'asc' | 'desc';
 type ViewMode = 'grid' | 'list';
+type TabView = 'links' | 'trash';
 
 const links = ref<LinkItem[]>([]);
 const total = ref(0);
@@ -43,6 +56,12 @@ const dateTo = ref<string>('');
 const totalCount = ref(0);
 const importInput = ref<HTMLInputElement | null>(null);
 const importing = ref(false);
+
+// 回收站
+const currentTab = ref<TabView>('links');
+const trashItems = ref<DeleteRecord[]>([]);
+const trashLoading = ref(false);
+const selectedTrashIds = ref<Set<string>>(new Set());
 
 const totalPages = computed(() => Math.ceil(total.value / pageSize.value));
 
@@ -179,8 +198,21 @@ async function changePage(page: number) {
 }
 
 async function handleDelete(id: string) {
-  if (!confirm('确定要删除这个链接吗？')) return;
-  await deleteLink(id);
+  if (!confirm('确定要删除这个链接吗？（删除后可在回收站还原）')) return;
+  const result = await deleteLink(id);
+  
+  // 如果删除成功且配置了 WebDAV，移动云端图片到 deleted 文件夹
+  if (result.success && result.record) {
+    const webdavConfig = await getWebDAVConfig();
+    if (webdavConfig.enabled) {
+      try {
+        await deleteRemoteImage(webdavConfig, id);
+      } catch (error) {
+        console.warn('Failed to move remote image:', error);
+      }
+    }
+  }
+  
   await loadLinks();
   // 更新统计
   const stats = await getDomainStats();
@@ -188,14 +220,180 @@ async function handleDelete(id: string) {
 }
 
 async function handleBatchDelete() {
-  if (!confirm(`确定要删除选中的 ${selectedIds.value.size} 个链接吗？`)) return;
-  await deleteLinks(Array.from(selectedIds.value));
+  if (!confirm(`确定要删除选中的 ${selectedIds.value.size} 个链接吗？（删除后可在回收站还原）`)) return;
+  
+  const ids = Array.from(selectedIds.value);
+  const webdavConfig = await getWebDAVConfig();
+  
+  // 逐个删除，同时移动云端图片到 deleted 文件夹
+  for (const id of ids) {
+    const result = await deleteLink(id);
+    if (result.success && result.record && webdavConfig.enabled) {
+      try {
+        await deleteRemoteImage(webdavConfig, id);
+      } catch (error) {
+        console.warn('Failed to move remote image:', error);
+      }
+    }
+  }
+  
   selectedIds.value.clear();
   await loadLinks();
   // 更新统计
   const [count, stats] = await Promise.all([getLinkCount(), getDomainStats()]);
   totalCount.value = count;
   domainStats.value = stats;
+}
+
+// ========== 回收站功能 ==========
+
+async function loadTrash() {
+  trashLoading.value = true;
+  try {
+    trashItems.value = await getTrashItems();
+  } finally {
+    trashLoading.value = false;
+  }
+}
+
+function switchTab(tab: TabView) {
+  currentTab.value = tab;
+  if (tab === 'trash') {
+    loadTrash();
+  }
+}
+
+async function restoreItem(recordId: string) {
+  if (!confirm('确定要还原这个链接吗？')) return;
+  
+  // 获取记录信息用于还原图片
+  const record = trashItems.value.find(r => r.id === recordId);
+  
+  const result = await restoreFromTrash(recordId);
+  if (result.success) {
+    // 如果启用了 WebDAV，尝试还原图片
+    if (record) {
+      const webdavConfig = await getWebDAVConfig();
+      if (webdavConfig.enabled) {
+        const deletedDate = new Date(record.deletedAt).toISOString().slice(0, 10);
+        try {
+          await restoreRemoteImage(webdavConfig, record.linkId, deletedDate);
+        } catch (error) {
+          console.warn('Failed to restore remote image:', error);
+        }
+      }
+    }
+    await loadTrash();
+    await loadLinkCount();
+  }
+}
+
+async function permanentlyDeleteItem(recordId: string) {
+  if (!confirm('确定要永久删除这个链接吗？此操作不可撤销！')) return;
+  
+  // 获取记录信息用于删除图片
+  const record = trashItems.value.find(r => r.id === recordId);
+  
+  const success = await permanentlyDeleteFromTrash(recordId);
+  if (success) {
+    // 如果启用了 WebDAV，永久删除图片
+    if (record) {
+      const webdavConfig = await getWebDAVConfig();
+      if (webdavConfig.enabled) {
+        const deletedDate = new Date(record.deletedAt).toISOString().slice(0, 10);
+        try {
+          await permanentlyDeleteRemoteImage(webdavConfig, record.linkId, deletedDate);
+        } catch (error) {
+          console.warn('Failed to permanently delete remote image:', error);
+        }
+      }
+    }
+    await loadTrash();
+  }
+}
+
+async function emptyTrash() {
+  if (!confirm('确定要清空回收站吗？所有项目将被永久删除！')) return;
+  
+  const webdavConfig = await getWebDAVConfig();
+  
+  // 逐个永久删除，同时删除云端图片
+  for (const item of trashItems.value) {
+    await permanentlyDeleteFromTrash(item.id);
+    
+    if (webdavConfig.enabled) {
+      const deletedDate = new Date(item.deletedAt).toISOString().slice(0, 10);
+      try {
+        await permanentlyDeleteRemoteImage(webdavConfig, item.linkId, deletedDate);
+      } catch (error) {
+        console.warn('Failed to permanently delete remote image:', error);
+      }
+    }
+  }
+  
+  await loadTrash();
+}
+
+function toggleTrashSelection(id: string) {
+  if (selectedTrashIds.value.has(id)) {
+    selectedTrashIds.value.delete(id);
+  } else {
+    selectedTrashIds.value.add(id);
+  }
+}
+
+async function restoreSelected() {
+  if (!confirm(`确定要还原选中的 ${selectedTrashIds.value.size} 个链接吗？`)) return;
+  
+  const webdavConfig = await getWebDAVConfig();
+  
+  for (const id of selectedTrashIds.value) {
+    const record = trashItems.value.find(r => r.id === id);
+    if (record) {
+      const result = await restoreFromTrash(id);
+      if (result.success && webdavConfig.enabled) {
+        const deletedDate = new Date(record.deletedAt).toISOString().slice(0, 10);
+        try {
+          await restoreRemoteImage(webdavConfig, record.linkId, deletedDate);
+        } catch (error) {
+          console.warn('Failed to restore remote image:', error);
+        }
+      }
+    }
+  }
+  
+  selectedTrashIds.value.clear();
+  await loadTrash();
+  await loadLinkCount();
+}
+
+async function deleteSelected() {
+  if (!confirm(`确定要永久删除选中的 ${selectedTrashIds.value.size} 个链接吗？此操作不可撤销！`)) return;
+  
+  const webdavConfig = await getWebDAVConfig();
+  
+  for (const id of selectedTrashIds.value) {
+    const record = trashItems.value.find(r => r.id === id);
+    if (record) {
+      await permanentlyDeleteFromTrash(id);
+      
+      if (webdavConfig.enabled) {
+        const deletedDate = new Date(record.deletedAt).toISOString().slice(0, 10);
+        try {
+          await permanentlyDeleteRemoteImage(webdavConfig, record.linkId, deletedDate);
+        } catch (error) {
+          console.warn('Failed to permanently delete remote image:', error);
+        }
+      }
+    }
+  }
+  
+  selectedTrashIds.value.clear();
+  await loadTrash();
+}
+
+async function loadLinkCount() {
+  totalCount.value = await getLinkCount();
 }
 
 async function handleExport() {
@@ -320,6 +518,26 @@ onMounted(() => {
     </header>
 
     <main class="main">
+      <!-- Tab 导航 -->
+      <nav class="tab-nav">
+        <button 
+          class="tab-btn" 
+          :class="{ active: currentTab === 'links' }"
+          @click="switchTab('links')"
+        >
+          📚 链接列表
+        </button>
+        <button 
+          class="tab-btn" 
+          :class="{ active: currentTab === 'trash' }"
+          @click="switchTab('trash')"
+        >
+          🗑️ 回收站 ({{ trashItems.length }})
+        </button>
+      </nav>
+
+      <!-- 链接列表视图 -->
+      <template v-if="currentTab === 'links'">
       <!-- 搜索和过滤工具栏 -->
       <div class="toolbar">
         <div class="search-box">
@@ -547,6 +765,81 @@ onMounted(() => {
           下一页
         </button>
       </div>
+      </template>
+
+      <!-- 回收站视图 -->
+      <template v-if="currentTab === 'trash'">
+        <div class="trash-header">
+          <h2>🗑️ 回收站</h2>
+          <p class="trash-desc">已删除的链接会在这里保留 30 天，之后自动清理</p>
+          <div class="trash-actions">
+            <button 
+              class="btn btn-primary" 
+              @click="restoreSelected" 
+              :disabled="selectedTrashIds.size === 0"
+            >
+              还原选中 ({{ selectedTrashIds.size }})
+            </button>
+            <button 
+              class="btn btn-danger" 
+              @click="deleteSelected" 
+              :disabled="selectedTrashIds.size === 0"
+            >
+              永久删除选中 ({{ selectedTrashIds.size }})
+            </button>
+            <button 
+              class="btn btn-default" 
+              @click="emptyTrash"
+              :disabled="trashItems.length === 0"
+            >
+              清空回收站
+            </button>
+          </div>
+        </div>
+
+        <div v-if="trashLoading" class="loading">
+          <div class="spinner"></div>
+          <p>加载中...</p>
+        </div>
+
+        <div v-else-if="trashItems.length === 0" class="empty-state">
+          <p>回收站是空的</p>
+          <p class="hint">删除的链接会出现在这里</p>
+        </div>
+
+        <div v-else class="trash-list">
+          <div 
+            v-for="item in trashItems" 
+            :key="item.id"
+            class="trash-item"
+          >
+            <div class="trash-checkbox">
+              <input 
+                type="checkbox" 
+                :checked="selectedTrashIds.has(item.id)"
+                @change="toggleTrashSelection(item.id)"
+              />
+            </div>
+            <div class="trash-content">
+              <h4 class="trash-title">{{ item.title }}</h4>
+              <p class="trash-url">{{ item.url }}</p>
+              <div class="trash-meta">
+                <span>创建于: {{ formatDate(item.createdAt) }}</span>
+                <span>删除于: {{ formatDate(item.deletedAt) }}</span>
+                <span v-if="item.nearbyImage || item.screenshot" class="has-image">📷 有图片</span>
+              </div>
+            </div>
+            <div class="trash-actions-row">
+              <button class="btn btn-sm btn-primary" @click="restoreItem(item.id)">
+                还原
+              </button>
+              <button class="btn btn-sm btn-danger" @click="permanentlyDeleteItem(item.id)">
+                永久删除
+              </button>
+            </div>
+          </div>
+        </div>
+      </template>
     </main>
   </div>
 </template>
@@ -1003,6 +1296,120 @@ onMounted(() => {
 .page-info {
   font-size: 14px;
   color: #6b7280;
+}
+
+/* 回收站 */
+.tab-nav {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid #e5e7eb;
+  padding-bottom: 12px;
+}
+
+.tab-btn {
+  padding: 10px 20px;
+  border: none;
+  background: #f3f4f6;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.tab-btn:hover {
+  background: #e5e7eb;
+}
+
+.tab-btn.active {
+  background: #667eea;
+  color: white;
+}
+
+.trash-header {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 20px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+.trash-header h2 {
+  font-size: 20px;
+  margin-bottom: 8px;
+}
+
+.trash-desc {
+  color: #6b7280;
+  margin-bottom: 16px;
+}
+
+.trash-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.trash-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.trash-item {
+  background: white;
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.trash-checkbox input {
+  width: 20px;
+  height: 20px;
+}
+
+.trash-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.trash-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trash-url {
+  font-size: 13px;
+  color: #6b7280;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-bottom: 8px;
+}
+
+.trash-meta {
+  display: flex;
+  gap: 16px;
+  font-size: 12px;
+  color: #9ca3af;
+  flex-wrap: wrap;
+}
+
+.trash-meta .has-image {
+  color: #667eea;
+}
+
+.trash-actions-row {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 /* 响应式 */

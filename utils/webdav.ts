@@ -30,6 +30,8 @@ const DEFAULT_FOLDER = 'ReadLater';
 const DEFAULT_HISTORY_COUNT = 10;
 const DATA_FILE_NAME = 'readlater-data.json';
 const HISTORY_FOLDER = 'history';
+const IMAGES_FOLDER = 'images'; // 图片文件夹
+const DELETED_IMAGES_FOLDER = 'images/deleted'; // 已删除图片文件夹（在images下）
 
 // 获取 WebDAV 配置
 export async function getWebDAVConfig(): Promise<WebDAVConfig> {
@@ -80,11 +82,15 @@ export async function testWebDAVConnection(config: WebDAVConfig): Promise<{ succ
 interface SyncData {
   version: number;
   lastModified: number;
-  links: LinkItem[];
+  links: LinkItem[]; // 使用 LinkItem，但上传前会移除图片数据
   customJsConfigs: CustomJsConfig[];
   deviceId: string;
   deleteRecords: DeleteRecord[];
 }
+
+// 数据大小限制（MB）
+const MAX_SYNC_SIZE_MB = 5;
+const WARNING_SIZE_MB = 2;
 
 // 历史版本信息
 export interface HistoryVersion {
@@ -92,6 +98,63 @@ export interface HistoryVersion {
   date: string;
   timestamp: number;
   size?: number;
+}
+
+// 估算数据大小（MB）
+export function estimateDataSizeMB(data: unknown): number {
+  const jsonString = JSON.stringify(data);
+  // UTF-8 编码，每个字符约 1-2 字节，中文约 3 字节
+  const bytes = new Blob([jsonString]).size;
+  return bytes / 1024 / 1024;
+}
+
+// 将 LinkItem 转换为不含图片数据的版本（用于同步）
+function stripImageData(links: LinkItem[]): LinkItem[] {
+  return links.map(link => {
+    const { nearbyImage, screenshot, ...rest } = link;
+    return rest as LinkItem;
+  });
+}
+
+// 检查同步数据大小
+export interface SizeCheckResult {
+  sizeMB: number;
+  isOversized: boolean;
+  isWarning: boolean;
+  linkCount: number;
+  estimatedSyncSizeMB: number;
+  message: string;
+}
+
+export async function checkDataSize(): Promise<SizeCheckResult> {
+  const localLinksJson = await exportLinks();
+  const localLinks: LinkItem[] = JSON.parse(localLinksJson);
+  
+  const fullSizeMB = estimateDataSizeMB(localLinks);
+  const syncLinks = stripImageData(localLinks);
+  const syncSizeMB = estimateDataSizeMB(syncLinks);
+  
+  const isOversized = fullSizeMB > MAX_SYNC_SIZE_MB;
+  const isWarning = fullSizeMB > WARNING_SIZE_MB;
+  
+  let message = `当前数据：${localLinks.length} 个链接\n`;
+  message += `含图片：${fullSizeMB.toFixed(2)} MB\n`;
+  message += `同步大小（不含图片）：${syncSizeMB.toFixed(2)} MB`;
+  
+  if (isOversized) {
+    message += `\n⚠️ 数据过大！建议清理旧截图`;
+  } else if (isWarning) {
+    message += `\n💡 数据较大，清理截图可提升性能`;
+  }
+  
+  return {
+    sizeMB: fullSizeMB,
+    isOversized,
+    isWarning,
+    linkCount: localLinks.length,
+    estimatedSyncSizeMB: syncSizeMB,
+    message,
+  };
 }
 
 // 获取设备ID
@@ -141,10 +204,36 @@ async function ensureFolderExists(config: WebDAVConfig): Promise<void> {
     });
 
     if (historyResponse.status !== 201 && historyResponse.status !== 405) {
-      console.warn('[WebDAV] History folder creation warning:', historyResponse.status);
+      console.warn('[ReadLater] History folder creation warning:', historyResponse.status);
+    }
+
+    // 创建 images 子文件夹
+    const imagesUrl = `${folderUrl}/${IMAGES_FOLDER}`;
+    const imagesResponse = await fetch(imagesUrl, {
+      method: 'MKCOL',
+      headers: {
+        'Authorization': 'Basic ' + btoa(config.username + ':' + config.password),
+      },
+    });
+
+    if (imagesResponse.status !== 201 && imagesResponse.status !== 405) {
+      console.warn('[ReadLater] Images folder creation warning:', imagesResponse.status);
+    }
+
+    // 创建 images/deleted 子文件夹（存放已删除的图片）
+    const deletedImagesUrl = `${folderUrl}/${DELETED_IMAGES_FOLDER}`;
+    const deletedImagesResponse = await fetch(deletedImagesUrl, {
+      method: 'MKCOL',
+      headers: {
+        'Authorization': 'Basic ' + btoa(config.username + ':' + config.password),
+      },
+    });
+
+    if (deletedImagesResponse.status !== 201 && deletedImagesResponse.status !== 405) {
+      console.warn('[ReadLater] Deleted images folder creation warning:', deletedImagesResponse.status);
     }
   } catch (error) {
-    console.error('[WebDAV] Failed to create folder:', error);
+    console.error('[ReadLater] Failed to create folder:', error);
     throw error;
   }
 }
@@ -309,8 +398,342 @@ async function cleanupOldHistory(config: WebDAVConfig, keepCount: number): Promi
       });
       console.log('[ReadLater] Deleted old history:', version.fileName);
     } catch (error) {
-      console.warn('[WebDAV] Failed to delete old history:', version.fileName, error);
+      console.warn('[ReadLater] Failed to delete old history:', version.fileName, error);
     }
+  }
+}
+
+// ============ 图片同步功能 ============
+
+// 上传单个图片
+async function uploadImage(
+  config: WebDAVConfig,
+  linkId: string,
+  imageType: 'screenshot' | 'nearby',
+  imageData: string
+): Promise<boolean> {
+  try {
+    const fileName = `${linkId}_${imageType}.png`;
+    const fileUrl = getFilePath(config, `${IMAGES_FOLDER}/${fileName}`);
+
+    // 将 base64 转换为 blob
+    const response = await fetch(imageData);
+    const blob = await response.blob();
+
+    const uploadResponse = await fetch(fileUrl, {
+      method: 'PUT',
+      headers: {
+        'Authorization': 'Basic ' + btoa(config.username + ':' + config.password),
+        'Content-Type': 'image/png',
+      },
+      body: blob,
+    });
+
+    return uploadResponse.ok;
+  } catch (error) {
+    console.warn(`[ReadLater] Failed to upload image ${linkId}_${imageType}:`, error);
+    return false;
+  }
+}
+
+// 下载单个图片
+async function downloadImage(
+  config: WebDAVConfig,
+  linkId: string,
+  imageType: 'screenshot' | 'nearby'
+): Promise<string | null> {
+  try {
+    const fileName = `${linkId}_${imageType}.png`;
+    const fileUrl = getFilePath(config, `${IMAGES_FOLDER}/${fileName}`);
+
+    const response = await fetch(fileUrl, {
+      method: 'GET',
+      headers: {
+        'Authorization': 'Basic ' + btoa(config.username + ':' + config.password),
+      },
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const blob = await response.blob();
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  } catch (error) {
+    console.warn(`[ReadLater] Failed to download image ${linkId}_${imageType}:`, error);
+    return null;
+  }
+}
+
+// 同步所有图片（上传本地有但云端没有的图片）
+async function syncImages(
+  config: WebDAVConfig,
+  localLinks: LinkItem[],
+  direction: 'upload' | 'download' | 'bidirectional' = 'bidirectional'
+): Promise<{ uploaded: number; downloaded: number; failed: number }> {
+  const result = { uploaded: 0, downloaded: 0, failed: 0 };
+
+  for (const link of localLinks) {
+    // 上传截图
+    if (link.screenshot) {
+      if (direction === 'upload' || direction === 'bidirectional') {
+        const success = await uploadImage(config, link.id, 'screenshot', link.screenshot);
+        if (success) result.uploaded++;
+        else result.failed++;
+      }
+    }
+
+    // 上传附近图片
+    if (link.nearbyImage) {
+      if (direction === 'upload' || direction === 'bidirectional') {
+        const success = await uploadImage(config, link.id, 'nearby', link.nearbyImage);
+        if (success) result.uploaded++;
+        else result.failed++;
+      }
+    }
+  }
+
+  return result;
+}
+
+// 将图片移动到 images/deleted 文件夹（而不是直接删除）
+export async function deleteRemoteImage(
+  config: WebDAVConfig,
+  linkId: string
+): Promise<void> {
+  try {
+    const timestamp = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    
+    for (const imageType of ['screenshot', 'nearby']) {
+      const fileName = `${linkId}_${imageType}.png`;
+      const sourceUrl = getFilePath(config, `${IMAGES_FOLDER}/${fileName}`);
+      const destUrl = getFilePath(config, `${DELETED_IMAGES_FOLDER}/${timestamp}_${fileName}`);
+      
+      // 使用 MOVE 方法将图片移动到 images/deleted 文件夹
+      const response = await fetch(sourceUrl, {
+        method: 'MOVE',
+        headers: {
+          'Authorization': 'Basic ' + btoa(config.username + ':' + config.password),
+          'Destination': destUrl,
+          'Overwrite': 'T',
+        },
+      });
+      
+      // 如果 MOVE 失败（如文件不存在），忽略错误
+      if (!response.ok && response.status !== 404) {
+        console.warn(`[ReadLater] Failed to move image ${fileName}:`, response.status);
+      }
+    }
+  } catch (error) {
+    console.warn(`[ReadLater] Failed to move remote images for ${linkId}:`, error);
+  }
+}
+
+// 从回收站还原图片（移回 images 文件夹）
+export async function restoreRemoteImage(
+  config: WebDAVConfig,
+  linkId: string,
+  deletedDate: string // YYYY-MM-DD
+): Promise<boolean> {
+  try {
+    let success = false;
+    
+    for (const imageType of ['screenshot', 'nearby']) {
+      const fileName = `${linkId}_${imageType}.png`;
+      const sourceUrl = getFilePath(config, `${DELETED_IMAGES_FOLDER}/${deletedDate}_${fileName}`);
+      const destUrl = getFilePath(config, `${IMAGES_FOLDER}/${fileName}`);
+      
+      // 使用 MOVE 方法将图片移回 images 文件夹
+      const response = await fetch(sourceUrl, {
+        method: 'MOVE',
+        headers: {
+          'Authorization': 'Basic ' + btoa(config.username + ':' + config.password),
+          'Destination': destUrl,
+          'Overwrite': 'T',
+        },
+      });
+      
+      if (response.ok) {
+        success = true;
+      }
+    }
+    
+    return success;
+  } catch (error) {
+    console.warn(`[ReadLater] Failed to restore remote images for ${linkId}:`, error);
+    return false;
+  }
+}
+
+// 永久删除回收站中的图片
+export async function permanentlyDeleteRemoteImage(
+  config: WebDAVConfig,
+  linkId: string,
+  deletedDate: string // YYYY-MM-DD
+): Promise<boolean> {
+  try {
+    let success = true;
+    
+    for (const imageType of ['screenshot', 'nearby']) {
+      const fileName = `${deletedDate}_${linkId}_${imageType}.png`;
+      const fileUrl = getFilePath(config, `${DELETED_IMAGES_FOLDER}/${fileName}`);
+      
+      const response = await fetch(fileUrl, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': 'Basic ' + btoa(config.username + ':' + config.password),
+        },
+      });
+      
+      if (!response.ok && response.status !== 404) {
+        success = false;
+      }
+    }
+    
+    return success;
+  } catch (error) {
+    console.warn(`[ReadLater] Failed to permanently delete remote images for ${linkId}:`, error);
+    return false;
+  }
+}
+
+// 清理旧的已删除图片（保留最近 N 天）
+export async function cleanupDeletedImages(
+  config: WebDAVConfig,
+  keepDays: number = 30
+): Promise<{ deleted: number; errors: number }> {
+  const result = { deleted: 0, errors: 0 };
+  
+  try {
+    const folder = config.folderName || DEFAULT_FOLDER;
+    const baseUrl = config.url.endsWith('/') ? config.url.slice(0, -1) : config.url;
+    const deletedUrl = `${baseUrl}/${folder}/${DELETED_IMAGES_FOLDER}/`;
+    
+    const response = await fetch(deletedUrl, {
+      method: 'PROPFIND',
+      headers: {
+        'Authorization': 'Basic ' + btoa(config.username + ':' + config.password),
+        'Depth': '1',
+      },
+    });
+    
+    if (!response.ok) {
+      return result;
+    }
+    
+    const text = await response.text();
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(text, 'text/xml');
+    const responses = doc.querySelectorAll('response');
+    
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - keepDays);
+    
+    for (const resp of responses) {
+      const href = resp.querySelector('href')?.textContent || '';
+      const displayName = decodeURIComponent(href.split('/').pop() || '');
+      
+      if (!displayName.endsWith('.png')) continue;
+      
+      // 解析文件名中的日期 (YYYY-MM-DD_linkId_*.png)
+      const match = displayName.match(/^(\d{4}-\d{2}-\d{2})_/);
+      if (match) {
+        const fileDate = new Date(match[1]);
+        if (fileDate < cutoffDate) {
+          // 删除过期文件
+          const fileUrl = getFilePath(config, `${DELETED_IMAGES_FOLDER}/${displayName}`);
+          const deleteResponse = await fetch(fileUrl, {
+            method: 'DELETE',
+            headers: {
+              'Authorization': 'Basic ' + btoa(config.username + ':' + config.password),
+            },
+          });
+          
+          if (deleteResponse.ok) {
+            result.deleted++;
+          } else {
+            result.errors++;
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.error('[ReadLater] Failed to cleanup deleted images:', error);
+    result.errors++;
+  }
+  
+  return result;
+}
+
+// 获取回收站中的图片列表
+export async function getDeletedImages(
+  config: WebDAVConfig
+): Promise<{ linkId: string; date: string; hasScreenshot: boolean; hasNearby: boolean }[]> {
+  const result: { linkId: string; date: string; hasScreenshot: boolean; hasNearby: boolean }[] = [];
+  
+  try {
+    const folder = config.folderName || DEFAULT_FOLDER;
+    const baseUrl = config.url.endsWith('/') ? config.url.slice(0, -1) : config.url;
+    const deletedUrl = `${baseUrl}/${folder}/${DELETED_IMAGES_FOLDER}/`;
+    
+    const response = await fetch(deletedUrl, {
+      method: 'PROPFIND',
+      headers: {
+        'Authorization': 'Basic ' + btoa(config.username + ':' + config.password),
+        'Depth': '1',
+      },
+    });
+    
+    if (!response.ok) {
+      return result;
+    }
+    
+    const text = await response.text();
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(text, 'text/xml');
+    const responses = doc.querySelectorAll('response');
+    
+    const linkMap = new Map<string, { date: string; hasScreenshot: boolean; hasNearby: boolean }>();
+    
+    for (const resp of responses) {
+      const href = resp.querySelector('href')?.textContent || '';
+      const displayName = decodeURIComponent(href.split('/').pop() || '');
+      
+      // 解析文件名: YYYY-MM-DD_linkId_screenshot.png 或 YYYY-MM-DD_linkId_nearby.png
+      const match = displayName.match(/^(\d{4}-\d{2}-\d{2})_(.+)_(screenshot|nearby)\.png$/);
+      if (match) {
+        const date = match[1];
+        const linkId = match[2];
+        const imageType = match[3];
+        
+        const existing = linkMap.get(linkId);
+        if (existing) {
+          if (imageType === 'screenshot') existing.hasScreenshot = true;
+          if (imageType === 'nearby') existing.hasNearby = true;
+        } else {
+          linkMap.set(linkId, {
+            date,
+            hasScreenshot: imageType === 'screenshot',
+            hasNearby: imageType === 'nearby',
+          });
+        }
+      }
+    }
+    
+    for (const [linkId, data] of linkMap) {
+      result.push({ linkId, ...data });
+    }
+    
+    // 按日期倒序排列
+    return result.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  } catch (error) {
+    console.error('[ReadLater] Failed to get deleted images:', error);
+    return result;
   }
 }
 
@@ -369,7 +792,7 @@ export async function deleteHistoryVersion(
     });
     return response.ok || response.status === 404;
   } catch (error) {
-    console.warn('[WebDAV] Failed to delete history:', error);
+    console.warn('[ReadLater] Failed to delete history:', error);
     return false;
   }
 }
@@ -384,6 +807,7 @@ export interface SyncResult {
     downloaded?: number;
     merged?: number;
     deleted?: number;
+    imagesUploaded?: number;
     localCount?: number;
     remoteCount?: number;
     totalCount?: number;
@@ -418,10 +842,11 @@ export async function syncWithWebDAV(config?: WebDAVConfig): Promise<SyncResult>
 
     // 如果远程没有数据，直接上传本地数据
     if (!remoteData) {
+      // 上传元数据（不含图片）
       const localData: SyncData = {
         version: 2,
         lastModified: Date.now(),
-        links: localLinks,
+        links: stripImageData(localLinks),
         customJsConfigs: localConfigs,
         deviceId,
         deleteRecords: localDeleteRecords,
@@ -429,15 +854,19 @@ export async function syncWithWebDAV(config?: WebDAVConfig): Promise<SyncResult>
       
       await uploadToWebDAV(webdavConfig, localData, true);
       
+      // 上传图片文件
+      const imageResult = await syncImages(webdavConfig, localLinks, 'upload');
+      
       webdavConfig.lastSyncTime = Date.now();
       await saveWebDAVConfig(webdavConfig);
 
       return {
         success: true,
         direction: 'upload',
-        message: '首次同步，已上传本地数据',
+        message: `首次同步，已上传 ${localLinks.length} 个链接，${imageResult.uploaded} 张图片`,
         details: {
           uploaded: localLinks.length,
+          imagesUploaded: imageResult.uploaded,
           localCount: localLinks.length,
           totalCount: localLinks.length,
         },
@@ -462,21 +891,24 @@ export async function syncWithWebDAV(config?: WebDAVConfig): Promise<SyncResult>
     // 合并配置
     const mergedConfigs = mergeConfigs(localConfigs, remoteData.customJsConfigs || []);
 
-    // 准备合并后的数据
+    // 准备合并后的数据（移除图片数据，减小 JSON 体积）
     const mergedData: SyncData = {
       version: 2,
       lastModified: Date.now(),
-      links: mergedResult.links,
+      links: stripImageData(mergedResult.links),
       customJsConfigs: mergedConfigs,
       deviceId,
       deleteRecords: allDeleteRecords,
     };
 
-    // 上传合并后的数据（创建历史版本）
+    // 上传合并后的元数据（创建历史版本）
     await uploadToWebDAV(webdavConfig, mergedData, true);
 
-    // 更新本地数据库
-    await importLinks(JSON.stringify(mergedResult.links), 'replace');
+    // 同步图片文件（本地图片上传到云端）
+    const imageResult = await syncImages(webdavConfig, mergedResult.links, 'upload');
+
+    // 更新本地数据库（保留本地图片）
+    await importLinks(JSON.stringify(mergedResult.links) as any, 'replace');
 
     // 保存合并后的配置
     for (const config of mergedConfigs) {
@@ -486,22 +918,26 @@ export async function syncWithWebDAV(config?: WebDAVConfig): Promise<SyncResult>
     // 清理30天前的删除记录
     const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
     await clearOldDeleteRecords(thirtyDaysAgo);
+    
+    // 清理30天前的已删除图片
+    await cleanupDeletedImages(webdavConfig, 30);
 
     webdavConfig.lastSyncTime = Date.now();
     await saveWebDAVConfig(webdavConfig);
 
-    const hasChanges = mergedResult.localAdded > 0 || mergedResult.remoteAdded > 0 || totalDeleted > 0;
+    const hasChanges = mergedResult.localAdded > 0 || mergedResult.remoteAdded > 0 || totalDeleted > 0 || imageResult.uploaded > 0;
 
     if (hasChanges) {
       return {
         success: true,
         direction: 'merge',
-        message: `同步完成：新增 ${mergedResult.localAdded + mergedResult.remoteAdded} 个，删除 ${totalDeleted} 个`,
+        message: `同步完成：新增 ${mergedResult.localAdded + mergedResult.remoteAdded} 个，删除 ${totalDeleted} 个，上传 ${imageResult.uploaded} 张图片`,
         details: {
           uploaded: mergedResult.localAdded,
           downloaded: mergedResult.remoteAdded,
           merged: mergedResult.localAdded + mergedResult.remoteAdded,
           deleted: totalDeleted,
+          imagesUploaded: imageResult.uploaded,
           localCount: localLinks.length,
           remoteCount: remoteData.links.length,
           totalCount: mergedResult.links.length,
@@ -673,10 +1109,11 @@ export async function forceUploadToWebDAV(config?: WebDAVConfig): Promise<SyncRe
     const localDeleteRecords = await getDeleteRecords();
     const deviceId = await getDeviceId();
 
+    // 上传元数据（不含图片）
     const localData: SyncData = {
       version: 2,
       lastModified: Date.now(),
-      links: localLinks,
+      links: stripImageData(localLinks),
       customJsConfigs: localConfigs,
       deviceId,
       deleteRecords: localDeleteRecords,
@@ -684,15 +1121,19 @@ export async function forceUploadToWebDAV(config?: WebDAVConfig): Promise<SyncRe
 
     await uploadToWebDAV(webdavConfig, localData, true);
 
+    // 上传图片
+    const imageResult = await syncImages(webdavConfig, localLinks, 'upload');
+
     webdavConfig.lastSyncTime = Date.now();
     await saveWebDAVConfig(webdavConfig);
 
     return {
       success: true,
       direction: 'upload',
-      message: `已上传 ${localLinks.length} 个链接${localDeleteRecords.length > 0 ? `（含 ${localDeleteRecords.length} 条删除记录）` : ''}到云端（覆盖远程）`,
+      message: `已上传 ${localLinks.length} 个链接，${imageResult.uploaded} 张图片${localDeleteRecords.length > 0 ? `（含 ${localDeleteRecords.length} 条删除记录）` : ''}到云端（覆盖远程）`,
       details: {
         uploaded: localLinks.length,
+        imagesUploaded: imageResult.uploaded,
         deleted: localDeleteRecords.length,
       },
     };

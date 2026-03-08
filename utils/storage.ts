@@ -133,12 +133,18 @@ export async function getLinkById(id: string): Promise<LinkItem | null> {
   });
 }
 
-// 删除链接（记录删除操作用于同步）
-export async function deleteLink(id: string): Promise<void> {
+// 删除链接（移入回收站）
+export async function deleteLink(id: string): Promise<{ 
+  success: boolean; 
+  record?: DeleteRecord;
+}> {
   const database = await initDB();
 
-  // 先获取链接信息，用于记录删除
+  // 先获取链接信息
   const link = await getLinkById(id);
+  if (!link) {
+    return { success: false };
+  }
 
   return new Promise((resolve, reject) => {
     const transaction = database.transaction([STORE_NAME, SYNC_META_STORE], 'readwrite');
@@ -146,17 +152,28 @@ export async function deleteLink(id: string): Promise<void> {
     const deleteRequest = store.delete(id);
 
     deleteRequest.onsuccess = () => {
-      // 记录删除操作
-      if (link) {
-        const syncStore = transaction.objectStore(SYNC_META_STORE);
-        syncStore.put({
-          id: `delete_${link.url}`, // 使用 URL 作为键
-          url: link.url,
-          deletedAt: Date.now(),
-          normalizedUrl: normalizeUrl(link.url),
-        });
-      }
-      resolve();
+      // 创建完整的删除记录（用于回收站和同步）
+      const record: DeleteRecord = {
+        id: `delete_${link.url}`,
+        linkId: link.id,
+        url: link.url,
+        title: link.title,
+        sourcePage: link.sourcePage,
+        createdAt: link.createdAt,
+        deletedAt: Date.now(),
+        normalizedUrl: normalizeUrl(link.url),
+        nearbyImage: link.nearbyImage,
+        screenshot: link.screenshot,
+        customData: link.customData,
+      };
+      
+      const syncStore = transaction.objectStore(SYNC_META_STORE);
+      syncStore.put(record);
+      
+      resolve({ 
+        success: true, 
+        record,
+      });
     };
     deleteRequest.onerror = () => reject(deleteRequest.error);
   });
@@ -416,12 +433,19 @@ export async function deleteCustomJsConfig(id: string): Promise<void> {
   });
 }
 
-// 获取删除记录（用于同步）
+// 获取删除记录（用于同步和回收站）
 export interface DeleteRecord {
-  id: string;
+  id: string;  // delete_{url} 格式
+  linkId: string;  // 原始链接ID
   url: string;
+  title: string;
+  sourcePage: string;
+  createdAt: number;
   deletedAt: number;
   normalizedUrl: string;
+  nearbyImage: string | null;
+  screenshot: string | null;
+  customData?: any;
 }
 
 export async function getDeleteRecords(since?: number): Promise<DeleteRecord[]> {
@@ -444,6 +468,123 @@ export async function getDeleteRecords(since?: number): Promise<DeleteRecord[]> 
         cursor.continue();
       } else {
         resolve(records);
+      }
+    };
+
+    request.onerror = () => reject(request.error);
+  });
+}
+
+// 获取回收站列表
+export async function getTrashItems(): Promise<DeleteRecord[]> {
+  const database = await initDB();
+
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction([SYNC_META_STORE], 'readonly');
+    const store = transaction.objectStore(SYNC_META_STORE);
+    const request = store.openCursor();
+
+    const records: DeleteRecord[] = [];
+
+    request.onsuccess = (event) => {
+      const cursor = (event.target as IDBRequest).result;
+      if (cursor) {
+        const record = cursor.value as DeleteRecord;
+        // 只返回删除记录（id 以 delete_ 开头）
+        if (record.id.startsWith('delete_')) {
+          records.push(record);
+        }
+        cursor.continue();
+      } else {
+        // 按删除时间倒序排列
+        resolve(records.sort((a, b) => b.deletedAt - a.deletedAt));
+      }
+    };
+
+    request.onerror = () => reject(request.error);
+  });
+}
+
+// 从回收站还原链接
+export async function restoreFromTrash(recordId: string): Promise<{ success: boolean; link?: LinkItem }> {
+  const database = await initDB();
+
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction([STORE_NAME, SYNC_META_STORE], 'readwrite');
+    const syncStore = transaction.objectStore(SYNC_META_STORE);
+    
+    // 获取删除记录
+    const getRequest = syncStore.get(recordId);
+    
+    getRequest.onsuccess = () => {
+      const record = getRequest.result as DeleteRecord | undefined;
+      if (!record) {
+        resolve({ success: false });
+        return;
+      }
+      
+      // 创建新链接（使用原始ID，但更新时间戳）
+      const restoredLink: LinkItem = {
+        id: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        url: record.url,
+        title: record.title,
+        nearbyImage: record.nearbyImage,
+        screenshot: record.screenshot,
+        sourcePage: record.sourcePage,
+        createdAt: Date.now(), // 重新创建时间
+        customData: record.customData,
+      };
+      
+      // 保存到链接表
+      const linkStore = transaction.objectStore(STORE_NAME);
+      linkStore.add(restoredLink);
+      
+      // 从回收站删除
+      syncStore.delete(recordId);
+      
+      resolve({ success: true, link: restoredLink });
+    };
+    
+    getRequest.onerror = () => reject(getRequest.error);
+  });
+}
+
+// 永久删除回收站项目
+export async function permanentlyDeleteFromTrash(recordId: string): Promise<boolean> {
+  const database = await initDB();
+
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction([SYNC_META_STORE], 'readwrite');
+    const store = transaction.objectStore(SYNC_META_STORE);
+    const request = store.delete(recordId);
+
+    request.onsuccess = () => resolve(true);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+// 清空回收站
+export async function clearTrash(): Promise<number> {
+  const database = await initDB();
+
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction([SYNC_META_STORE], 'readwrite');
+    const store = transaction.objectStore(SYNC_META_STORE);
+    const request = store.openCursor();
+
+    let deletedCount = 0;
+
+    request.onsuccess = (event) => {
+      const cursor = (event.target as IDBRequest).result;
+      if (cursor) {
+        const record = cursor.value as DeleteRecord;
+        if (record.id.startsWith('delete_')) {
+          store.delete(record.id);
+          deletedCount++;
+        }
+        cursor.continue();
+      } else {
+        resolve(deletedCount);
       }
     };
 
