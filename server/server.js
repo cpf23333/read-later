@@ -5,11 +5,31 @@
  * 默认端口: 3000
  */
 
+// 加载环境变量
+require('dotenv').config();
+
 const express = require("express");
 const Database = require("better-sqlite3");
 const cors = require("cors");
+const rateLimit = require("express-rate-limit");
 const path = require("path");
 const fs = require("fs");
+
+// 请求限流配置
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 分钟
+  max: 100, // 每个 IP 最多 100 个请求
+  message: { success: false, error: 'Too many requests, please try again later' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// 更严格的 API 限流（添加、删除操作）
+const apiLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 分钟
+  max: 30, // 每个 IP 最多 30 个请求
+  message: { success: false, error: 'Too many API requests, please slow down' },
+});
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -65,11 +85,38 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_trash_deleted ON trash(deleted_at);
 `);
 
+// 安全配置
+const MAX_IMAGE_SIZE = (parseInt(process.env.MAX_IMAGE_SIZE_MB) || 10) * 1024 * 1024;
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp'];
+
+// 辅助函数：验证文件路径安全
+function isSafeFilePath(filename, baseDir) {
+  const resolvedPath = path.resolve(baseDir, filename);
+  const resolvedBase = path.resolve(baseDir);
+  return resolvedPath.startsWith(resolvedBase);
+}
+
 // 辅助函数：将 Base64 保存为文件
 function saveBase64ToFile(base64Data, prefix) {
   try {
     console.log("[saveBase64ToFile] Input length:", base64Data.length);
     console.log("[saveBase64ToFile] Prefix:", prefix);
+
+    // 验证 base64 数据大小（粗略估计）
+    if (base64Data.length > MAX_IMAGE_SIZE * 2) {
+      console.error("[saveBase64ToFile] Image too large");
+      return null;
+    }
+
+    // 提取 MIME 类型并验证
+    const mimeMatch = base64Data.match(/^data:(image\/\w+);base64,/);
+    if (mimeMatch) {
+      const mimeType = mimeMatch[1];
+      if (!ALLOWED_IMAGE_TYPES.includes(mimeType)) {
+        console.error("[saveBase64ToFile] Invalid image type:", mimeType);
+        return null;
+      }
+    }
 
     const cleanBase64 = base64Data.replace(/^data:image\/\w+;base64,/, "");
     console.log("[saveBase64ToFile] After regex, length:", cleanBase64.length);
@@ -77,10 +124,22 @@ function saveBase64ToFile(base64Data, prefix) {
     const buffer = Buffer.from(cleanBase64, "base64");
     console.log("[saveBase64ToFile] Buffer size:", buffer.length);
 
+    // 验证解码后大小
+    if (buffer.length > MAX_IMAGE_SIZE) {
+      console.error("[saveBase64ToFile] Image too large after decode:", buffer.length);
+      return null;
+    }
+
     // 根据 prefix 选择扩展名
     const ext = prefix === "screenshot" ? "jpg" : "png";
     const filename = `${Date.now()}_${prefix}_${Math.random().toString(36).substr(2, 9)}.${ext}`;
     const filepath = path.join(IMAGES_DIR, filename);
+
+    // 验证文件路径安全
+    if (!isSafeFilePath(filename, IMAGES_DIR)) {
+      console.error("[saveBase64ToFile] Invalid file path");
+      return null;
+    }
 
     console.log("[saveBase64ToFile] Saving to:", filepath);
     fs.writeFileSync(filepath, buffer);
@@ -94,11 +153,57 @@ function saveBase64ToFile(base64Data, prefix) {
   }
 }
 
-// 中间件
-app.use(cors());
+// 全局限流
+app.use(limiter);
+
+// 安全配置
+const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : ['*'];
+
+// CORS 配置
+app.use(cors({
+  origin: (origin, callback) => {
+    // 允许无来源（如Postman）或配置的允许列表
+    if (!origin || ALLOWED_ORIGINS.includes('*') || ALLOWED_ORIGINS.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  methods: ['GET', 'POST', 'DELETE'],
+  credentials: true
+}));
+
+// JSON 解析限制
 app.use(express.json({ limit: "50mb" }));
-app.use("/images", express.static(IMAGES_DIR));
-app.use("/images/deleted", express.static(DELETED_IMAGES_DIR));
+
+// 静态文件服务 - 只允许访问图片文件
+app.use("/images", (req, res, next) => {
+  // 阻止访问以 . 开头的隐藏文件
+  if (req.path.includes('..') || req.path.includes('/.')) {
+    return res.status(403).json({ success: false, error: 'Forbidden' });
+  }
+  // 只允许图片文件扩展名
+  const ext = path.extname(req.path).toLowerCase();
+  const allowedExts = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'];
+  if (!allowedExts.includes(ext)) {
+    return res.status(403).json({ success: false, error: 'Invalid file type' });
+  }
+  next();
+}, express.static(IMAGES_DIR));
+
+app.use("/images/deleted", (req, res, next) => {
+  // 阻止访问以 . 开头的隐藏文件
+  if (req.path.includes('..') || req.path.includes('/.')) {
+    return res.status(403).json({ success: false, error: 'Forbidden' });
+  }
+  // 只允许图片文件扩展名
+  const ext = path.extname(req.path).toLowerCase();
+  const allowedExts = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'];
+  if (!allowedExts.includes(ext)) {
+    return res.status(403).json({ success: false, error: 'Invalid file type' });
+  }
+  next();
+}, express.static(DELETED_IMAGES_DIR));
 
 // ===== 链接 API =====
 
@@ -164,7 +269,8 @@ app.get("/api/links", (req, res) => {
 
     res.json({ success: true, data: links, total });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error('[API Error]', error);
+    res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -172,11 +278,16 @@ app.get("/api/links", (req, res) => {
 app.get("/api/search", (req, res) => {
   try {
     const { q } = req.query;
-    if (!q) {
+    if (!q || typeof q !== 'string') {
       return res.json({ success: true, data: [] });
     }
 
-    const searchParam = `%${q}%`;
+    const sanitizedQuery = sanitizeSearchQuery(q);
+    if (!sanitizedQuery) {
+      return res.json({ success: true, data: [] });
+    }
+
+    const searchParam = `%${sanitizedQuery}%`;
     const links = db
       .prepare(
         `
@@ -189,7 +300,8 @@ app.get("/api/search", (req, res) => {
 
     res.json({ success: true, data: links });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error('[Search Error]', error);
+    res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -216,13 +328,44 @@ app.get("/api/domains", (req, res) => {
 
     res.json({ success: true, data: result });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error('[API Error]', error);
+    res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
+
+// URL 验证函数
+function isValidImageUrl(url) {
+  try {
+    const parsed = new URL(url);
+    // 只允许 http 和 https
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return false;
+    }
+    // 禁止访问私有 IP 和 localhost
+    const hostname = parsed.hostname;
+    if (hostname === 'localhost' || hostname === '127.0.0.1' || 
+        hostname.startsWith('192.168.') || hostname.startsWith('10.') ||
+        hostname.startsWith('172.')) {
+      // 在生产环境中应该阻止，但开发环境允许
+      if (process.env.NODE_ENV === 'production') {
+        return false;
+      }
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 // 辅助函数：下载网络图片
 async function downloadImage(url, prefix) {
   try {
+    // 验证 URL
+    if (!isValidImageUrl(url)) {
+      console.warn(`[downloadImage] Invalid URL: ${url}`);
+      return null;
+    }
+
     const response = await fetch(url, {
       timeout: 10000,
       headers: {
@@ -242,10 +385,16 @@ async function downloadImage(url, prefix) {
       return null;
     }
 
+    // 验证图片类型
+    if (!ALLOWED_IMAGE_TYPES.some(type => contentType.includes(type.replace('image/', '')))) {
+      console.warn(`[downloadImage] Unsupported image type: ${contentType}`);
+      return null;
+    }
+
     const buffer = Buffer.from(await response.arrayBuffer());
 
-    // 5MB 限制
-    if (buffer.length > 5 * 1024 * 1024) {
+    // 使用统一的 10MB 限制
+    if (buffer.length > MAX_IMAGE_SIZE) {
       console.warn(`[downloadImage] Too large: ${buffer.length} bytes`);
       return null;
     }
@@ -258,6 +407,12 @@ async function downloadImage(url, prefix) {
           : "jpg";
     const filename = `${Date.now()}_${prefix}_${Math.random().toString(36).substr(2, 9)}.${ext}`;
     const filepath = path.join(IMAGES_DIR, filename);
+
+    // 验证文件路径安全
+    if (!isSafeFilePath(filename, IMAGES_DIR)) {
+      console.error("[downloadImage] Invalid file path");
+      return null;
+    }
 
     fs.writeFileSync(filepath, buffer);
     console.log(`[downloadImage] Saved: ${filename}`);
@@ -296,8 +451,8 @@ async function processImage(imageData, prefix) {
   return null;
 }
 
-// 添加链接
-app.post("/api/links", async (req, res) => {
+// 添加链接（应用更严格的限流）
+app.post("/api/links", apiLimiter, async (req, res) => {
   try {
     const {
       id,
@@ -345,12 +500,13 @@ app.post("/api/links", async (req, res) => {
 
     res.json({ success: true });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error('[API Error]', error);
+    res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
-// 批量添加链接
-app.post("/api/links/batch", async (req, res) => {
+// 批量添加链接（应用更严格的限流）
+app.post("/api/links/batch", apiLimiter, async (req, res) => {
   try {
     const { links } = req.body;
     const insert = db.prepare(`
@@ -381,16 +537,36 @@ app.post("/api/links/batch", async (req, res) => {
 
     res.json({ success: true, count: links.length });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error('[API Error]', error);
+    res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
-// 删除链接（移入回收站）
-app.delete("/api/links/:id", (req, res) => {
+// 输入验证函数
+function sanitizeId(id) {
+  if (typeof id !== 'string') return null;
+  // 只允许字母数字和下划线
+  if (!/^[a-zA-Z0-9_]+$/.test(id)) return null;
+  return id;
+}
+
+function sanitizeSearchQuery(query) {
+  if (typeof query !== 'string') return '';
+  // 限制长度并转义特殊字符
+  return query.slice(0, 200).replace(/[<>\"']/g, '');
+}
+
+// 删除链接（移入回收站）（应用更严格的限流）
+app.delete("/api/links/:id", apiLimiter, (req, res) => {
   try {
+    const id = sanitizeId(req.params.id);
+    if (!id) {
+      return res.status(400).json({ success: false, error: "Invalid ID" });
+    }
+
     const link = db
       .prepare("SELECT * FROM links WHERE id = ?")
-      .get(req.params.id);
+      .get(id);
     if (!link) {
       return res.status(404).json({ success: false, error: "Link not found" });
     }
@@ -416,7 +592,7 @@ app.delete("/api/links/:id", (req, res) => {
     );
 
     // 从主表删除
-    db.prepare("DELETE FROM links WHERE id = ?").run(req.params.id);
+    db.prepare("DELETE FROM links WHERE id = ?").run(id);
 
     // 移动图片到 deleted 文件夹（保持原文件名）
     [link.nearby_image, link.screenshot].forEach((imgPath) => {
@@ -433,7 +609,8 @@ app.delete("/api/links/:id", (req, res) => {
 
     res.json({ success: true });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error('[API Error]', error);
+    res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -458,15 +635,21 @@ app.get("/api/trash", (req, res) => {
     }));
     res.json({ success: true, data: itemsWithFixedPaths });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error('[API Error]', error);
+    res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
-app.post("/api/trash/:id/restore", (req, res) => {
+app.post("/api/trash/:id/restore", apiLimiter, (req, res) => {
   try {
+    const id = sanitizeId(req.params.id);
+    if (!id) {
+      return res.status(400).json({ success: false, error: "Invalid ID" });
+    }
+
     const item = db
       .prepare("SELECT * FROM trash WHERE id = ?")
-      .get(req.params.id);
+      .get(id);
     if (!item)
       return res.status(404).json({ success: false, error: "Not found" });
 
@@ -489,7 +672,7 @@ app.post("/api/trash/:id/restore", (req, res) => {
       item.custom_data,
     );
 
-    db.prepare("DELETE FROM trash WHERE id = ?").run(req.params.id);
+    db.prepare("DELETE FROM trash WHERE id = ?").run(id);
 
     // 还原图片（保持原文件名）
     [item.nearby_image, item.screenshot].forEach((imgPath) => {
@@ -505,15 +688,21 @@ app.post("/api/trash/:id/restore", (req, res) => {
 
     res.json({ success: true, data: { newId } });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error('[API Error]', error);
+    res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
-app.delete("/api/trash/:id", (req, res) => {
+app.delete("/api/trash/:id", apiLimiter, (req, res) => {
   try {
+    const id = sanitizeId(req.params.id);
+    if (!id) {
+      return res.status(400).json({ success: false, error: "Invalid ID" });
+    }
+
     const item = db
       .prepare("SELECT * FROM trash WHERE id = ?")
-      .get(req.params.id);
+      .get(id);
     if (item) {
       // 删除图片（使用原文件名）
       [item.nearby_image, item.screenshot].forEach((imgPath) => {
@@ -525,10 +714,11 @@ app.delete("/api/trash/:id", (req, res) => {
       });
     }
 
-    db.prepare("DELETE FROM trash WHERE id = ?").run(req.params.id);
+    db.prepare("DELETE FROM trash WHERE id = ?").run(id);
     res.json({ success: true });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error('[API Error]', error);
+    res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -549,7 +739,8 @@ app.post("/api/upload", async (req, res) => {
 
     res.json({ success: true, data: { url: result } });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error('[API Error]', error);
+    res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -566,7 +757,8 @@ app.get("/api/stats", (req, res) => {
 
     res.json({ success: true, data: { linkCount, trashCount } });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error('[API Error]', error);
+    res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -577,11 +769,12 @@ app.get("/api/export", (req, res) => {
     const links = db.prepare("SELECT * FROM links").all();
     res.json({ success: true, data: links });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error('[API Error]', error);
+    res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
-app.post("/api/import", async (req, res) => {
+app.post("/api/import", apiLimiter, async (req, res) => {
   try {
     const { links, mode = "merge" } = req.body;
 
@@ -623,7 +816,8 @@ app.post("/api/import", async (req, res) => {
     }
     res.json({ success: true, data: { imported, total: links.length } });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error('[API Error]', error);
+    res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 

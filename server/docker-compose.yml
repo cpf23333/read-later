@@ -14,4 +14,9 @@ services:
       - NODE_ENV=production
       - PORT=3000
       - DATA_DIR=/app/data
+      # CORS 配置 - 生产环境请修改为实际的前端来源
+      # 例如: https://your-extension.com,chrome-extension://your-extension-id
+      - ALLOWED_ORIGINS=*
+      # 图片大小限制（MB）
+      - MAX_IMAGE_SIZE_MB=10
     restart: unless-stopped
