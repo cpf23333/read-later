@@ -218,9 +218,17 @@ async function handleDelete(id: string) {
     const result = await deleteLink(id);
     console.log('[LinkManager] Delete result:', result);
     await loadLinks();
-    // 更新统计
-    const stats = await getDomainStats();
-    domainStats.value = stats;
+    // 更新统计和回收站数据
+    const [stats, domainStatsResult] = await Promise.all([
+      getStats(),
+      getDomainStats(),
+    ]);
+    totalCount.value = stats.linkCount;
+    domainStats.value = domainStatsResult;
+    // 如果回收站已加载，刷新回收站
+    if (trashItems.value.length > 0 || currentTab.value === 'trash') {
+      await loadTrash();
+    }
   } catch (error) {
     console.error('[LinkManager] Delete failed:', error);
     alert('删除失败: ' + (error instanceof Error ? error.message : '未知错误'));
@@ -238,8 +246,13 @@ async function handleBatchDelete() {
   
   selectedIds.value.clear();
   await loadLinks();
-  // 更新统计
-  await updateStats();
+  // 更新统计和回收站数据
+  const stats = await getStats();
+  totalCount.value = stats.linkCount;
+  // 如果回收站已加载，刷新回收站
+  if (trashItems.value.length > 0 || currentTab.value === 'trash') {
+    await loadTrash();
+  }
 }
 
 // ========== 回收站功能 ==========
@@ -265,7 +278,14 @@ async function restoreItem(recordId: string) {
   
   await restoreFromTrash(recordId);
   await loadTrash();
-  await updateStats();
+  // 刷新链接列表和统计
+  await loadLinks();
+  const [stats, domainStatsResult] = await Promise.all([
+    getStats(),
+    getDomainStats(),
+  ]);
+  totalCount.value = stats.linkCount;
+  domainStats.value = domainStatsResult;
 }
 
 async function permanentlyDeleteItem(recordId: string) {
@@ -273,6 +293,8 @@ async function permanentlyDeleteItem(recordId: string) {
   
   await permanentlyDeleteFromTrash(recordId);
   await loadTrash();
+  // 更新统计
+  await updateStats();
 }
 
 async function emptyTrash() {
@@ -283,6 +305,8 @@ async function emptyTrash() {
   }
   
   await loadTrash();
+  // 更新统计
+  await updateStats();
 }
 
 function toggleTrashSelection(id: string) {
@@ -302,7 +326,14 @@ async function restoreSelected() {
   
   selectedTrashIds.value.clear();
   await loadTrash();
-  await updateStats();
+  // 刷新链接列表和统计
+  await loadLinks();
+  const [stats, domainStatsResult] = await Promise.all([
+    getStats(),
+    getDomainStats(),
+  ]);
+  totalCount.value = stats.linkCount;
+  domainStats.value = domainStatsResult;
 }
 
 async function deleteSelected() {
@@ -314,6 +345,8 @@ async function deleteSelected() {
   
   selectedTrashIds.value.clear();
   await loadTrash();
+  // 更新统计
+  await updateStats();
 }
 
 async function updateStats() {
