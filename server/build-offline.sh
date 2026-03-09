@@ -1,4 +1,4 @@
-#!/bin/bash
+﻿#!/bin/bash
 
 echo "=========================================="
 echo "ReadLater Server 离线镜像构建脚本"

@@ -26,9 +26,20 @@ else
     echo "[1/2] 镜像已存在，跳过导入"
 fi
 
+# 检测 docker compose 命令（兼容新版和旧版）
+if docker compose version &>/dev/null; then
+    COMPOSE_CMD="docker compose"
+elif docker-compose version &>/dev/null; then
+    COMPOSE_CMD="docker-compose"
+else
+    echo "错误：未找到 docker compose 命令"
+    echo "请确保 Docker 和 Docker Compose 已安装"
+    exit 1
+fi
+
 echo
 echo "[2/2] 启动服务..."
-docker-compose -f docker-compose.offline.yml up -d
+$COMPOSE_CMD -f docker-compose.offline.yml up -d
 
 echo
 echo "=========================================="
@@ -38,7 +49,7 @@ echo "数据目录：./data"
 echo "=========================================="
 echo
 echo "常用命令："
-echo "  查看日志：docker-compose -f docker-compose.offline.yml logs -f"
-echo "  停止服务：docker-compose -f docker-compose.offline.yml down"
-echo "  重启服务：docker-compose -f docker-compose.offline.yml restart"
+echo "  查看日志：$COMPOSE_CMD -f docker-compose.offline.yml logs -f"
+echo "  停止服务：$COMPOSE_CMD -f docker-compose.offline.yml down"
+echo "  重启服务：$COMPOSE_CMD -f docker-compose.offline.yml restart"
 echo
