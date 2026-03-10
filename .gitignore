@@ -30,3 +30,7 @@ server/readlater-deploy.zip
 server/read-later-server.tar
 
 .temp
+
+# Environment variables
+.env.local
+.env.*.local

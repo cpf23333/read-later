@@ -15,6 +15,9 @@ importers:
       '@wxt-dev/module-vue':
         specifier: ^1.0.3
         version: 1.0.3(vite@7.3.1(@types/node@25.3.5)(jiti@2.6.1))(vue@3.5.29(typescript@5.9.3))(wxt@0.20.18(@types/node@25.3.5)(jiti@2.6.1)(rollup@4.59.0))
+      dotenv:
+        specifier: ^17.3.1
+        version: 17.3.1
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
