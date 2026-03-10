@@ -88,16 +88,16 @@ async function handleMessage(message: any) {
       return await extractLinkInfo(message.url);
 
     case 'SAVE_SUCCESS':
-      showNotification(`✅ 链接已保存: ${message.data.title.substring(0, 30)}...`, 'success');
+      showToast(`链接已保存: ${message.data.title.substring(0, 30)}...`, 'success');
       return { success: true };
 
     case 'SAVE_DUPLICATE':
       const date = message.data.createdAt ? new Date(message.data.createdAt).toLocaleDateString('zh-CN') : '';
-      showNotification(`⚠️ 链接已存在 (${date})`, 'warning');
+      showToast(`链接已存在 (${date})`, 'warning');
       return { success: true };
 
     case 'SAVE_ERROR':
-      showNotification(`❌ 保存失败: ${message.error}`, 'error');
+      showToast(`保存失败: ${message.error}`, 'error');
       return { success: true };
 
     default:
@@ -182,14 +182,23 @@ function getNearbyText(element: HTMLElement): string {
   return element.textContent?.trim() || '';
 }
 
-// 显示通知
-function showNotification(message: string, type: 'success' | 'error' | 'warning' = 'success') {
+// 显示 Toast 提示（内容脚本专用，使用原生 DOM 实现）
+// Vue 组件请使用 @/utils/toast
+function showToast(message: string, type: 'success' | 'error' | 'warning' | 'info' = 'success') {
   const notification = document.createElement('div');
   
+  const icons = {
+    success: '✅',
+    error: '❌',
+    warning: '⚠️',
+    info: 'ℹ️',
+  };
+  
   const colors = {
-    success: 'background: #10b981; color: white;',
-    error: 'background: #ef4444; color: white;',
-    warning: 'background: #f59e0b; color: white;',
+    success: 'background: #ecfdf5; color: #065f46; border: 1px solid #10b981;',
+    error: 'background: #fef2f2; color: #991b1b; border: 1px solid #ef4444;',
+    warning: 'background: #fffbeb; color: #92400e; border: 1px solid #f59e0b;',
+    info: 'background: #eff6ff; color: #1e40af; border: 1px solid #3b82f6;',
   };
   
   notification.style.cssText = `
@@ -199,15 +208,29 @@ function showNotification(message: string, type: 'success' | 'error' | 'warning'
     padding: 12px 20px;
     border-radius: 8px;
     font-size: 14px;
+    font-weight: 500;
     font-family: system-ui, -apple-system, sans-serif;
     z-index: 2147483647;
-    max-width: 300px;
+    max-width: 400px;
+    min-width: 200px;
     word-break: break-word;
     box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     animation: readlater-slide-in 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 8px;
     ${colors[type]}
   `;
-  notification.textContent = message;
+  
+  const icon = document.createElement('span');
+  icon.textContent = icons[type];
+  icon.style.cssText = 'font-size: 16px;';
+  
+  const text = document.createElement('span');
+  text.textContent = message;
+  
+  notification.appendChild(icon);
+  notification.appendChild(text);
 
   // 添加动画样式
   if (!document.getElementById('readlater-styles')) {
@@ -219,8 +242,8 @@ function showNotification(message: string, type: 'success' | 'error' | 'warning'
         to { transform: translateX(0); opacity: 1; }
       }
       @keyframes readlater-fade-out {
-        from { opacity: 1; }
-        to { opacity: 0; }
+        from { transform: translateX(0); opacity: 1; }
+        to { transform: translateX(100%); opacity: 0; }
       }
     `;
     document.head.appendChild(style);

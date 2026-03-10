@@ -18,6 +18,7 @@ import {
   saveCustomJsConfig,
   deleteCustomJsConfig,
 } from '@/utils/apiStorage';
+import { showSuccess, showError } from '@/utils/toast';
 
 type TabType = 'extractor' | 'import' | 'server';
 const activeTab = ref<TabType>('server');
@@ -86,7 +87,7 @@ function applyTemplate(templateCode: string) {
 
 async function saveConfig() {
   if (!editingConfig.value.name?.trim()) {
-    alert('请输入配置名称');
+    showError('请输入配置名称');
     return;
   }
 
@@ -160,7 +161,7 @@ function handleFileSelect(event: Event) {
 
 async function handleImport() {
   if (!importFile.value) {
-    alert('请选择要导入的文件');
+    showError('请选择要导入的文件');
     return;
   }
 
@@ -173,12 +174,12 @@ async function handleImport() {
     importResult.value = result;
     
     if (result.imported > 0) {
-      alert(`导入成功！导入了 ${result.imported} 个链接，跳过了 ${result.skipped} 个重复链接。`);
+      showSuccess(`导入成功！导入了 ${result.imported} 个链接，跳过了 ${result.skipped} 个重复链接。`);
     } else {
-      alert(`导入完成，没有新链接被导入（${result.skipped} 个重复链接被跳过）。`);
+      showSuccess(`导入完成，没有新链接被导入（${result.skipped} 个重复链接被跳过）。`);
     }
   } catch (error) {
-    alert(`导入失败: ${error instanceof Error ? error.message : '未知错误'}`);
+    showError(`导入失败: ${error instanceof Error ? error.message : '未知错误'}`);
   } finally {
     importing.value = false;
     importFile.value = null;
@@ -208,11 +209,11 @@ async function testServer() {
 async function saveServer() {
   if (serverConfig.value.enabled) {
     if (!serverConfig.value.url.trim()) {
-      alert('请输入服务器地址');
+      showError('请输入服务器地址');
       return;
     }
     if (!serverConfig.value.apiKey.trim()) {
-      alert('请输入 API Key');
+      showError('请输入 API Key');
       return;
     }
   }
@@ -220,7 +221,7 @@ async function saveServer() {
   savingServer.value = true;
   try {
     await saveServerConfig(serverConfig.value);
-    alert('服务器配置已保存');
+    showSuccess('服务器配置已保存');
     serverStatus.value = null;
   } finally {
     savingServer.value = false;

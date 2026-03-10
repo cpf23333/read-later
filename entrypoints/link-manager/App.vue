@@ -19,6 +19,7 @@ import {
   getAllDomains,
   getDomainStats,
 } from '@/utils/hybridStorage';
+import { showSuccess, showError } from '@/utils/toast';
 
 type SortBy = 'createdAt' | 'title' | 'domain';
 type SortOrder = 'asc' | 'desc';
@@ -231,7 +232,7 @@ async function handleDelete(id: string) {
     }
   } catch (error) {
     console.error('[LinkManager] Delete failed:', error);
-    alert('删除失败: ' + (error instanceof Error ? error.message : '未知错误'));
+    showError('删除失败: ' + (error instanceof Error ? error.message : '未知错误'));
   }
 }
 
@@ -382,9 +383,9 @@ async function handleImport(event: Event) {
     // 刷新数据
     await loadInitialData();
     
-    alert(`导入成功！导入了 ${result.imported} 个链接，跳过了 ${result.skipped} 个重复链接。`);
+    showSuccess(`导入成功！导入了 ${result.imported} 个链接，跳过了 ${result.skipped} 个重复链接。`);
   } catch (error) {
-    alert(`导入失败: ${error instanceof Error ? error.message : '未知错误'}`);
+    showError(`导入失败: ${error instanceof Error ? error.message : '未知错误'}`);
   } finally {
     importing.value = false;
     input.value = '';
@@ -1081,6 +1082,13 @@ onMounted(() => {
   width: 18px;
   height: 18px;
   cursor: pointer;
+  margin: 0;
+  vertical-align: middle;
+}
+
+.checkbox span {
+  vertical-align: middle;
+  line-height: 18px;
 }
 
 /* 加载和空状态 */
@@ -1145,6 +1153,9 @@ onMounted(() => {
 
 .links-container.list .card-content {
   padding: 16px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
 }
 
 .link-card {
@@ -1155,6 +1166,8 @@ onMounted(() => {
   transition: all 0.2s;
   cursor: pointer;
   position: relative;
+  display: flex;
+  flex-direction: column;
 }
 
 .link-card:hover {
@@ -1231,6 +1244,7 @@ onMounted(() => {
   justify-content: space-between;
   font-size: 12px;
   color: #9ca3af;
+  margin-top: auto;
 }
 
 .card-meta .domain {

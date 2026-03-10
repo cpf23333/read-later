@@ -8,19 +8,33 @@ import {
 // 右键菜单ID
 const CONTEXT_MENU_ID = 'read-later-save-link';
 
-export default defineBackground(() => {
-  console.log('[ReadLater] Background script started');
-
-  // 创建右键菜单（先移除已存在的，避免重复 ID 错误）
-  browser.contextMenus.removeAll().then(() => {
-    browser.contextMenus.create({
+// 创建右键菜单（幂等操作）
+async function createContextMenu() {
+  try {
+    // 先移除已存在的菜单
+    await browser.contextMenus.removeAll();
+    // 创建新菜单
+    await browser.contextMenus.create({
       id: CONTEXT_MENU_ID,
       title: '收好链接（稍后再看）',
       contexts: ['link'],
     });
-  }).catch((err) => {
+    console.log('[ReadLater] Context menu created');
+  } catch (err) {
     console.warn('[ReadLater] Failed to create context menu:', err);
+  }
+}
+
+export default defineBackground(() => {
+  console.log('[ReadLater] Background script started');
+
+  // 在扩展安装或更新时创建菜单
+  browser.runtime.onInstalled.addListener(() => {
+    createContextMenu();
   });
+
+  // 启动时也创建（处理开发热重载场景）
+  createContextMenu();
 
   // 监听菜单点击
   browser.contextMenus.onClicked.addListener(async (info, tab) => {

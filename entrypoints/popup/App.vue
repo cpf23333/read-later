@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import { ref, onMounted } from 'vue';
 import { getLinkCount, isLinkExists, addLink } from '@/utils/hybridStorage';
+import { showSuccess, showError, showWarning } from '@/utils/toast';
 
 const linkCount = ref(0);
 const saving = ref(false);
@@ -21,7 +22,7 @@ async function openLinkManager() {
     window.close();
   } catch (error) {
     console.error('[Popup] Failed to open link manager:', error);
-    alert('打开失败: ' + (error instanceof Error ? error.message : '未知错误'));
+    showError('打开失败: ' + (error instanceof Error ? error.message : '未知错误'));
   }
 }
 
@@ -33,7 +34,7 @@ async function openSettings() {
     window.close();
   } catch (error) {
     console.error('[Popup] Failed to open settings:', error);
-    alert('打开失败: ' + (error instanceof Error ? error.message : '未知错误'));
+    showError('打开失败: ' + (error instanceof Error ? error.message : '未知错误'));
   }
 }
 
@@ -53,7 +54,7 @@ async function saveCurrentPage() {
     const exists = await isLinkExists(tab.url);
     console.log('[Popup] Link exists:', exists);
     if (exists) {
-      alert('⚠️ 该页面已经在"稍后再看"列表中了！');
+      showWarning('该页面已经在"稍后再看"列表中了！');
       return;
     }
 
@@ -90,10 +91,10 @@ async function saveCurrentPage() {
     await loadLinkCount();
     
     // 显示成功提示
-    alert('✅ 已收好！稍后记得来看哦~');
+    showSuccess('已收好！稍后记得来看哦~');
   } catch (error) {
     console.error('[Popup] Failed to save current page:', error);
-    alert('❌ 保存失败: ' + (error instanceof Error ? error.message : '未知错误'));
+    showError('保存失败: ' + (error instanceof Error ? error.message : '未知错误'));
   } finally {
     saving.value = false;
   }
