@@ -26,6 +26,7 @@ web-ext.config.ts
 *.sw?
 server-deploy.zip
 server/readlater-offline.zip
+server/readlater-deploy.zip
 server/read-later-server.tar
 
 .temp

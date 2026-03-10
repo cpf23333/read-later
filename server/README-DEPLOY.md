@@ -1,61 +1,82 @@
 # ReadLater Server 部署指南
 
-## 方案一：使用国内镜像源（需联网）
+## 方案一：联网部署（需 Docker Hub 访问）
 
-如果 fnOS 能访问阿里云镜像仓库：
+如果你的服务器能访问 Docker Hub 或阿里云镜像：
 
 ```bash
 cd server
+
+# 修改 API_KEY（必须）
+vim docker-compose.yml
+
+# 启动
 docker-compose up -d
 ```
-
-Dockerfile 已配置使用 `registry.cn-hangzhou.aliyuncs.com/nodejs/node:20-alpine`
 
 ---
 
 ## 方案二：完全离线部署（推荐）
 
-### 步骤 1：在有网络的机器上构建镜像
+适用于无外网环境（如内网 NAS）。
 
-在 Windows 上：
+### 步骤 1：准备离线包（在有网络的机器上）
+
+默认使用阿里云镜像源，无需额外配置：
+
+```bash
+cd server
+./build-offline.sh
+```
+
+Windows:
 ```cmd
 cd server
 build-offline.bat
 ```
 
-在 Linux/Mac 上：
+可选配置（环境变量）：
 ```bash
-cd server
-chmod +x build-offline.sh
-./build-offline.sh
+# 使用其他镜像源（覆盖默认阿里云）
+DOCKER_REGISTRY=docker.xuanyuan.me ./build-offline.sh
 ```
 
 输出：`readlater-offline.zip`
 
-### 步骤 2：复制到 fnOS
+包含内容：
+- `readlater-images.tar` 或 `read-later-server.tar` - Docker 镜像
+- `docker-compose.offline.yml` - 部署配置
+- `start-offline.sh/.bat` - 启动脚本
+- `update-offline.sh/.bat` - 更新脚本
+- `README-DEPLOY.md` - 部署说明
 
-将 `readlater-offline.zip` 复制到 fnOS 的任意目录
-
-### 步骤 3：在 fnOS 上部署
+### 步骤 2：部署到目标服务器
 
 ```bash
-# 解压
+# 1. 复制并解压
 unzip readlater-offline.zip
 
-# 修改数据目录（重要！）
+# 2. 修改配置（重要！）
 vim docker-compose.offline.yml
-# 将 volumes 改为：
-# - /vol1/backup/readlater:/app/data
 
-# 启动（Linux）
-chmod +x start-offline.sh
+# 必须修改：
+# - API_KEY: 设置鉴权密钥
+# - volumes: 修改为实际数据目录
+#
+# 示例：
+# environment:
+#   - API_KEY=$(openssl rand -base64 32)
+# volumes:
+#   - /vol1/backup/readlater:/app/data
+
+# 3. 启动（Linux/Mac）
 ./start-offline.sh
 
 # 或启动（Windows）
 start-offline.bat
 ```
 
-### 步骤 4：验证
+### 步骤 3：验证
 
 ```bash
 # 查看容器状态
@@ -70,44 +91,92 @@ curl http://localhost:3000/api/health
 
 ---
 
+## 离线更新
+
+当有新版本时，无需重新配置：
+
+### 1. 准备新的离线包
+
+在有网络的机器上重新执行：
+```bash
+./prepare-offline.sh
+```
+
+### 2. 在服务器上更新
+
+将新的 `read-later-server.tar` 复制到服务器：
+
+```bash
+# Linux/Mac
+./update-offline.sh
+
+# Windows
+update-offline.bat
+```
+
+更新脚本会自动：
+1. 加载新的 Docker 镜像
+2. 停止并删除旧容器（数据保留）
+3. 清理旧镜像
+4. 启动新容器
+
+---
+
 ## 目录结构
 
 ```
 server/
-├── Dockerfile                  # 标准构建（使用阿里云源）
-├── Dockerfile.offline          # 离线构建（使用本地 node_modules）
-├── docker-compose.yml          # 标准部署
-├── docker-compose.offline.yml  # 离线部署
-├── build-offline.bat           # Windows 离线打包脚本
-├── build-offline.sh            # Linux 离线打包脚本
-├── start-offline.bat           # Windows 离线启动脚本
-├── start-offline.sh            # Linux 离线启动脚本
+├── Dockerfile                  # Docker 多阶段构建配置
+├── docker-compose.yml          # 联网部署配置
+├── docker-compose.offline.yml  # 离线部署配置
+├── prepare-offline.sh          # 离线包准备脚本（需联网）
+├── start-offline.sh            # 离线启动脚本（Linux/Mac）
+├── start-offline.bat           # 离线启动脚本（Windows）
+├── update-offline.sh           # 离线更新脚本（Linux/Mac）
+├── update-offline.bat          # 离线更新脚本（Windows）
 ├── package.json
 └── server.js
 ```
 
 ---
 
+## 环境变量（必需）
+
+| 变量 | 必需 | 说明 | 示例 |
+|------|------|------|------|
+| `API_KEY` | ✅ | API 鉴权密钥 | `openssl rand -base64 32` |
+| `PORT` | ❌ | 服务端口 | `3000` |
+| `DATA_DIR` | ❌ | 数据目录 | `/app/data` |
+
+---
+
 ## 常见问题
 
-### 1. 镜像拉取失败
-检查 fnOS Docker 是否配置了镜像加速器，或直接使用方案二离线部署。
+### 1. 找不到 docker compose 命令
 
-### 2. better-sqlite3 编译失败
-确保基础镜像包含 python3、make、g++ 编译工具。
+脚本会自动检测 `docker compose`（新版）或 `docker-compose`（旧版）。
 
-### 3. 数据持久化
-务必修改 `docker-compose.offline.yml` 中的 volumes 路径为 fnOS 实际存储路径，例如：
+### 2. 数据持久化
+
+务必修改 `docker-compose.offline.yml` 中的 volumes 为实际存储路径：
 ```yaml
 volumes:
   - /vol1/backup/readlater:/app/data
 ```
 
-### 4. 端口冲突
-如果 3000 端口被占用，修改 `docker-compose.offline.yml`：
+### 3. 端口冲突
+
+修改 `docker-compose.offline.yml`：
 ```yaml
 ports:
   - "3001:3000"  # 主机 3001 映射到容器 3000
+```
+
+### 4. API Key 未配置
+
+服务端启动必须配置 `API_KEY`，否则拒绝启动。生成命令：
+```bash
+openssl rand -base64 32
 ```
 
 ---
@@ -116,22 +185,20 @@ ports:
 
 ### API Key 鉴权（必须）
 
-服务端必须配置 API Key，否则无法启动。
-
-1. **生成随机密钥**（Linux/macOS）：
+1. **生成密钥**：
    ```bash
    openssl rand -base64 32
    ```
 
 2. **配置服务端**：
-   编辑 `docker-compose.yml`（或 `docker-compose.offline.yml`），修改 `API_KEY`：
+   编辑 `docker-compose.offline.yml`：
    ```yaml
    environment:
      - API_KEY=your-generated-api-key
    ```
 
 3. **配置扩展端**：
-   在浏览器扩展的设置页面 → 服务器 → API Key 中填写相同的密钥
+   在浏览器扩展设置页面 → 服务器 → API Key 中填写相同密钥
 
 4. **验证**：
    ```bash

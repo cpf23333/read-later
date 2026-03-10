@@ -8,14 +8,11 @@ echo
 # 检查镜像是否存在
 if ! docker images read-later-server:latest | grep -q "read-later-server"; then
     echo "[1/2] 导入 Docker 镜像..."
-    # 优先加载完整包（包含基础镜像）
-    if [ -f "readlater-images.tar" ]; then
-        docker load -i readlater-images.tar
-    elif [ -f "read-later-server.tar" ]; then
+    if [ -f "read-later-server.tar" ]; then
         docker load -i read-later-server.tar
     else
         echo "错误：找不到镜像文件！"
-        echo "请确保 readlater-images.tar 或 read-later-server.tar 存在"
+        echo "请确保 read-later-server.tar 存在于当前目录"
         exit 1
     fi
     if [ $? -ne 0 ]; then

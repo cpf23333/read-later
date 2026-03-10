@@ -9,7 +9,7 @@
 - **框架**: WXT (浏览器扩展开发框架)
 - **前端**: Vue 3 + TypeScript
 - **样式**: 原生 CSS (Scoped)
-- **存储**: 服务器 SQLite 数据库（通过 HTTP API）
+- **存储**: 服务器 SQLite 数据库（通过 HTTP API + Bearer Token 鉴权）
 - **服务器**: Express + SQLite (server/)
 - **构建**: Vite
 
@@ -30,8 +30,17 @@
 │   └── imageExtractor.ts  # 图片提取逻辑
 ├── server/                # 后端服务器
 │   ├── server.js          # Express + SQLite 服务
-│   ├── Dockerfile         # Docker 构建配置
-│   └── docker-compose.yml # Docker Compose 配置
+│   ├── Dockerfile         # Docker 多阶段构建
+│   ├── docker-compose.yml # Docker Compose 配置
+│   ├── docker-compose.offline.yml  # 离线部署配置
+│   ├── build-offline.sh   # 完全离线包构建脚本（Linux/Mac）
+│   ├── build-offline.bat  # 完全离线包构建脚本（Windows）
+│   ├── prepare-deploy.sh  # 联网部署包准备脚本（Linux/Mac，体积小）
+│   ├── prepare-deploy.bat # 联网部署包准备脚本（Windows，体积小）
+│   ├── start-offline.sh   # 离线启动脚本（Linux/Mac）
+│   ├── start-offline.bat  # 离线启动脚本（Windows）
+│   ├── update-offline.sh  # 离线更新脚本（Linux/Mac）
+│   └── update-offline.bat # 离线更新脚本（Windows）
 ├── components/            # 共享组件
 └── assets/                # 静态资源
 ```
@@ -81,9 +90,15 @@ GET /api/links 返回完整 URL
 Authorization: Bearer <API_KEY>
 ```
 
-- 服务端启动时必须配置 `API_KEY` 环境变量
+- 服务端启动时必须配置 `API_KEY` 环境变量，否则拒绝启动
 - 扩展端在设置页面配置相同的 API Key
 - 未携带或错误的 Key 返回 401
+- 静态图片访问 (`/images/*`) 无需鉴权
+
+生成随机密钥：
+```bash
+openssl rand -base64 32
+```
 
 ## API 端点
 
@@ -171,7 +186,100 @@ pnpm build  # 生产构建，压缩代码，移除 console
 3. **回收站图片**: 删除时自动移动到 deleted 目录
 4. **路径处理**: 数据库存相对路径，前端拼接 baseUrl
 
+## 服务器部署
+
+### 方案一：联网部署
+```bash
+cd server
+docker-compose up -d
+```
+
+### 方案二：完全离线部署（推荐）
+
+适用于无外网环境（如内网 NAS）：
+
+**步骤 1：在有网络的机器上构建离线包**
+```bash
+cd server
+./build-offline.sh
+```
+
+脚本默认使用阿里云镜像源，无需额外配置。如需使用其他镜像源：
+```bash
+DOCKER_REGISTRY=your.mirror.com ./build-offline.sh
+```
+
+### 方案三：联网部署包（体积小）
+
+适用于部署机器能访问 Docker Hub 或镜像源的场景：
+
+```bash
+cd server
+./prepare-deploy.sh  # 输出 readlater-deploy.zip（~80MB，仅含应用镜像）
+```
+
+**步骤 2：复制到目标服务器**
+```bash
+# 解压
+unzip readlater-offline.zip
+
+# 修改数据目录（重要！）
+vim docker-compose.offline.yml
+# volumes:
+#   - /your/data/path:/app/data
+
+# 启动（Linux/Mac）
+./start-offline.sh
+
+# 或启动（Windows）
+start-offline.bat
+```
+
+**步骤 3：更新（有新版时）**
+```bash
+# 1. 在新机器上重新执行 prepare-offline.sh 生成新包
+# 2. 复制 readlater-images.tar 到服务器
+# 3. 执行更新
+./update-offline.sh  # Linux/Mac
+# 或
+update-offline.bat   # Windows
+```
+
+离线包包含：
+- `readlater-images.tar` - Docker 镜像（node:20-alpine + read-later-server）
+- `docker-compose.offline.yml` - 部署配置
+- `start-offline.sh/.bat` - 启动脚本
+- `update-offline.sh/.bat` - 更新脚本
+
+### 环境变量（必需）
+| 变量 | 说明 | 示例 |
+|------|------|------|
+| `API_KEY` | API 鉴权密钥（必须） | `openssl rand -base64 32` |
+| `PORT` | 服务端口 | `3000` |
+| `DATA_DIR` | 数据目录 | `/app/data` |
+
+## 开发注意事项
+
+### 文件编码规范
+- **Shell 脚本** (`.sh`): UTF-8 无 BOM, LF 换行
+- **Batch 脚本** (`.bat`): UTF-8 无 BOM, CRLF 换行
+- **代码文件**: UTF-8 无 BOM
+
+### Docker 多阶段构建
+```dockerfile
+# 阶段 1：构建（含编译工具）
+FROM node:20-alpine AS builder
+RUN apk add --no-cache python3 make g++
+RUN npm install
+
+# 阶段 2：运行（仅运行时文件）
+FROM node:20-alpine
+COPY --from=builder /app/node_modules ./node_modules
+```
+镜像体积：~200MB → ~80MB
+
 ## 相关文件
 
 - [FEATURES.md](./FEATURES.md) - 功能清单
 - [server/README-DEPLOY.md](./server/README-DEPLOY.md) - 服务器部署指南
+- [server/SECURITY.md](./server/SECURITY.md) - 安全配置说明

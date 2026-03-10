@@ -1,18 +1,29 @@
-# 完全离线版本 - 使用本地 node_modules
+# 完全离线版本 - 多阶段构建，减小镜像体积
 # 在有网络的机器上先执行：npm install 并打包
 
-FROM registry.cn-hangzhou.aliyuncs.com/nodejs/node:20-alpine
+# ===== 阶段 1：构建（编译依赖） =====
+FROM registry.cn-hangzhou.aliyuncs.com/nodejs/node:20-alpine AS builder
 
 WORKDIR /app
 
-# 安装 Python 和构建工具（better-sqlite3 需要编译）
+# 安装编译工具（better-sqlite3 需要编译）
 RUN apk add --no-cache python3 make g++
 
 # 复制已下载的依赖（需要在有网络的环境中预先下载）
 COPY node_modules ./node_modules
 COPY package.json .
 
-# 复制代码
+# 重新编译原生模块（确保目标平台兼容）
+RUN npm rebuild
+
+# ===== 阶段 2：运行 =====
+FROM registry.cn-hangzhou.aliyuncs.com/nodejs/node:20-alpine
+
+WORKDIR /app
+
+# 只复制编译后的依赖和代码
+COPY --from=builder /app/node_modules ./node_modules
+COPY package.json .
 COPY server.js .
 
 # 创建数据目录
