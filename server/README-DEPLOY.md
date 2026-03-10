@@ -109,3 +109,37 @@ volumes:
 ports:
   - "3001:3000"  # 主机 3001 映射到容器 3000
 ```
+
+---
+
+## 安全配置
+
+### API Key 鉴权（必须）
+
+服务端必须配置 API Key，否则无法启动。
+
+1. **生成随机密钥**（Linux/macOS）：
+   ```bash
+   openssl rand -base64 32
+   ```
+
+2. **配置服务端**：
+   编辑 `docker-compose.yml`（或 `docker-compose.offline.yml`），修改 `API_KEY`：
+   ```yaml
+   environment:
+     - API_KEY=your-generated-api-key
+   ```
+
+3. **配置扩展端**：
+   在浏览器扩展的设置页面 → 服务器 → API Key 中填写相同的密钥
+
+4. **验证**：
+   ```bash
+   # 未带 Key 应返回 401
+   curl http://localhost:3000/api/links
+   
+   # 带 Key 应正常返回
+   curl -H "Authorization: Bearer your-api-key" http://localhost:3000/api/links
+   ```
+
+> **注意**：Health 检查接口 (`/api/health`) 始终公开，用于连接测试。

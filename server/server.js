@@ -34,6 +34,25 @@ const apiLimiter = rateLimit({
 const app = express();
 const PORT = process.env.PORT || 3000;
 const DATA_DIR = process.env.DATA_DIR || "./data";
+const API_KEY = process.env.API_KEY; // API Key 鉴权（必须）
+
+// 检查 API_KEY 是否配置
+if (!API_KEY) {
+  console.error(`
+╔════════════════════════════════════════════════╗
+║                                                ║
+║   ❌ 启动失败：缺少 API_KEY 环境变量          ║
+║                                                ║
+║   请设置 API_KEY 环境变量，例如：             ║
+║   API_KEY=your-secret-api-key                 ║
+║                                                ║
+║   生成随机密钥：                              ║
+║   openssl rand -base64 32                     ║
+║                                                ║
+╚════════════════════════════════════════════════╝
+  `);
+  process.exit(1);
+}
 
 // 确保数据目录存在
 if (!fs.existsSync(DATA_DIR)) {
@@ -175,6 +194,35 @@ app.use(cors({
 
 // JSON 解析限制
 app.use(express.json({ limit: "50mb" }));
+
+// API Key 鉴权中间件
+function authMiddleware(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  if (!authHeader) {
+    return res.status(401).json({ success: false, error: 'Missing Authorization header' });
+  }
+  
+  const parts = authHeader.split(' ');
+  if (parts.length !== 2 || parts[0] !== 'Bearer') {
+    return res.status(401).json({ success: false, error: 'Invalid Authorization format. Use: Bearer <token>' });
+  }
+  
+  const token = parts[1];
+  if (token !== API_KEY) {
+    return res.status(401).json({ success: false, error: 'Invalid API Key' });
+  }
+  
+  next();
+}
+
+// 应用鉴权中间件到所有 /api/* 路由（除了 health 检查）
+app.use('/api', (req, res, next) => {
+  // health 检查不需要鉴权
+  if (req.path === '/health') {
+    return next();
+  }
+  return authMiddleware(req, res, next);
+});
 
 // 静态文件服务 - 只允许访问图片文件
 app.use("/images", (req, res, next) => {
@@ -835,6 +883,7 @@ app.listen(PORT, () => {
 ║                                                ║
 ║   地址: http://localhost:${PORT}                  ║
 ║   数据目录: ${DATA_DIR}          ║
+║   鉴权: 已启用                                 ║
 ║                                                ║
 ╚════════════════════════════════════════════════╝
   `);

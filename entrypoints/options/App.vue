@@ -43,10 +43,12 @@ const exporting = ref(false);
 interface ServerConfig {
   enabled: boolean;
   url: string;
+  apiKey: string;
 }
 const serverConfig = ref<ServerConfig>({
   enabled: false,
   url: '',
+  apiKey: '',
 });
 const testingServer = ref(false);
 const savingServer = ref(false);
@@ -196,7 +198,7 @@ async function testServer() {
   serverStatus.value = null;
   
   try {
-    const result = await testServerConnection(serverConfig.value.url);
+    const result = await testServerConnection(serverConfig.value.url, serverConfig.value.apiKey);
     serverStatus.value = result;
   } finally {
     testingServer.value = false;
@@ -204,6 +206,17 @@ async function testServer() {
 }
 
 async function saveServer() {
+  if (serverConfig.value.enabled) {
+    if (!serverConfig.value.url.trim()) {
+      alert('请输入服务器地址');
+      return;
+    }
+    if (!serverConfig.value.apiKey.trim()) {
+      alert('请输入 API Key');
+      return;
+    }
+  }
+  
   savingServer.value = true;
   try {
     await saveServerConfig(serverConfig.value);
@@ -389,6 +402,17 @@ async function saveServer() {
               :disabled="!serverConfig.enabled"
             />
             <span class="hint">例如：http://localhost:3000 或 http://NAS_IP:3000</span>
+          </div>
+
+          <div class="form-group">
+            <label>API Key <span style="color: #ef4444;">*</span></label>
+            <input 
+              v-model="serverConfig.apiKey" 
+              type="password" 
+              placeholder="请输入 API Key"
+              :disabled="!serverConfig.enabled"
+            />
+            <span class="hint">必须与服务端 API_KEY 环境变量一致</span>
           </div>
 
           <div class="form-actions">

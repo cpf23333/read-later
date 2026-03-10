@@ -5,6 +5,7 @@ import { LinkItem, DeleteRecord, CustomJsConfig, ImportResult } from './storage'
 export interface ServerConfig {
   enabled: boolean;
   url: string;
+  apiKey: string;
 }
 
 const CONFIG_KEY = 'server_config';
@@ -17,7 +18,7 @@ export async function getServerConfig(): Promise<ServerConfig> {
   if (config && typeof config === 'object' && 'enabled' in config && 'url' in config) {
     return config as ServerConfig;
   }
-  return { enabled: false, url: '' };
+  return { enabled: false, url: '', apiKey: '' };
 }
 
 // 保存服务器配置
@@ -26,14 +27,20 @@ export async function saveServerConfig(config: ServerConfig): Promise<void> {
 }
 
 // 测试连接
-export async function testServerConnection(url: string): Promise<{ success: boolean; message: string }> {
+export async function testServerConnection(url: string, apiKey?: string): Promise<{ success: boolean; message: string }> {
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 5000); // 5秒超时
     
+    const headers: Record<string, string> = {};
+    if (apiKey) {
+      headers['Authorization'] = `Bearer ${apiKey}`;
+    }
+    
     const response = await fetch(`${url}/api/health`, { 
       method: 'GET',
       signal: controller.signal,
+      headers,
     });
     
     clearTimeout(timeoutId);
@@ -62,13 +69,20 @@ async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promi
   const timeoutId = setTimeout(() => controller.abort(), 10000); // 10秒超时
   
   try {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...options.headers as Record<string, string>,
+    };
+    
+    // 添加 API Key 鉴权头
+    if (config.apiKey) {
+      headers['Authorization'] = `Bearer ${config.apiKey}`;
+    }
+    
     const response = await fetch(`${config.url}${endpoint}`, {
       ...options,
       signal: controller.signal,
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
+      headers,
     });
     
     clearTimeout(timeoutId);
@@ -154,7 +168,12 @@ export async function apiGetLinks(
   if (options?.sortBy) url += `&sortBy=${options.sortBy}`;
   if (options?.sortOrder) url += `&sortOrder=${options.sortOrder}`;
   
-  const response = await fetch(url);
+  const headers: Record<string, string> = {};
+  if (config.apiKey) {
+    headers['Authorization'] = `Bearer ${config.apiKey}`;
+  }
+  
+  const response = await fetch(url, { headers });
   if (!response.ok) {
     throw new Error(`API 错误: ${response.status}`);
   }
@@ -177,7 +196,12 @@ export async function apiSearchLinks(query: string): Promise<LinkItem[]> {
     throw new Error('服务器未配置');
   }
   
-  const response = await fetch(`${config.url}/api/search?q=${encodeURIComponent(query)}`);
+  const headers: Record<string, string> = {};
+  if (config.apiKey) {
+    headers['Authorization'] = `Bearer ${config.apiKey}`;
+  }
+  
+  const response = await fetch(`${config.url}/api/search?q=${encodeURIComponent(query)}`, { headers });
   if (!response.ok) {
     throw new Error(`API 错误: ${response.status}`);
   }
@@ -268,9 +292,14 @@ export async function apiPermanentlyDelete(id: string): Promise<void> {
 
 export async function apiUploadImage(base64Image: string, filename?: string): Promise<string> {
   const config = await getServerConfig();
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (config.apiKey) {
+    headers['Authorization'] = `Bearer ${config.apiKey}`;
+  }
+  
   const response = await fetch(`${config.url}/api/upload`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify({ image: base64Image, filename }),
   });
   
@@ -293,7 +322,12 @@ export async function apiGetDomainStats(): Promise<{ domain: string; count: numb
     throw new Error('服务器未配置');
   }
   
-  const response = await fetch(`${config.url}/api/domains`);
+  const headers: Record<string, string> = {};
+  if (config.apiKey) {
+    headers['Authorization'] = `Bearer ${config.apiKey}`;
+  }
+  
+  const response = await fetch(`${config.url}/api/domains`, { headers });
   if (!response.ok) {
     throw new Error(`API 错误: ${response.status}`);
   }

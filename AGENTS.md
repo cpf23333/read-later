@@ -73,10 +73,23 @@ GET /api/links 返回完整 URL
 - **图片存储**: 服务器文件系统，`/images/` 和 `/images/deleted/`
 - **路径格式**: 数据库存相对路径 `/images/xxx.jpg`，前端拼接完整 URL
 
+## API 鉴权
+
+所有 API 请求（除 `/api/health` 外）必须通过 Bearer Token 鉴权：
+
+```http
+Authorization: Bearer <API_KEY>
+```
+
+- 服务端启动时必须配置 `API_KEY` 环境变量
+- 扩展端在设置页面配置相同的 API Key
+- 未携带或错误的 Key 返回 401
+
 ## API 端点
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
+| GET | /api/health | 健康检查（无需鉴权） |
 | GET | /api/links | 获取链接列表 |
 | POST | /api/links | 添加链接（支持 base64/URL/路径） |
 | DELETE | /api/links/:id | 删除链接（移入回收站） |

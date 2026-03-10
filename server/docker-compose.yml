@@ -19,4 +19,7 @@ services:
       - ALLOWED_ORIGINS=*
       # 图片大小限制（MB）
       - MAX_IMAGE_SIZE_MB=10
+      # API Key 鉴权（必须）- 请修改为随机字符串
+      # 生成随机密钥：openssl rand -base64 32
+      - API_KEY=your-secret-api-key-change-this
     restart: unless-stopped

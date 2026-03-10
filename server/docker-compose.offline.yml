@@ -11,4 +11,7 @@ services:
       - NODE_ENV=production
       - PORT=3000
       - DATA_DIR=/app/data
+      # API Key 鉴权（必须）- 请修改为随机字符串
+      # 生成随机密钥：openssl rand -base64 32
+      - API_KEY=your-secret-api-key-change-this
     restart: unless-stopped
