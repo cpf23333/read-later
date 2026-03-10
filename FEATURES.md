@@ -44,7 +44,6 @@
 - [x] Docker 多阶段构建（减小镜像体积）
 - [x] Docker 部署支持
 - [x] 离线部署包构建（`build-offline.sh`，完全无外网）
-- [x] 联网部署包准备（`prepare-deploy.sh`，体积小）
 - [x] 离线更新脚本（`update-offline.sh`，更新容器不丢数据）
 
 ### 设置
@@ -72,7 +71,6 @@
 - [x] API Key 鉴权 ✅ 已完成
 - [x] Docker 多阶段构建 ✅ 已完成
 - [x] 离线部署包构建 (`build-offline`) ✅ 已完成
-- [x] 联网部署包准备 (`prepare-deploy`) ✅ 已完成
 - [x] 离线更新脚本 ✅ 已完成
 - [ ] 增量同步（只同步变更数据）
 - ~~图片压缩~~（暂不需要，图片不大）

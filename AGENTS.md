@@ -35,8 +35,6 @@
 │   ├── docker-compose.offline.yml  # 离线部署配置
 │   ├── build-offline.sh   # 完全离线包构建脚本（Linux/Mac）
 │   ├── build-offline.bat  # 完全离线包构建脚本（Windows）
-│   ├── prepare-deploy.sh  # 联网部署包准备脚本（Linux/Mac，体积小）
-│   ├── prepare-deploy.bat # 联网部署包准备脚本（Windows，体积小）
 │   ├── start-offline.sh   # 离线启动脚本（Linux/Mac）
 │   ├── start-offline.bat  # 离线启动脚本（Windows）
 │   ├── update-offline.sh  # 离线更新脚本（Linux/Mac）
@@ -209,14 +207,7 @@ cd server
 DOCKER_REGISTRY=your.mirror.com ./build-offline.sh
 ```
 
-### 方案三：联网部署包（体积小）
 
-适用于部署机器能访问 Docker Hub 或镜像源的场景：
-
-```bash
-cd server
-./prepare-deploy.sh  # 输出 readlater-deploy.zip（~80MB，仅含应用镜像）
-```
 
 **步骤 2：复制到目标服务器**
 ```bash
