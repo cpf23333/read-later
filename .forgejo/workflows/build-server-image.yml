@@ -1,0 +1,56 @@
+name: Build Server Image
+
+on:
+  push:
+    branches: [main, master, ci-test]
+    tags: ["v*"]
+    paths:
+      - "server/**"
+      - ".forgejo/workflows/build-server-image.yml"
+  pull_request:
+    branches: [main, master]
+    paths:
+      - "server/**"
+  workflow_dispatch:
+
+jobs:
+  build-and-push:
+    runs-on: docker
+    container:
+      image: 192.168.1.3:8083/readlater-ci:latest
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image with Buildah
+        working-directory: ./server
+        run: |
+          echo "=== 使用 Buildah 构建镜像 ==="
+          buildah bud -t read-later-server:latest .
+
+      - name: Export image to tar
+        working-directory: ./server
+        run: |
+          echo "=== 导出镜像到 tar ==="
+          mkdir -p /tmp/image-export
+          buildah push read-later-server:latest dir:/tmp/image-export
+          skopeo copy dir:/tmp/image-export docker-archive:read-later-server.tar:read-later-server:latest
+          ls -lh read-later-server.tar
+
+      - name: Prepare offline deployment artifacts
+        working-directory: ./server
+        run: |
+          echo "=== 创建交付目录 ==="
+          mkdir -p offline-deploy
+          cp read-later-server.tar offline-deploy/
+          cp docker-compose.offline.yml offline-deploy/
+          cp reload.sh offline-deploy/
+          cp reload.bat offline-deploy/
+          ls -la offline-deploy/
+
+      - name: Upload offline deployment artifact
+        uses: https://code.forgejo.org/forgejo/upload-artifact@v4
+        with:
+          name: readlater-server-offline
+          path: server/offline-deploy/
+          if-no-files-found: error

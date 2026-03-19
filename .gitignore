@@ -34,3 +34,5 @@ server/read-later-server.tar
 # Environment variables
 .env.local
 .env.*.local
+.vfox/
+deploy

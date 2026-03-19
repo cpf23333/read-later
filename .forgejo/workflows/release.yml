@@ -1,0 +1,44 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+    branches: [main, master, ci-test]
+  workflow_dispatch:  # 手动触发
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: docker
+    # docker.xuanyuan.me/
+    container: m.daocloud.io/docker.io/library/node:20-alpine
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install pnpm
+        run: |
+          npm install -g pnpm
+          pnpm --version
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build all
+        run: |
+          pnpm build
+          pnpm build:firefox
+          pnpm zip
+          pnpm zip:firefox
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            .output/*.zip
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITEA_TOKEN }}

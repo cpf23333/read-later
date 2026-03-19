@@ -1,20 +1,28 @@
 {
   "name": "read-later-server",
-  "version": "1.0.0",
-  "description": "稍后再看后端服务 - SQLite",
-  "main": "server.js",
+  "version": "2.0.0",
+  "description": "稍后再看后端服务 - Hono + TypeScript + SQLite",
+  "type": "module",
+  "main": "dist/index.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "nodemon server.js"
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "clean": "rm -rf dist"
   },
   "dependencies": {
-    "express": "^4.18.2",
-    "better-sqlite3": "^9.4.3",
-    "cors": "^2.8.5",
-    "express-rate-limit": "^7.1.5",
-    "dotenv": "^16.4.5"
+    "@hono/node-server": "^1.13.8",
+    "better-sqlite3": "^12.6.2",
+    "dotenv": "^16.4.5",
+    "hono": "^4.7.4"
   },
   "devDependencies": {
-    "nodemon": "^3.0.3"
+    "@types/better-sqlite3": "^7.6.9",
+    "@types/node": "^20.11.24",
+    "tsx": "^4.7.1",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }

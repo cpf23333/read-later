@@ -10,7 +10,7 @@
 - **前端**: Vue 3 + TypeScript
 - **样式**: 原生 CSS (Scoped)
 - **存储**: 服务器 SQLite 数据库（通过 HTTP API + Bearer Token 鉴权）
-- **服务器**: Express + SQLite (server/)
+- **服务器**: Hono + TypeScript + SQLite (server/)
 - **构建**: Vite
 
 ## 项目结构
@@ -29,7 +29,13 @@
 │   ├── hybridStorage.ts   # 统一存储接口
 │   └── imageExtractor.ts  # 图片提取逻辑
 ├── server/                # 后端服务器
-│   ├── server.js          # Express + SQLite 服务
+│   ├── src/               # TypeScript 源代码
+│   │   ├── index.ts       # 主入口
+│   │   ├── routes/        # 路由定义
+│   │   ├── middleware/    # 中间件（鉴权、限流）
+│   │   ├── utils/         # 工具函数（数据库、图片处理）
+│   │   └── types/         # 类型定义
+│   ├── dist/              # 编译后的 JavaScript
 │   ├── Dockerfile         # Docker 多阶段构建
 │   ├── docker-compose.yml # Docker Compose 配置
 │   ├── docker-compose.offline.yml  # 离线部署配置
@@ -128,7 +134,28 @@ openssl rand -base64 32
 - `fetchPageTitle()` - 获取页面标题
 - 右键菜单点击处理
 
-### 服务器 (server/server.js)
+### 服务器开发 (server/)
+
+**开发模式：**
+```bash
+cd server
+npm run dev    # 使用 tsx watch 热重载
+```
+
+**构建：**
+```bash
+cd server
+npm run build  # 编译 TypeScript 到 dist/
+npm start      # 运行编译后的代码
+```
+
+**Docker 构建：**
+```bash
+cd server
+docker-compose up --build -d
+```
+
+**关键函数：**
 - `processImage()` - 处理图片数据（base64/URL/路径）
 - `saveBase64ToFile()` - 保存 base64 为文件
 - `downloadImage()` - 下载网络图片
