@@ -4,18 +4,20 @@ on:
   push:
     tags: ["v*"]
     branches: [main, master, ci-test]
-  workflow_dispatch:  # 手动触发
-
-permissions:
-  contents: write
+  workflow_dispatch:
 
 jobs:
   release:
     runs-on: docker
-    # docker.xuanyuan.me/
-    container: m.daocloud.io/docker.io/library/node:20-alpine
+    container:
+      image: m.daocloud.io/docker.io/library/node:20-alpine
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install tools
+        run: apk add --no-cache curl jq
 
       - name: Install pnpm
         run: |
@@ -32,13 +34,85 @@ jobs:
           pnpm zip
           pnpm zip:firefox
 
+      - name: Generate release notes
+        id: notes
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [ -n "$PREV_TAG" ]; then
+            {
+              echo "Changelog (${PREV_TAG} → ${{ github.ref_name }}):"
+              echo ""
+              git log --pretty=format:"- %s" "${PREV_TAG}..HEAD"
+            } > /tmp/release_notes.txt
+          else
+            {
+              echo "Release ${{ github.ref_name }}"
+              echo ""
+              git log --pretty=format:"- %s" HEAD
+            } > /tmp/release_notes.txt
+          fi
+          cat /tmp/release_notes.txt
+
       - name: Create Release
-        uses: softprops/action-gh-release@v1
-        with:
-          files: |
-            .output/*.zip
-          generate_release_notes: true
-          draft: false
-          prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITEA_TOKEN }}
+        id: create_release
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          TOKEN="${{ secrets.FORGEJO_TOKEN || secrets.GITEA_TOKEN }}"
+          API_URL="${{ github.server_url }}/api/v1/repos/${{ github.repository }}/releases"
+
+          PRERELEASE="${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}"
+
+          BODY_JSON=$(jq -Rs '.' /tmp/release_notes.txt)
+          PAYLOAD=$(jq -n \
+            --arg tag_name "${{ github.ref_name }}" \
+            --arg name "${{ github.ref_name }}" \
+            --argjson body "$BODY_JSON" \
+            --argjson draft false \
+            --argjson prerelease "$PRERELEASE" \
+            '{tag_name: $tag_name, name: $name, body: $body, draft: $draft, prerelease: $prerelease}')
+
+          echo "Creating release on ${{ github.server_url }} ..."
+          RESPONSE=$(curl -s -w "\n%{http_code}" \
+            -X POST \
+            -H "Authorization: token ${TOKEN}" \
+            -H "Content-Type: application/json" \
+            "${API_URL}" \
+            -d "${PAYLOAD}")
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n 1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+
+          if [ "$HTTP_CODE" != "201" ] && [ "$HTTP_CODE" != "200" ]; then
+            echo "Failed to create release (HTTP $HTTP_CODE)"
+            echo "$BODY"
+            exit 1
+          fi
+
+          RELEASE_ID=$(echo "$BODY" | grep -o '"id":[0-9]*' | head -n 1 | cut -d: -f2)
+          echo "release_id=${RELEASE_ID}" >> $GITHUB_OUTPUT
+          echo "Created release ID: ${RELEASE_ID}"
+
+      - name: Upload release assets
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          TOKEN="${{ secrets.FORGEJO_TOKEN || secrets.GITEA_TOKEN }}"
+          API_URL="${{ github.server_url }}/api/v1/repos/${{ github.repository }}/releases/${{ steps.create_release.outputs.release_id }}/assets"
+
+          for file in .output/*.zip; do
+            if [ -f "$file" ]; then
+              echo "Uploading $(basename "$file") ..."
+              HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+                -X POST \
+                -H "Authorization: token ${TOKEN}" \
+                -F "attachment=@${file}" \
+                "${API_URL}")
+
+              if [ "$HTTP_CODE" = "201" ] || [ "$HTTP_CODE" = "200" ]; then
+                echo "  OK"
+              else
+                echo "  FAILED (HTTP $HTTP_CODE)"
+                exit 1
+              fi
+            fi
+          done

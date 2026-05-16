@@ -49,7 +49,7 @@ jobs:
           ls -la offline-deploy/
 
       - name: Upload offline deployment artifact
-        uses: https://code.forgejo.org/forgejo/upload-artifact@v4
+        uses: forgejo/upload-artifact@v4
         with:
           name: readlater-server-offline
           path: server/offline-deploy/

@@ -6,7 +6,7 @@ on:
     tags: ["v*"]
   pull_request:
     branches: [main, master]
-  workflow_dispatch:  # 手动触发
+  workflow_dispatch:
 
 jobs:
   build:
@@ -19,23 +19,18 @@ jobs:
       - name: Prepare naming variables
         id: vars
         run: |
-          # 处理分支名：把 feature/login-fix 变成 feature-login-fix
           BRANCH="${{ github.ref_name }}"
           SAFE_BRANCH="${BRANCH//\//-}"
           echo "branch=${SAFE_BRANCH}" >> $GITHUB_OUTPUT
-
-          # 生成时间戳：20250317-1430
           echo "timestamp=$(date +%Y%m%d-%H%M)" >> $GITHUB_OUTPUT
 
-      # 安装 pnpm
       - name: Setup pnpm
         run: |
           npm install -g pnpm --registry=https://registry.npmmirror.com
           pnpm config set store-dir /root/.pnpm-store
 
-      # 配置 pnpm 依赖缓存
       - name: Cache pnpm dependencies
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             /root/.pnpm-store
@@ -43,7 +38,6 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pnpm-ext-
 
-      # 使用 pnpm deploy 生成扩展独立目录（包含 devDependencies，不含 server）
       - name: Deploy extension
         run: |
           mkdir -p deploy/ext
@@ -58,13 +52,12 @@ jobs:
           mkdir -p .output/unzipped-chrome-mv3
           unzip .output/*chrome*.zip -d .output/unzipped-chrome-mv3/
 
-      - name: Upload Chrome Artifact (可直接上架)
-        uses: https://code.forgejo.org/forgejo/upload-artifact@v4
+      - name: Upload Chrome Artifact
+        uses: forgejo/upload-artifact@v4
         with:
-          name: read-later-chrome-extension-${{ steps.vars.outputs.branch }}-构建时间${{ steps.vars.outputs.timestamp }}-构建号${{ github.run_number }} # 下载后为 chrome构建产物.zip
-          path: deploy/ext/.output/unzipped-chrome-mv3/ # 关键：指向解压后的目录，不是 zip 文件
+          name: read-later-chrome-extension-${{ steps.vars.outputs.branch }}-构建时间${{ steps.vars.outputs.timestamp }}-构建号${{ github.run_number }}
+          path: deploy/ext/.output/unzipped-chrome-mv3/
 
-      # Firefox 同理
       - name: Build Firefox Extension
         working-directory: deploy/ext
         env:
@@ -75,7 +68,7 @@ jobs:
           unzip .output/*firefox*.zip -d .output/unzipped-firefox/
 
       - name: Upload Firefox Artifact
-        uses: https://code.forgejo.org/forgejo/upload-artifact@v4
+        uses: forgejo/upload-artifact@v4
         with:
-          name: read-later-firefox-extension-${{ steps.vars.outputs.branch }}-构建时间${{ steps.vars.outputs.timestamp }}-构建号${{ github.run_number }} # 下载后为 firefox-分支-时间戳-运行号.zip
+          name: read-later-firefox-extension-${{ steps.vars.outputs.branch }}-构建时间${{ steps.vars.outputs.timestamp }}-构建号${{ github.run_number }}
           path: deploy/ext/.output/unzipped-firefox/
