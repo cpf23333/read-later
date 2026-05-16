@@ -1,6 +1,6 @@
 # CI 部署专用 Dockerfile
 # 由 pnpm deploy 输出的独立目录直接使用
-FROM node:20-alpine
+FROM docker.m.daocloud.io/library/node:24-alpine
 
 WORKDIR /app
 
