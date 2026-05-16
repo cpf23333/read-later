@@ -22,6 +22,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Pre-pull base image from mirror
+        run: |
+          echo "=== 从镜像源预拉取 node:20-alpine ==="
+          buildah pull swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/node:20-alpine
+          buildah tag swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/node:20-alpine node:20-alpine
+
       - name: Build image with Buildah
         working-directory: ./server
         run: |
