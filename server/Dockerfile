@@ -1,33 +1,40 @@
 # 标准构建 Dockerfile
-# 在有网环境构建，导出镜像后可在无网环境运行
+# 基于 pnpm deploy 的 workspace 多阶段构建
 
+# ===== 构建阶段 =====
 FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# 安装编译工具（better-sqlite3 需要）
-RUN apk add --no-cache python3 make g++
+# 安装编译工具（better-sqlite3 需要）+ pnpm
+RUN apk add --no-cache python3 make g++ && \
+    npm install -g pnpm
 
-# 复制依赖配置并安装（包括 devDependencies 用于构建）
-COPY package.json ./
-RUN npm install
+# 先复制 workspace 配置（利用缓存，这些文件不常变）
+COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
+COPY server/package.json ./server/
 
-# 复制源码并构建
-COPY . .
-RUN npm run build
+# 安装依赖（严格锁定版本）
+RUN pnpm install --frozen-lockfile
 
-# 重新安装仅生产依赖（清理 devDependencies）
-RUN rm -rf node_modules && npm install --production
+# 再复制 server 源码并构建
+COPY server ./server
+WORKDIR /app/server
+RUN pnpm build
+
+# 导出 server 包到独立目录（自动只保留生产依赖，解除 workspace 硬链接依赖）
+WORKDIR /app
+RUN pnpm deploy --filter=read-later-server --prod /app/deploy
 
 # ===== 运行阶段 =====
 FROM node:20-alpine
 
 WORKDIR /app
 
-# 只复制生产依赖和构建产物
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/dist ./dist
-COPY package.json .
+# deploy 出来的目录是自包含的，直接复制即可
+COPY --from=builder /app/deploy/node_modules ./node_modules
+COPY --from=builder /app/deploy/dist ./dist
+COPY --from=builder /app/deploy/package.json .
 
 # 创建数据目录
 RUN mkdir -p /app/data

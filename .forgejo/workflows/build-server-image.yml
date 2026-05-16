@@ -29,10 +29,10 @@ jobs:
           buildah tag swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/node:20-alpine node:20-alpine
 
       - name: Build image with Buildah
-        working-directory: ./server
+        working-directory: ./
         run: |
           echo "=== 使用 Buildah 构建镜像 ==="
-          buildah bud -t read-later-server:latest .
+          buildah bud -f server/Dockerfile -t read-later-server:latest .
 
       - name: Export image to tar
         working-directory: ./server
