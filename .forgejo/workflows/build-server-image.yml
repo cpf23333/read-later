@@ -41,6 +41,8 @@ jobs:
           buildah bud -f server-deploy/Dockerfile -t read-later-server:latest ./server-deploy
 
       - name: Export image to tar
+        env:
+          STORAGE_DRIVER: vfs
         working-directory: ./server
         run: |
           echo "=== 导出镜像到 tar ==="
