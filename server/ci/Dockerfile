@@ -1,15 +1,16 @@
-# 自定义 CI 镜像：包含 buildah + Node.js + skopeo
+# CI 镜像：基于 Alpine + buildah + skopeo + pnpm
 # 构建命令: docker build -t readlater-ci:latest .
-FROM quay.io/buildah/stable:latest
+FROM swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/node:20-alpine
 
-# 安装 Node.js 和其他工具
-RUN dnf install -y nodejs skopeo && \
-    dnf clean all && \
-    rm -rf /var/cache/dnf/*
+# 安装容器构建工具 + 原生编译工具（better-sqlite3 需要）
+RUN apk add --no-cache buildah skopeo python3 make g++
+
+# 安装 pnpm
+RUN npm install -g pnpm
 
 # 验证安装
 RUN node --version && \
-    npm --version && \
+    pnpm --version && \
     buildah --version && \
     skopeo --version
 
