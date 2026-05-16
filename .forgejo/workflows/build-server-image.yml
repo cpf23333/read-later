@@ -26,12 +26,10 @@ jobs:
         run: |
           echo "=== 安装依赖 ==="
           pnpm install --frozen-lockfile
-          echo "=== 重建 server 原生模块（better-sqlite3）==="
-          pnpm rebuild --filter=read-later-server
           echo "=== 构建 server ==="
-          pnpm build --filter=read-later-server
+          cd server && pnpm rebuild && pnpm build
           echo "=== 部署 server 到独立目录 ==="
-          pnpm deploy --filter=read-later-server --prod ./server-deploy
+          cd .. && pnpm deploy --filter=read-later-server --prod ./server-deploy
 
       - name: Build image with Buildah
         run: |
