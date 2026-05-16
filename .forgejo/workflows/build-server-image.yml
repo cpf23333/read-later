@@ -32,6 +32,8 @@ jobs:
           cd .. && pnpm deploy --filter=read-later-server --prod ./server-deploy
 
       - name: Build image with Buildah
+        env:
+          STORAGE_DRIVER: vfs
         run: |
           echo "=== 复制 Dockerfile 到部署目录 ==="
           cp server/deploy.Dockerfile server-deploy/Dockerfile
