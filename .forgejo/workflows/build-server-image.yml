@@ -8,7 +8,7 @@ jobs:
     runs-on: docker
     container:
       image: 192.168.1.3:8083/readlater-ci:latest
-      options: --privileged --pull always
+      options: --privileged
     steps:
       - uses: actions/checkout@v4
 
