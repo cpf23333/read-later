@@ -32,7 +32,7 @@ jobs:
             ${{ runner.os }}-pnpm-ext-
 
       - name: Install dependencies
-        run: pnpm install --allow-build=esbuild --allow-build=spawn-sync
+        run: pnpm install
 
       - name: Deploy extension
         run: |
