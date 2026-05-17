@@ -264,7 +264,7 @@ update-offline.bat   # Windows
 ```
 
 离线包包含：
-- `readlater-images.tar` - Docker 镜像（node:20-alpine + read-later-server）
+- `readlater-images.tar` - Docker 镜像（node:24-alpine + read-later-server）
 - `docker-compose.offline.yml` - 部署配置
 - `start-offline.sh/.bat` - 启动脚本
 - `update-offline.sh/.bat` - 更新脚本
@@ -276,7 +276,41 @@ update-offline.bat   # Windows
 | `PORT` | 服务端口 | `3000` |
 | `DATA_DIR` | 数据目录 | `/app/data` |
 
-## 开发注意事项
+## CI 与工作流
+
+项目使用 **Forgejo Actions** 进行 CI 构建，所有工作流定义在 `.forgejo/workflows/` 目录下。
+
+### 工作流列表
+
+| 工作流 | 说明 | 触发方式 |
+|--------|------|----------|
+| `release.yml` | 构建扩展并创建 Release | `workflow_dispatch`（手动） |
+| `build-extension.yml` | 构建 Chrome/Firefox 扩展产物 | `workflow_dispatch`（手动） |
+| `build-server-image.yml` | 构建服务器 Docker 镜像 | `workflow_dispatch`（手动） |
+
+> 所有工作流均为**手动触发**，不再关联 push/pull_request 事件。
+
+### CI 镜像 (`readlater-ci`)
+
+三个工作流共用统一的 CI 镜像 `192.168.1.3:8083/readlater-ci:latest`，基于 `node:24-alpine`，预装：
+- `pnpm`（全局）
+- `buildah` + `skopeo`（容器镜像构建）
+- `python3` + `make` + `g++`（原生模块编译）
+- `curl` + `jq`
+
+**构建 CI 镜像：**
+```bash
+cd server/ci
+./build-and-push.sh [registry] [name] [tag] [alpine-proxy]
+# 示例：
+./build-and-push.sh 192.168.1.3:8083 readlater-ci latest
+```
+
+**镜像 Dockerfile**: `server/ci/Dockerfile`
+- 支持通过 `ARG ALPINE_REPO_URL` 指定 apk 源（默认阿里云）
+- `Batch 脚本 (.bat)` 构建后需确认 **CRLF 换行符**（`unix2dos` 修复）
+
+### 开发注意事项
 
 ### 文件编码规范
 - **Shell 脚本** (`.sh`): UTF-8 无 BOM, LF 换行
@@ -286,12 +320,12 @@ update-offline.bat   # Windows
 ### Docker 多阶段构建
 ```dockerfile
 # 阶段 1：构建（含编译工具）
-FROM node:20-alpine AS builder
+FROM node:24-alpine AS builder
 RUN apk add --no-cache python3 make g++
 RUN npm install
 
 # 阶段 2：运行（仅运行时文件）
-FROM node:20-alpine
+FROM node:24-alpine
 COPY --from=builder /app/node_modules ./node_modules
 ```
 镜像体积：~200MB → ~80MB
