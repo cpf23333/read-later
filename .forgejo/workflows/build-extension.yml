@@ -34,13 +34,7 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
-      - name: Deploy extension
-        run: |
-          mkdir -p deploy/ext
-          pnpm --filter read-later deploy --allow-build=esbuild --allow-build=spawn-sync ./deploy/ext
-
       - name: Build Chrome Extension
-        working-directory: deploy/ext
         env:
           EXTENSION_KEY: ${{ vars.EXTENSION_KEY }}
         run: |
@@ -52,10 +46,9 @@ jobs:
         uses: forgejo/upload-artifact@v4
         with:
           name: read-later-chrome-extension-${{ steps.vars.outputs.branch }}-构建时间${{ steps.vars.outputs.timestamp }}-构建号${{ github.run_number }}
-          path: deploy/ext/.output/unzipped-chrome-mv3/
+          path: .output/unzipped-chrome-mv3/
 
       - name: Build Firefox Extension
-        working-directory: deploy/ext
         env:
           EXTENSION_KEY: ${{ vars.EXTENSION_KEY }}
         run: |
@@ -67,4 +60,4 @@ jobs:
         uses: forgejo/upload-artifact@v4
         with:
           name: read-later-firefox-extension-${{ steps.vars.outputs.branch }}-构建时间${{ steps.vars.outputs.timestamp }}-构建号${{ github.run_number }}
-          path: deploy/ext/.output/unzipped-firefox/
+          path: .output/unzipped-firefox/
