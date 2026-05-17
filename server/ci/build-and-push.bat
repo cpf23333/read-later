@@ -1,10 +1,10 @@
 @echo off
 chcp 65001 >nul
 REM 构建并推送 CI 镜像脚本（Windows）
-REM 用法: build-and-push.bat [仓库地址] [镜像名] [标签]
+REM 用法: build-and-push.bat [仓库地址] [镜像名] [标签] [alpine代理源]
 REM
 REM Nexus 示例:
-REM   build-and-push.bat 192.168.1.3:8083
+REM   build-and-push.bat 192.168.1.3:8083 readlater-ci latest https://nexus.example.com/repository/alpine-proxy
 REM
 
 setlocal EnableDelayedExpansion
@@ -18,6 +18,8 @@ if "%~2"=="" set "IMAGE_NAME=readlater-ci"
 set "TAG=%~3"
 if "%~3"=="" set "TAG=latest"
 
+set "ALPINE_REPO_URL=%~4"
+
 set "FULL_IMAGE=%REGISTRY%/%IMAGE_NAME%:%TAG%"
 
 echo === 构建 CI 镜像 ===
@@ -25,7 +27,12 @@ echo 目标: %FULL_IMAGE%
 
 cd /d "%~dp0"
 
-docker build -t "%FULL_IMAGE%" .
+set "BUILD_ARGS="
+if not "%~4"=="" (
+  set "BUILD_ARGS=--build-arg ALPINE_REPO_URL=%~4"
+)
+
+docker build %BUILD_ARGS% -t "%FULL_IMAGE%" .
 if errorlevel 1 (
     echo 构建失败
     exit /b 1

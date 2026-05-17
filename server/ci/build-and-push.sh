@@ -1,9 +1,9 @@
 #!/bin/bash
 # 构建并推送 CI 镜像脚本
-# 用法: ./build-and-push.sh [仓库地址] [镜像名] [标签]
+# 用法: ./build-and-push.sh [仓库地址] [镜像名] [标签] [alpine代理源]
 #
 # Nexus 示例:
-#   ./build-and-push.sh 192.168.1.3:8083
+#   ./build-and-push.sh 192.168.1.3:8083 readlater-ci latest https://nexus.example.com/repository/alpine-proxy
 #
 
 set -e
@@ -11,6 +11,7 @@ set -e
 REGISTRY="${1:-192.168.1.3:8083}"
 IMAGE_NAME="${2:-readlater-ci}"
 TAG="${3:-latest}"
+ALPINE_REPO_URL="${4:-}"
 
 FULL_IMAGE="${REGISTRY}/${IMAGE_NAME}:${TAG}"
 
@@ -19,7 +20,12 @@ echo "目标: ${FULL_IMAGE}"
 
 cd "$(dirname "$0")"
 
-docker build -t "${FULL_IMAGE}" .
+BUILD_ARGS=()
+if [ -n "${ALPINE_REPO_URL}" ]; then
+  BUILD_ARGS+=("--build-arg" "ALPINE_REPO_URL=${ALPINE_REPO_URL}")
+fi
+
+docker build "${BUILD_ARGS[@]}" -t "${FULL_IMAGE}" .
 
 echo ""
 echo "=== 登录 Nexus (端口 8083) ==="
