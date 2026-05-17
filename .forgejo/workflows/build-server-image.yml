@@ -1,16 +1,6 @@
 name: Build Server Image
 
 on:
-  push:
-    branches: [main, master, ci-test]
-    tags: ["v*"]
-    paths:
-      - "server/**"
-      - ".forgejo/workflows/build-server-image.yml"
-  pull_request:
-    branches: [main, master]
-    paths:
-      - "server/**"
   workflow_dispatch:
 
 jobs:
