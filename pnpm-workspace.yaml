@@ -1,4 +1,5 @@
 injectWorkspacePackages: true
+forceLegacyDeploy: true
 packages:
   - ./server
 

@@ -37,7 +37,7 @@ jobs:
       - name: Deploy extension
         run: |
           mkdir -p deploy/ext
-          pnpm --filter read-later deploy ./deploy/ext
+          pnpm --filter read-later deploy --allow-build=esbuild --allow-build=spawn-sync ./deploy/ext
 
       - name: Build Chrome Extension
         working-directory: deploy/ext
