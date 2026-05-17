@@ -292,7 +292,7 @@ update-offline.bat   # Windows
 
 ### CI 镜像 (`readlater-ci`)
 
-三个工作流共用统一的 CI 镜像 `192.168.1.3:8083/readlater-ci:latest`，基于 `node:24-alpine`，预装：
+三个工作流共用统一的 CI 镜像 `192.168.1.3:8083/readlater-ci:latest`，基于 `node:24`（Debian），预装：
 - `pnpm`（全局）
 - `buildah` + `skopeo`（容器镜像构建）
 - `python3` + `make` + `g++`（原生模块编译）
@@ -310,7 +310,7 @@ cd server/ci
 - 支持通过 `ARG ALPINE_REPO_URL` 指定 apk 源（默认阿里云）
 - `Batch 脚本 (.bat)` 构建后需确认 **CRLF 换行符**（`unix2dos` 修复）
 
-### 开发注意事项
+## 开发注意事项
 
 ### 文件编码规范
 - **Shell 脚本** (`.sh`): UTF-8 无 BOM, LF 换行
