@@ -17,7 +17,7 @@ RUN apt-get update && apt-get install -y \
 
 # 配置 Buildah / Skopeo 允许访问 HTTP 私有仓库
 RUN mkdir -p /etc/containers && \
-    printf '[registries.insecure]\nregistries = ["192.168.1.100:8083", "192.168.1.100:5443"]\n' > /etc/containers/registries.conf
+    printf '[registries.insecure]\nregistries = ["192.168.1.100:8083"]\n' > /etc/containers/registries.conf
 
 # 嵌套容器环境下强制使用 vfs 存储驱动
 ENV STORAGE_DRIVER=vfs

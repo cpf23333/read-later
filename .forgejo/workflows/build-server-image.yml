@@ -34,6 +34,8 @@ jobs:
         env:
           STORAGE_DRIVER: vfs
         run: |
+          echo "=== Buildah registry 配置 ==="
+          cat /etc/containers/registries.conf || echo "未找到 /etc/containers/registries.conf"
           echo "=== 复制 Dockerfile 到部署目录 ==="
           cp server/deploy.Dockerfile server-deploy/Dockerfile
           echo "=== 使用 Buildah 构建镜像 ==="
