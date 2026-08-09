@@ -7,7 +7,7 @@ jobs:
   build-and-push:
     runs-on: docker
     container:
-      image: docker:24-cli
+      image: 192.168.1.100:8083/library/docker:24-cli
       options: --privileged
     env:
       DOCKER_HOST: tcp://docker-in-docker:2375

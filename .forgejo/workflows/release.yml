@@ -27,19 +27,34 @@ jobs:
           pnpm zip
           pnpm zip:firefox
 
+      - name: Prepare release variables
+        id: relvars
+        run: |
+          TIMESTAMP=$(date +%Y-%m-%d-%H-%M)
+          REF_NAME="${{ github.ref_name }}"
+          REF_TYPE="${{ github.ref_type }}"
+
+          if [ "$REF_TYPE" = "tag" ]; then
+            echo "tag_name=${REF_NAME}" >> $GITHUB_OUTPUT
+            echo "release_name=${REF_NAME}-${TIMESTAMP}" >> $GITHUB_OUTPUT
+          else
+            echo "tag_name=${REF_NAME}-${TIMESTAMP}" >> $GITHUB_OUTPUT
+            echo "release_name=${REF_NAME}-${TIMESTAMP}" >> $GITHUB_OUTPUT
+          fi
+
       - name: Generate release notes
         id: notes
         run: |
           PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
           if [ -n "$PREV_TAG" ]; then
             {
-              echo "Changelog (${PREV_TAG} → ${{ github.ref_name }}):"
+              echo "Changelog (${PREV_TAG} → ${{ steps.relvars.outputs.release_name }}):"
               echo ""
               git log --pretty=format:"- %s" "${PREV_TAG}..HEAD"
             } > /tmp/release_notes.txt
           else
             {
-              echo "Release ${{ github.ref_name }}"
+              echo "Release ${{ steps.relvars.outputs.release_name }}"
               echo ""
               git log --pretty=format:"- %s" HEAD
             } > /tmp/release_notes.txt
@@ -52,12 +67,12 @@ jobs:
           TOKEN="${{ secrets.FORGEJO_TOKEN || secrets.GITEA_TOKEN }}"
           API_URL="${{ github.server_url }}/api/v1/repos/${{ github.repository }}/releases"
 
-          PRERELEASE="${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}"
+          PRERELEASE="${{ contains(steps.relvars.outputs.tag_name, 'alpha') || contains(steps.relvars.outputs.tag_name, 'beta') || contains(steps.relvars.outputs.tag_name, 'rc') }}"
 
           BODY_JSON=$(jq -Rs '.' /tmp/release_notes.txt)
           PAYLOAD=$(jq -n \
-            --arg tag_name "${{ github.ref_name }}" \
-            --arg name "${{ github.ref_name }}" \
+            --arg tag_name "${{ steps.relvars.outputs.tag_name }}" \
+            --arg name "${{ steps.relvars.outputs.release_name }}" \
             --argjson body "$BODY_JSON" \
             --argjson draft false \
             --argjson prerelease "$PRERELEASE" \

@@ -29,7 +29,7 @@ docker build "${BUILD_ARGS[@]}" -t "${FULL_IMAGE}" .
 
 echo ""
 echo "=== 登录 Nexus (端口 8083) ==="
-docker login 192.168.1.100:8083
+docker login "${REGISTRY}"
 
 echo ""
 echo "=== 推送镜像 ==="

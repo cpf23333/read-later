@@ -40,7 +40,7 @@ if errorlevel 1 (
 
 echo.
 echo === 登录 Nexus (端口 8083) ===
-docker login 192.168.1.100:8083
+docker login %REGISTRY%
 if errorlevel 1 (
     echo 登录失败
     exit /b 1

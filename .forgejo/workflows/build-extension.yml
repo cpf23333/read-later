@@ -21,7 +21,7 @@ jobs:
           BRANCH="${{ github.ref_name }}"
           SAFE_BRANCH="${BRANCH//\//-}"
           echo "branch=${SAFE_BRANCH}" >> $GITHUB_OUTPUT
-          echo "timestamp=$(date +%Y%m%d-%H%M)" >> $GITHUB_OUTPUT
+          echo "timestamp=$(date +%Y-%m-%d-%H-%M)" >> $GITHUB_OUTPUT
 
       - name: Setup pnpm store
         run: pnpm config set store-dir /root/.pnpm-store
@@ -50,7 +50,7 @@ jobs:
       - name: Upload Chrome Artifact
         uses: forgejo/upload-artifact@v4
         with:
-          name: read-later-chrome-extension-${{ steps.vars.outputs.branch }}-构建时间${{ steps.vars.outputs.timestamp }}-构建号${{ github.run_number }}
+          name: ${{ steps.vars.outputs.timestamp }}-read-later-chrome-extension-${{ steps.vars.outputs.branch }}-构建号${{ github.run_number }}
           path: .output/unzipped-chrome-mv3/
 
       - name: Build Firefox Extension
@@ -64,5 +64,5 @@ jobs:
       - name: Upload Firefox Artifact
         uses: forgejo/upload-artifact@v4
         with:
-          name: read-later-firefox-extension-${{ steps.vars.outputs.branch }}-构建时间${{ steps.vars.outputs.timestamp }}-构建号${{ github.run_number }}
+          name: ${{ steps.vars.outputs.timestamp }}-read-later-firefox-extension-${{ steps.vars.outputs.branch }}-构建号${{ github.run_number }}
           path: .output/unzipped-firefox/
