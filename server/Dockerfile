@@ -8,7 +8,7 @@
 #   （可省去安装 pnpm / buildah / skopeo 的步骤）
 
 # ===== 构建阶段 =====
-FROM 192.168.1.100:8083/library/node:24-alpine AS builder
+FROM 192.168.1.100:5443/library/node:24-alpine AS builder
 
 WORKDIR /app
 
@@ -33,7 +33,7 @@ WORKDIR /app
 RUN pnpm deploy --filter=read-later-server --prod /app/deploy
 
 # ===== 运行阶段 =====
-FROM 192.168.1.100:8083/library/node:24-alpine
+FROM 192.168.1.100:5443/library/node:24-alpine
 
 WORKDIR /app
 
