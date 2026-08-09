@@ -45,8 +45,15 @@ jobs:
             'location = "192.168.1.100:5443"' \
             'insecure = true' \
             '' \
-            '[registries.insecure]' \
-            'registries = ["192.168.1.100:8083", "192.168.1.100:5443"]' \
+            '[[registry]]' \
+            'prefix = "192.168.1.100:8083"' \
+            'location = "192.168.1.100:8083"' \
+            'insecure = true' \
+            '' \
+            '[[registry]]' \
+            'prefix = "192.168.1.100:5443"' \
+            'location = "192.168.1.100:5443"' \
+            'insecure = true' \
             > /etc/containers/registries.conf
           cat /etc/containers/registries.conf
           echo "=== 复制 Dockerfile 到部署目录 ==="
