@@ -1,12 +1,12 @@
 # CI 镜像：基于 Debian + buildah + skopeo + pnpm
 # 构建命令: docker build -t readlater-ci:latest .
-FROM docker.m.daocloud.io/library/node:24
+FROM 192.168.1.100:5443/library/node:24
 
 # 换国内 apt 源（阿里云）
 RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources
 
 # 使用 Nexus npm proxy 安装依赖 + 国内镜像加速 prebuild/node-gyp
-ENV NPM_CONFIG_REGISTRY=http://192.168.1.3:8081/repository/npm-proxy/
+ENV NPM_CONFIG_REGISTRY=http://192.168.1.100:8081/repository/npm-proxy/
 ENV npm_config_disturl=https://npmmirror.com/mirrors/node
 ENV npm_config_prebuild_install_mirror=https://registry.npmmirror.com/-/binary/prebuild-install
 

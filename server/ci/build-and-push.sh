@@ -3,12 +3,12 @@
 # 用法: ./build-and-push.sh [仓库地址] [镜像名] [标签] [alpine代理源]
 #
 # Nexus 示例:
-#   ./build-and-push.sh 192.168.1.3:8083 readlater-ci latest https://nexus.example.com/repository/alpine-proxy
+#   ./build-and-push.sh 192.168.1.100:8083 readlater-ci latest https://nexus.example.com/repository/alpine-proxy
 #
 
 set -e
 
-REGISTRY="${1:-192.168.1.3:8083}"
+REGISTRY="${1:-192.168.1.100:8083}"
 IMAGE_NAME="${2:-readlater-ci}"
 TAG="${3:-latest}"
 ALPINE_REPO_URL="${4:-}"
@@ -29,7 +29,7 @@ docker build "${BUILD_ARGS[@]}" -t "${FULL_IMAGE}" .
 
 echo ""
 echo "=== 登录 Nexus (端口 8083) ==="
-docker login 192.168.1.3:8083
+docker login 192.168.1.100:8083
 
 echo ""
 echo "=== 推送镜像 ==="

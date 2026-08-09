@@ -16,17 +16,17 @@ jobs:
 
       - name: Build CI image
         run: |
-          docker build -t 192.168.1.3:8083/readlater-ci:latest -f server/ci/Dockerfile server/ci
+          docker build -t 192.168.1.100:8083/readlater-ci:latest -f server/ci/Dockerfile server/ci
 
       - name: Login to registry
         run: |
           echo "${{ secrets.DOCKER_REGISTRY_PASSWORD }}" | \
-            docker login 192.168.1.3:8083 -u "${{ secrets.DOCKER_REGISTRY_USER }}" --password-stdin
+            docker login 192.168.1.100:8083 -u "${{ secrets.DOCKER_REGISTRY_USER }}" --password-stdin
 
       - name: Push CI image
         run: |
-          docker push 192.168.1.3:8083/readlater-ci:latest
+          docker push 192.168.1.100:8083/readlater-ci:latest
 
       - name: Remove old CI image from DinD cache
         run: |
-          docker rmi 192.168.1.3:8083/readlater-ci:latest || true
+          docker rmi 192.168.1.100:8083/readlater-ci:latest || true

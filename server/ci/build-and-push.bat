@@ -4,13 +4,13 @@ REM 构建并推送 CI 镜像脚本（Windows）
 REM 用法: build-and-push.bat [仓库地址] [镜像名] [标签] [alpine代理源]
 REM
 REM Nexus 示例:
-REM   build-and-push.bat 192.168.1.3:8083 readlater-ci latest https://nexus.example.com/repository/alpine-proxy
+REM   build-and-push.bat 192.168.1.100:8083 readlater-ci latest https://nexus.example.com/repository/alpine-proxy
 REM
 
 setlocal EnableDelayedExpansion
 
 set "REGISTRY=%~1"
-if "%~1"=="" set "REGISTRY=192.168.1.3:8083"
+if "%~1"=="" set "REGISTRY=192.168.1.100:8083"
 
 set "IMAGE_NAME=%~2"
 if "%~2"=="" set "IMAGE_NAME=readlater-ci"
@@ -40,7 +40,7 @@ if errorlevel 1 (
 
 echo.
 echo === 登录 Nexus (端口 8083) ===
-docker login 192.168.1.3:8083
+docker login 192.168.1.100:8083
 if errorlevel 1 (
     echo 登录失败
     exit /b 1

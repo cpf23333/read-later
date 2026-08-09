@@ -4,7 +4,7 @@
 #   docker build -f server/Dockerfile -t read-later-server:latest .
 #
 # 如果本地能访问私有仓库，也可以把 builder 阶段改为:
-#   FROM 192.168.1.3:8083/readlater-ci:latest AS builder
+#   FROM 192.168.1.100:8083/readlater-ci:latest AS builder
 #   （可省去安装 pnpm / buildah / skopeo 的步骤）
 
 # ===== 构建阶段 =====

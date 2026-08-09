@@ -292,7 +292,7 @@ update-offline.bat   # Windows
 
 ### CI 镜像 (`readlater-ci`)
 
-三个工作流共用统一的 CI 镜像 `192.168.1.3:8083/readlater-ci:latest`，基于 `node:24`（Debian），预装：
+三个工作流共用统一的 CI 镜像 `192.168.1.100:8083/readlater-ci:latest`，基于 `node:24`（Debian），预装：
 - `pnpm`（全局）
 - `buildah` + `skopeo`（容器镜像构建）
 - `python3` + `make` + `g++`（原生模块编译）
@@ -303,7 +303,7 @@ update-offline.bat   # Windows
 cd server/ci
 ./build-and-push.sh [registry] [name] [tag] [alpine-proxy]
 # 示例：
-./build-and-push.sh 192.168.1.3:8083 readlater-ci latest
+./build-and-push.sh 192.168.1.100:8083 readlater-ci latest
 ```
 
 **镜像 Dockerfile**: `server/ci/Dockerfile`

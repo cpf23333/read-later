@@ -6,7 +6,7 @@ set -e
 
 # Nexus 配置（端口路由模式 - 推荐）
 # 在 Nexus 中配置 HTTP 端口为 8083
-NEXUS_HOST="192.168.1.3:8083"
+NEXUS_HOST="192.168.1.100:8083"
 IMAGE_NAME="readlater-ci"
 TAG="latest"
 FULL_IMAGE="${NEXUS_HOST}/${IMAGE_NAME}:${TAG}"

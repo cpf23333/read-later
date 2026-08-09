@@ -7,10 +7,10 @@ jobs:
   build-and-push:
     runs-on: docker
     container:
-      image: 192.168.1.3:8083/readlater-ci:latest
+      image: 192.168.1.100:8083/readlater-ci:latest
       options: --privileged
     env:
-      NPM_CONFIG_REGISTRY: http://192.168.1.3:8081/repository/npm-proxy/
+      NPM_CONFIG_REGISTRY: http://192.168.1.100:8081/repository/npm-proxy/
       npm_config_disturl: https://npmmirror.com/mirrors/node
       npm_config_prebuild_install_mirror: https://registry.npmmirror.com/-/binary/prebuild-install
     steps:
