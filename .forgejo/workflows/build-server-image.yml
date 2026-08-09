@@ -34,9 +34,20 @@ jobs:
         env:
           STORAGE_DRIVER: vfs
         run: |
-          echo "=== 配置 Buildah insecure registry ==="
+          echo "=== 配置 Buildah registry mirror ==="
           mkdir -p /etc/containers
-          printf '[registries.insecure]\nregistries = ["192.168.1.100:8083"]\n' > /etc/containers/registries.conf
+          cat > /etc/containers/registries.conf <<'EOF'
+[[registry]]
+prefix = "docker.io"
+location = "docker.io"
+
+[[registry.mirror]]
+location = "192.168.1.100:5443"
+insecure = true
+
+[registries.insecure]
+registries = ["192.168.1.100:8083", "192.168.1.100:5443"]
+EOF
           cat /etc/containers/registries.conf
           echo "=== 复制 Dockerfile 到部署目录 ==="
           cp server/deploy.Dockerfile server-deploy/Dockerfile
