@@ -2,8 +2,8 @@
 import { ref, onMounted, computed, watch } from 'vue';
 import { 
   LinkItem,
-  ImportResult,
   DeleteRecord,
+  normalizeUrl,
 } from '@/utils/storage';
 
 import {
@@ -14,12 +14,13 @@ import {
   permanentlyDeleteFromTrash,
   getStats,
   searchLinks,
-  exportLinks,
-  importLinks,
   getAllDomains,
   getDomainStats,
+  batchAddLinks,
 } from '@/utils/hybridStorage';
 import { showSuccess, showError } from '@/utils/toast';
+import { parseImportFile, type ParsedLink } from '@/utils/importParser';
+import ImportPreview from '@/components/ImportPreview.vue';
 
 type SortBy = 'createdAt' | 'title' | 'domain';
 type SortOrder = 'asc' | 'desc';
@@ -51,6 +52,11 @@ const dateTo = ref<string>('');
 const totalCount = ref(0);
 const importInput = ref<HTMLInputElement | null>(null);
 const importing = ref(false);
+
+// 导入预览
+const showImportPreview = ref(false);
+const parsedLinks = ref<ParsedLink[]>([]);
+const previewExistingUrls = ref<Set<string>>(new Set());
 
 // 回收站
 const currentTab = ref<TabView>('links');
@@ -355,15 +361,10 @@ async function updateStats() {
   totalCount.value = stats.linkCount;
 }
 
-async function handleExport() {
-  const json = await exportLinks();
-  const blob = new Blob([json], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `readlater-backup-${new Date().toISOString().slice(0, 10)}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
+function openExportManager() {
+  browser.tabs.create({
+    url: browser.runtime.getURL('/export-manager.html'),
+  });
 }
 
 function triggerImport() {
@@ -377,19 +378,65 @@ async function handleImport(event: Event) {
 
   importing.value = true;
   try {
-    const text = await file.text();
-    const result = await importLinks(text, 'merge');
-    
-    // 刷新数据
-    await loadInitialData();
-    
-    showSuccess(`导入成功！导入了 ${result.imported} 个链接，跳过了 ${result.skipped} 个重复链接。`);
+    const result = await parseImportFile(file);
+    parsedLinks.value = result.links;
+
+    // 获取现有链接 URL 用于重复检测（使用统一的标准化逻辑）
+    try {
+      const { links: existingLinks } = await getLinks(1, 10000);
+      const existingSet = new Set(existingLinks.map(link => normalizeUrl(link.url)));
+      previewExistingUrls.value = existingSet;
+    } catch {
+      previewExistingUrls.value = new Set();
+    }
+
+    showImportPreview.value = true;
+    showSuccess(`成功解析 ${result.links.length} 个链接，请确认后导入`);
   } catch (error) {
-    showError(`导入失败: ${error instanceof Error ? error.message : '未知错误'}`);
+    showError(`解析失败: ${error instanceof Error ? error.message : '未知错误'}`);
   } finally {
     importing.value = false;
     input.value = '';
   }
+}
+
+async function confirmImport(selected: ParsedLink[]) {
+  importing.value = true;
+  try {
+    // 自动去重：过滤掉数据库中已存在的链接
+    const newLinks = selected.filter(link => !previewExistingUrls.value.has(normalizeUrl(link.url)));
+    const skipped = selected.length - newLinks.length;
+
+    if (newLinks.length === 0) {
+      showImportPreview.value = false;
+      parsedLinks.value = [];
+      previewExistingUrls.value = new Set();
+      showSuccess(skipped > 0 ? `已跳过 ${skipped} 个重复链接，没有新链接需要导入` : '没有新链接需要导入');
+      return;
+    }
+
+    const result = await batchAddLinks(newLinks);
+    showImportPreview.value = false;
+    parsedLinks.value = [];
+    previewExistingUrls.value = new Set();
+    await loadInitialData();
+
+    const parts: string[] = [];
+    parts.push(`成功导入 ${result.count} 个链接`);
+    if (skipped > 0) parts.push(`已跳过 ${skipped} 个重复链接`);
+    if (result.failed > 0) parts.push(`${result.failed} 个失败`);
+    showSuccess(parts.join('，'));
+  } catch (error) {
+    showError(`导入失败: ${error instanceof Error ? error.message : '未知错误'}`);
+  } finally {
+    importing.value = false;
+  }
+}
+
+function cancelImport() {
+  showImportPreview.value = false;
+  parsedLinks.value = [];
+  previewExistingUrls.value = new Set();
 }
 
 function toggleSelection(id: string) {
@@ -455,15 +502,15 @@ onMounted(() => {
           <input 
             ref="importInput"
             type="file" 
-            accept=".json" 
+            accept=".json,.html,.htm" 
             style="display: none"
             @change="handleImport"
           />
           <button class="btn btn-default" @click="triggerImport" :disabled="importing">
             {{ importing ? '导入中...' : '导入' }}
           </button>
-          <button class="btn btn-default" @click="handleExport">
-            导出备份
+          <button class="btn btn-default" @click="openExportManager">
+            导出管理
           </button>
           <button 
             class="btn btn-danger" 
@@ -475,6 +522,14 @@ onMounted(() => {
         </div>
       </div>
     </header>
+
+    <ImportPreview
+      v-model="showImportPreview"
+      :links="parsedLinks"
+      :existing-urls="previewExistingUrls"
+      @confirm="confirmImport"
+      @cancel="cancelImport"
+    />
 
     <main class="main">
       <!-- Tab 导航 -->

@@ -1,6 +1,6 @@
 // HTTP API 存储适配器 - 连接 SQLite 后端
 
-import { LinkItem, DeleteRecord, CustomJsConfig, ImportResult } from './storage';
+import { LinkItem, DeleteRecord, CustomJsConfig, ImportResult, ExportTask } from './storage';
 
 export interface ServerConfig {
   enabled: boolean;
@@ -239,8 +239,8 @@ export async function apiDeleteLink(id: string): Promise<void> {
   await apiRequest(`/api/links/${id}`, { method: 'DELETE' });
 }
 
-export async function apiBatchAddLinks(links: LinkItem[]): Promise<void> {
-  await apiRequest('/api/links/batch', {
+export async function apiBatchAddLinks(links: LinkItem[]): Promise<{ count: number; total: number; failed: number }> {
+  return await apiRequest<{ count: number; total: number; failed: number }>('/api/links/batch', {
     method: 'POST',
     body: JSON.stringify({ links }),
   });
@@ -357,6 +357,50 @@ export async function apiImport(links: LinkItem[], mode: 'merge' | 'replace' = '
     method: 'POST',
     body: JSON.stringify({ links, mode }),
   });
+}
+
+// ===== 导出任务 =====
+
+export async function apiCreateExport(): Promise<{ taskId: string; status: string }> {
+  return await apiRequest<{ taskId: string; status: string }>('/api/exports', {
+    method: 'POST',
+  });
+}
+
+export async function apiGetExports(): Promise<ExportTask[]> {
+  const data = await apiRequest<any[]>('/api/exports');
+  return data.map(item => ({
+    id: item.id,
+    status: item.status,
+    createdAt: item.created_at,
+    completedAt: item.completed_at,
+    filename: item.filename,
+    fileSize: item.file_size,
+    error: item.error,
+  }));
+}
+
+export async function apiDownloadExport(id: string): Promise<Blob> {
+  const config = await getServerConfig();
+  if (!config.enabled || !config.url) {
+    throw new Error('服务器未配置');
+  }
+
+  const headers: Record<string, string> = {};
+  if (config.apiKey) {
+    headers['Authorization'] = `Bearer ${config.apiKey}`;
+  }
+
+  const response = await fetch(`${config.url}/api/exports/${id}/download`, { headers });
+  if (!response.ok) {
+    throw new Error(`下载失败: ${response.status}`);
+  }
+
+  return await response.blob();
+}
+
+export async function apiDeleteExport(id: string): Promise<void> {
+  await apiRequest(`/api/exports/${id}`, { method: 'DELETE' });
 }
 
 // 检查是否使用服务器

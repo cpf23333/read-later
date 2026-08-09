@@ -12,11 +12,13 @@
   },
   "dependencies": {
     "@hono/node-server": "^1.13.8",
+    "archiver": "^8.0.0",
     "better-sqlite3": "^12.6.2",
     "dotenv": "^16.4.5",
     "hono": "^4.7.4"
   },
   "devDependencies": {
+    "@types/archiver": "^7.0.0",
     "@types/better-sqlite3": "^7.6.9",
     "@types/node": "^20.11.24",
     "tsx": "^4.7.1",

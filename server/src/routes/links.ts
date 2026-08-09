@@ -3,7 +3,7 @@
  */
 
 import { Hono } from 'hono';
-import { getLinks, searchLinks, getLinkById, addLink, deleteLink, addToTrash, exportLinks } from '../utils/database.ts';
+import { getLinks, searchLinks, getLinkById, addLink, deleteLink, addToTrash, exportLinks, batchInsertLinks } from '../utils/database.ts';
 import { processImage } from '../utils/image.ts';
 import { sanitizeId, sanitizeSearchQuery } from '../utils/security.ts';
 import { apiRateLimit } from '../middleware/ratelimit.ts';
@@ -120,29 +120,52 @@ app.post('/batch', apiRateLimit, async (c) => {
   const body = await c.req.json<BatchCreateBody>();
   const { links } = body;
 
-  for (const item of links) {
-    // 处理图片
-    const nearbyImagePath = await processImage(
-      item.nearby_image || item.nearbyImage,
-      'nearby',
-    );
-    const screenshotPath = await processImage(item.screenshot, 'screenshot');
-
-    addLink({
-      id: item.id,
-      url: item.url,
-      title: item.title || '',
-      nearby_image: nearbyImagePath,
-      screenshot: screenshotPath,
-      source_page: item.source_page || item.sourcePage || '',
-      created_at: item.created_at || item.createdAt || Date.now(),
-      custom_data: JSON.stringify(item.custom_data || item.customData || {}),
-    });
+  // 参数校验
+  if (!Array.isArray(links)) {
+    return c.json<ApiResponse>({ success: false, error: 'links must be an array' }, 400);
+  }
+  if (links.length === 0) {
+    return c.json<ApiResponse>({ success: false, error: 'links array is empty' }, 400);
+  }
+  if (links.length > 500) {
+    return c.json<ApiResponse>({ success: false, error: 'Batch size exceeds maximum of 500' }, 400);
   }
 
-  return c.json<ApiResponse<{ count: number }>>({ 
-    success: true, 
-    data: { count: links.length } 
+  // 先异步处理所有图片（processImage 内部已兜底，不会抛错）
+  const processed = [];
+  for (let i = 0; i < links.length; i++) {
+    const item = links[i];
+    if (!item || !item.url) {
+      continue;
+    }
+    try {
+      const nearbyImagePath = await processImage(
+        item.nearby_image || item.nearbyImage,
+        'nearby',
+      );
+      const screenshotPath = await processImage(item.screenshot, 'screenshot');
+
+      processed.push({
+        id: item.id || `${Date.now()}_${Math.random().toString(36).substring(2, 9)}_${i}`,
+        url: item.url,
+        title: item.title || '',
+        nearby_image: nearbyImagePath,
+        screenshot: screenshotPath,
+        source_page: item.source_page || item.sourcePage || '',
+        created_at: item.created_at || item.createdAt || Date.now(),
+        custom_data: JSON.stringify(item.custom_data || item.customData || {}),
+      });
+    } catch (e) {
+      console.error('[batch] Image processing failed for:', item.url, e);
+    }
+  }
+
+  // 使用事务批量插入，单条失败不影响其他
+  const { succeeded, failed } = batchInsertLinks(processed);
+
+  return c.json<ApiResponse<{ count: number; total: number; failed: number }>>({
+    success: true,
+    data: { count: succeeded, total: links.length, failed }
   });
 });
 
@@ -200,6 +223,10 @@ app.post('/import', apiRateLimit, async (c) => {
   const body = await c.req.json<ImportBody>();
   const { links, mode = 'merge' } = body;
 
+  if (!Array.isArray(links)) {
+    return c.json<ApiResponse>({ success: false, error: 'links must be an array' }, 400);
+  }
+
   if (mode === 'replace') {
     // 清空现有链接
     const allLinks = exportLinks();
@@ -229,8 +256,8 @@ app.post('/import', apiRateLimit, async (c) => {
         screenshot: screenshotPath,
         source_page: item.source_page || item.sourcePage || '',
         created_at: item.created_at || item.createdAt || Date.now(),
-        custom_data: typeof item.custom_data === 'string' 
-          ? item.custom_data 
+        custom_data: typeof item.custom_data === 'string'
+          ? item.custom_data
           : JSON.stringify(item.custom_data || item.customData || {}),
       });
       imported++;

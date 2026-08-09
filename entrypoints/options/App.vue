@@ -7,7 +7,6 @@ import {
   EXTRACTOR_TEMPLATES 
 } from '@/utils/imageExtractor';
 import{
-  exportLinks,
   importLinks,
 } from '@/utils/hybridStorage';
 import {
@@ -38,7 +37,7 @@ const importFile = ref<File | null>(null);
 const importMode = ref<'merge' | 'replace'>('merge');
 const importResult = ref<{ imported: number; skipped: number; total: number } | null>(null);
 const importing = ref(false);
-const exporting = ref(false);
+
 
 // ===== 服务器配置 =====
 interface ServerConfig {
@@ -135,20 +134,10 @@ async function toggleConfig(config: CustomJsConfig) {
 }
 
 // ===== 导入导出方法 =====
-async function handleExport() {
-  exporting.value = true;
-  try {
-    const json = await exportLinks();
-    const blob = new Blob([json], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `readlater-backup-${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  } finally {
-    exporting.value = false;
-  }
+function openExportManager() {
+  browser.tabs.create({
+    url: browser.runtime.getURL('/export-manager.html'),
+  });
 }
 
 function handleFileSelect(event: Event) {
@@ -330,9 +319,9 @@ async function saveServer() {
           <!-- 导出 -->
           <div class="card">
             <h3>📥 导出数据</h3>
-            <p>将"稍后再看"列表导出为 JSON 文件，用于备份或迁移。</p>
-            <button class="btn btn-primary" @click="handleExport" :disabled="exporting">
-              {{ exporting ? '导出中...' : '导出备份文件' }}
+            <p>将"稍后再看"的数据库和图片打包为压缩文件，用于完整备份或迁移。</p>
+            <button class="btn btn-primary" @click="openExportManager">
+              打开导出管理
             </button>
           </div>
 

@@ -15,6 +15,11 @@ import {
   apiExport,
   apiImport,
   apiUploadImage,
+  apiBatchAddLinks,
+  apiCreateExport,
+  apiGetExports,
+  apiDownloadExport,
+  apiDeleteExport,
   getServerConfig,
   testServerConnection,
 } from './apiStorage';
@@ -177,6 +182,23 @@ export async function exportLinks(): Promise<string> {
   return JSON.stringify(links, null, 2);
 }
 
+// 批量添加链接（用于导入预览后的确认导入）
+export async function batchAddLinks(links: Partial<LinkItem>[]): Promise<{ count: number; failed: number }> {
+  const now = Date.now();
+  const items: LinkItem[] = links.map((link, index) => ({
+    url: link.url || '',
+    title: link.title || '',
+    nearbyImage: link.nearbyImage || null,
+    screenshot: link.screenshot || null,
+    sourcePage: link.sourcePage || '',
+    createdAt: link.createdAt || now + index,
+    id: link.id || `${now}_${Math.random().toString(36).substr(2, 9)}_${index}`,
+  }));
+  
+  const result = await apiBatchAddLinks(items);
+  return { count: result.count, failed: result.failed };
+}
+
 // 导入链接
 export async function importLinks(jsonString: string, mode: 'merge' | 'replace' = 'merge'): Promise<{ imported: number; skipped: number; total: number }> {
   let data: LinkItem[];
@@ -201,4 +223,22 @@ export async function importLinks(jsonString: string, mode: 'merge' | 'replace' 
 export async function getLinkCount(): Promise<number> {
   const stats = await apiGetStats();
   return stats.linkCount;
+}
+
+// ===== 导出任务 =====
+
+export async function createExport(): Promise<{ taskId: string; status: string }> {
+  return await apiCreateExport();
+}
+
+export async function getExports() {
+  return await apiGetExports();
+}
+
+export async function downloadExport(id: string): Promise<Blob> {
+  return await apiDownloadExport(id);
+}
+
+export async function deleteExport(id: string): Promise<void> {
+  return await apiDeleteExport(id);
 }

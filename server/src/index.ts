@@ -30,6 +30,7 @@ import domainsRoute from "./routes/domains.ts";
 import statsRoute from "./routes/stats.ts";
 import uploadRoute from "./routes/upload.ts";
 import healthRoute from "./routes/health.ts";
+import exportsRoute from "./routes/exports.ts";
 
 // 配置
 const PORT = parseInt(process.env.PORT || "3000", 10);
@@ -154,6 +155,7 @@ app.route("/api/search", linksRoute);
 // 导出/导入路由
 app.route("/api/export", linksRoute);
 app.route("/api/import", linksRoute);
+app.route("/api/exports", exportsRoute);
 
 // 启动服务器
 serve(

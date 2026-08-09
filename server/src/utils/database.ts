@@ -44,6 +44,17 @@ export function initDatabase(dataDir: string): Database.Database {
 
     CREATE INDEX IF NOT EXISTS idx_links_created ON links(created_at);
     CREATE INDEX IF NOT EXISTS idx_trash_deleted ON trash(deleted_at);
+
+    CREATE TABLE IF NOT EXISTS export_tasks (
+      id TEXT PRIMARY KEY,
+      status TEXT NOT NULL DEFAULT 'running',
+      created_at INTEGER NOT NULL,
+      completed_at INTEGER,
+      filename TEXT,
+      file_path TEXT,
+      file_size INTEGER,
+      error TEXT
+    );
   `);
 
   return db;
@@ -265,9 +276,102 @@ export function getDomainStats(): Array<{ domain: string; count: number }> {
 }
 
 /**
+ * 批量插入链接（使用事务，单条失败不影响其他）
+ */
+export function batchInsertLinks(
+  items: Array<{
+    id: string;
+    url: string;
+    title: string;
+    nearby_image: string | null;
+    screenshot: string | null;
+    source_page: string;
+    created_at: number;
+    custom_data: string;
+  }>
+): { succeeded: number; failed: number } {
+  const database = getDatabase();
+  const now = Date.now();
+
+  const insert = database.prepare(
+    `INSERT INTO links (id, url, title, nearby_image, screenshot, source_page, created_at, updated_at, custom_data)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  );
+
+  let succeeded = 0;
+  let failed = 0;
+
+  const insertMany = database.transaction((linksToInsert: typeof items) => {
+    for (const link of linksToInsert) {
+      try {
+        insert.run(
+          link.id,
+          link.url,
+          link.title,
+          link.nearby_image,
+          link.screenshot,
+          link.source_page,
+          link.created_at,
+          now,
+          link.custom_data
+        );
+        succeeded++;
+      } catch (e) {
+        failed++;
+        console.error('[batchInsertLinks] Failed to insert:', link.url, e);
+      }
+    }
+  });
+
+  insertMany(items);
+
+  return { succeeded, failed };
+}
+
+/**
  * 导出所有链接
  */
 export function exportLinks(): Link[] {
   const database = getDatabase();
   return database.prepare('SELECT * FROM links').all() as Link[];
+}
+
+// ===== 导出任务操作 =====
+
+import type { ExportTask } from '../types/index.ts';
+
+export function createExportTask(id: string): void {
+  const database = getDatabase();
+  database.prepare(
+    `INSERT INTO export_tasks (id, status, created_at) VALUES (?, ?, ?)`
+  ).run(id, 'running', Date.now());
+}
+
+export function completeExportTask(id: string, filename: string, filePath: string, fileSize: number): void {
+  const database = getDatabase();
+  database.prepare(
+    `UPDATE export_tasks SET status = ?, completed_at = ?, filename = ?, file_path = ?, file_size = ? WHERE id = ?`
+  ).run('completed', Date.now(), filename, filePath, fileSize, id);
+}
+
+export function failExportTask(id: string, error: string): void {
+  const database = getDatabase();
+  database.prepare(
+    `UPDATE export_tasks SET status = ?, completed_at = ?, error = ? WHERE id = ?`
+  ).run('failed', Date.now(), error, id);
+}
+
+export function getExportTasks(): ExportTask[] {
+  const database = getDatabase();
+  return database.prepare('SELECT * FROM export_tasks ORDER BY created_at DESC').all() as ExportTask[];
+}
+
+export function getExportTaskById(id: string): ExportTask | undefined {
+  const database = getDatabase();
+  return database.prepare('SELECT * FROM export_tasks WHERE id = ?').get(id) as ExportTask | undefined;
+}
+
+export function deleteExportTask(id: string): void {
+  const database = getDatabase();
+  database.prepare('DELETE FROM export_tasks WHERE id = ?').run(id);
 }

@@ -38,6 +38,16 @@ export interface ImportResult {
   total: number;
 }
 
+export interface ExportTask {
+  id: string;
+  status: 'running' | 'completed' | 'failed';
+  createdAt: number;
+  completedAt: number | null;
+  filename: string | null;
+  fileSize: number | null;
+  error: string | null;
+}
+
 // URL标准化函数
 export function normalizeUrl(url: string): string {
   try {

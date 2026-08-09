@@ -1,0 +1,32 @@
+name: Update CI Image
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-and-push:
+    runs-on: docker
+    container:
+      image: docker:24-cli
+      options: --privileged
+    env:
+      DOCKER_HOST: tcp://docker-in-docker:2375
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build CI image
+        run: |
+          docker build -t 192.168.1.3:8083/readlater-ci:latest -f server/ci/Dockerfile server/ci
+
+      - name: Login to registry
+        run: |
+          echo "${{ secrets.DOCKER_REGISTRY_PASSWORD }}" | \
+            docker login 192.168.1.3:8083 -u "${{ secrets.DOCKER_REGISTRY_USER }}" --password-stdin
+
+      - name: Push CI image
+        run: |
+          docker push 192.168.1.3:8083/readlater-ci:latest
+
+      - name: Remove old CI image from DinD cache
+        run: |
+          docker rmi 192.168.1.3:8083/readlater-ci:latest || true

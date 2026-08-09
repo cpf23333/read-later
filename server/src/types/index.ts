@@ -61,7 +61,7 @@ export interface CreateLinkBody {
 // 批量添加请求体
 export interface BatchCreateBody {
   links: Array<{
-    id: string;
+    id?: string;
     url: string;
     title?: string;
     nearby_image?: string;
@@ -117,6 +117,18 @@ export interface DomainStat {
 export interface PaginatedResponse<T> {
   data: T[];
   total: number;
+}
+
+// 导出任务
+export interface ExportTask {
+  id: string;
+  status: 'running' | 'completed' | 'failed';
+  created_at: number;
+  completed_at: number | null;
+  filename: string | null;
+  file_path: string | null;
+  file_size: number | null;
+  error: string | null;
 }
 
 // 环境变量
