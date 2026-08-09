@@ -1,6 +1,6 @@
 # CI 镜像：基于 Debian + buildah + skopeo + pnpm
 # 构建命令: docker build -t readlater-ci:latest .
-FROM 192.168.1.100:5443/library/node:24
+FROM 192.168.1.100:8083/library/node:24
 
 # 换国内 apt 源（阿里云）
 RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources

@@ -1,6 +1,6 @@
 # CI 部署专用 Dockerfile
 # 由 pnpm deploy 输出的独立目录直接使用
-FROM 192.168.1.100:5443/library/node:24-alpine
+FROM 192.168.1.100:8083/library/node:24-alpine
 
 WORKDIR /app
 
