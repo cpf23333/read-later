@@ -6,6 +6,8 @@ import {
   apiSearchLinks,
   apiAddLink,
   apiDeleteLink,
+  apiCheckLinkExists,
+  apiCheckExistingUrls,
   apiGetTrash,
   apiRestoreFromTrash,
   apiPermanentlyDelete,
@@ -154,12 +156,22 @@ export async function getStats(): Promise<{ linkCount: number; trashCount: numbe
 // 检查链接是否已存在
 export async function isLinkExists(url: string): Promise<boolean> {
   try {
-    // 从服务器获取所有链接检查
-    const { links } = await apiGetLinks(1, 1000);
-    return links.some((link) => link.url === url);
+    const result = await apiCheckLinkExists(url);
+    return result.exists;
   } catch (error) {
     console.warn('[Storage] Failed to check link exists:', error);
     return false;
+  }
+}
+
+// 批量检查链接是否已存在，返回已存在的标准化 URL 集合
+export async function getExistingUrls(urls: string[]): Promise<Set<string>> {
+  try {
+    const existing = await apiCheckExistingUrls(urls);
+    return new Set(existing);
+  } catch (error) {
+    console.warn('[Storage] Failed to check existing urls:', error);
+    return new Set();
   }
 }
 

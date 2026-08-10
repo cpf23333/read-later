@@ -256,6 +256,25 @@ export async function apiBatchAddLinks(
   });
 }
 
+export async function apiCheckLinkExists(
+  url: string
+): Promise<{ exists: boolean; link?: LinkItem }> {
+  const result = await apiRequest<{ exists: boolean; link?: any }>(
+    `/api/links/exists?url=${encodeURIComponent(url)}`
+  );
+  return {
+    exists: result.exists,
+    link: result.link ? await dbToLinkItem(result.link) : undefined,
+  };
+}
+
+export async function apiCheckExistingUrls(urls: string[]): Promise<string[]> {
+  return await apiRequest<string[]>('/api/links/check-batch', {
+    method: 'POST',
+    body: JSON.stringify({ urls }),
+  });
+}
+
 // ===== 回收站 API =====
 
 export async function apiGetTrash(): Promise<DeleteRecord[]> {

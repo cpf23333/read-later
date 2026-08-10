@@ -13,6 +13,7 @@ import {
   getAllDomains,
   getDomainStats,
   batchAddLinks,
+  getExistingUrls,
 } from '@/utils/hybridStorage';
 import { showSuccess, showError } from '@/utils/toast';
 import { parseImportFile, type ParsedLink } from '@/utils/importParser';
@@ -380,10 +381,9 @@ async function handleImport(event: Event) {
     const result = await parseImportFile(file);
     parsedLinks.value = result.links;
 
-    // 获取现有链接 URL 用于重复检测（使用统一的标准化逻辑）
+    // 批量检查已存在的链接 URL
     try {
-      const { links: existingLinks } = await getLinks(1, 10000);
-      const existingSet = new Set(existingLinks.map((link) => normalizeUrl(link.url)));
+      const existingSet = await getExistingUrls(result.links.map((link) => link.url));
       previewExistingUrls.value = existingSet;
     } catch {
       previewExistingUrls.value = new Set();

@@ -6,6 +6,7 @@
 export interface Link {
   id: string;
   url: string;
+  normalized_url: string | null;
   title: string;
   nearby_image: string | null;
   screenshot: string | null;

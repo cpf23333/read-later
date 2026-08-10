@@ -5,6 +5,7 @@
 import Database from 'better-sqlite3';
 import path from 'path';
 import { tokenizeSearchQuery } from './security.ts';
+import { normalizeUrl } from './url.ts';
 import type { Link, TrashItem } from '../types/index.ts';
 
 let db: Database.Database | null = null;
@@ -21,6 +22,7 @@ export function initDatabase(dataDir: string): Database.Database {
     CREATE TABLE IF NOT EXISTS links (
       id TEXT PRIMARY KEY,
       url TEXT NOT NULL,
+      normalized_url TEXT,
       title TEXT,
       nearby_image TEXT,
       screenshot TEXT,
@@ -57,6 +59,28 @@ export function initDatabase(dataDir: string): Database.Database {
       error TEXT
     );
   `);
+
+  // 迁移：添加 normalized_url 列并回填已有数据
+  const tableInfo = db.prepare("PRAGMA table_info(links)").all() as Array<{ name: string }>;
+  const hasNormalizedUrl = tableInfo.some((col) => col.name === 'normalized_url');
+  if (!hasNormalizedUrl) {
+    db.exec(`ALTER TABLE links ADD COLUMN normalized_url TEXT`);
+  }
+
+  const linksWithoutNormalized = db
+    .prepare("SELECT id, url FROM links WHERE normalized_url IS NULL")
+    .all() as Array<{ id: string; url: string }>;
+  if (linksWithoutNormalized.length > 0) {
+    const updateNormalized = db.prepare("UPDATE links SET normalized_url = ? WHERE id = ?");
+    const updateMany = db.transaction((rows: typeof linksWithoutNormalized) => {
+      for (const row of rows) {
+        updateNormalized.run(normalizeUrl(row.url), row.id);
+      }
+    });
+    updateMany(linksWithoutNormalized);
+  }
+
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_links_normalized_url ON links(normalized_url)`);
 
   return db;
 }
@@ -170,20 +194,31 @@ export function getLinkById(id: string): Link | undefined {
 }
 
 /**
+ * 根据标准化 URL 查找链接
+ */
+export function findLinkByNormalizedUrl(url: string): Link | undefined {
+  const database = getDatabase();
+  return database
+    .prepare('SELECT * FROM links WHERE normalized_url = ?')
+    .get(normalizeUrl(url)) as Link | undefined;
+}
+
+/**
  * 添加链接
  */
-export function addLink(link: Omit<Link, 'updated_at'>): void {
+export function addLink(link: Omit<Link, 'updated_at' | 'normalized_url'>): void {
   const database = getDatabase();
   const now = Date.now();
 
   database
     .prepare(
-      `INSERT INTO links (id, url, title, nearby_image, screenshot, source_page, created_at, updated_at, custom_data)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO links (id, url, normalized_url, title, nearby_image, screenshot, source_page, created_at, updated_at, custom_data)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .run(
       link.id,
       link.url,
+      normalizeUrl(link.url),
       link.title || '',
       link.nearby_image,
       link.screenshot,
@@ -317,8 +352,8 @@ export function batchInsertLinks(
   const now = Date.now();
 
   const insert = database.prepare(
-    `INSERT INTO links (id, url, title, nearby_image, screenshot, source_page, created_at, updated_at, custom_data)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO links (id, url, normalized_url, title, nearby_image, screenshot, source_page, created_at, updated_at, custom_data)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
 
   let succeeded = 0;
@@ -330,6 +365,7 @@ export function batchInsertLinks(
         insert.run(
           link.id,
           link.url,
+          normalizeUrl(link.url),
           link.title,
           link.nearby_image,
           link.screenshot,

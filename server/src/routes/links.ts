@@ -7,6 +7,7 @@ import {
   getLinks,
   searchLinks,
   getLinkById,
+  findLinkByNormalizedUrl,
   addLink,
   deleteLink,
   addToTrash,
@@ -170,6 +171,53 @@ app.post('/batch', apiRateLimit, async (c) => {
   return c.json<ApiResponse<{ count: number; total: number; failed: number }>>({
     success: true,
     data: { count: succeeded, total: links.length, failed },
+  });
+});
+
+/**
+ * 检查链接是否已存在（基于标准化 URL）
+ * GET /api/links/exists?url=...
+ */
+app.get('/exists', async (c) => {
+  const { url } = c.req.query();
+
+  if (!url || typeof url !== 'string') {
+    return c.json<ApiResponse>({ success: false, error: 'url is required' }, 400);
+  }
+
+  const existing = findLinkByNormalizedUrl(url);
+
+  return c.json<ApiResponse<{ exists: boolean; link?: Link }>>({
+    success: true,
+    data: { exists: !!existing, link: existing },
+  });
+});
+
+/**
+ * 批量检查链接是否已存在
+ * POST /api/links/check-batch
+ */
+app.post('/check-batch', apiRateLimit, async (c) => {
+  const body = await c.req.json<{ urls?: string[] }>();
+  const urls = body.urls;
+
+  if (!Array.isArray(urls)) {
+    return c.json<ApiResponse>({ success: false, error: 'urls must be an array' }, 400);
+  }
+
+  const existingNormalizedUrls = new Set<string>();
+
+  for (const url of urls) {
+    if (typeof url !== 'string') continue;
+    const existing = findLinkByNormalizedUrl(url);
+    if (existing) {
+      existingNormalizedUrls.add(existing.normalized_url || existing.url);
+    }
+  }
+
+  return c.json<ApiResponse<{ existingUrls: string[] }>>({
+    success: true,
+    data: { existingUrls: Array.from(existingNormalizedUrls) },
   });
 });
 
