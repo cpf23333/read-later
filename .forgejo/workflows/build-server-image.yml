@@ -14,7 +14,7 @@ jobs:
       npm_config_disturl: https://npmmirror.com/mirrors/node
       npm_config_prebuild_install_mirror: https://registry.npmmirror.com/-/binary/prebuild-install
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Prepare naming variables
         id: vars
@@ -84,7 +84,7 @@ jobs:
           ls -la offline-deploy/
 
       - name: Upload offline deployment artifact
-        uses: forgejo/upload-artifact@v4
+        uses: forgejo/upload-artifact@v5
         with:
           name: ${{ steps.vars.outputs.timestamp }}-readlater-server-offline-构建号${{ github.run_number }}
           path: server/offline-deploy/

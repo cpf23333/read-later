@@ -12,7 +12,7 @@ jobs:
     env:
       DOCKER_HOST: tcp://localhost:2375
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Build CI image
         run: |

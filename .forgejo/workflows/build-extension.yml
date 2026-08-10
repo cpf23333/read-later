@@ -13,7 +13,7 @@ jobs:
       npm_config_disturl: https://npmmirror.com/mirrors/node
       npm_config_prebuild_install_mirror: https://registry.npmmirror.com/-/binary/prebuild-install
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Prepare naming variables
         id: vars
@@ -27,7 +27,7 @@ jobs:
         run: pnpm config set store-dir /root/.pnpm-store
 
       - name: Cache pnpm dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             /root/.pnpm-store
@@ -48,7 +48,7 @@ jobs:
           unzip .output/*chrome*.zip -d .output/unzipped-chrome-mv3/
 
       - name: Upload Chrome Artifact
-        uses: forgejo/upload-artifact@v4
+        uses: forgejo/upload-artifact@v5
         with:
           name: ${{ steps.vars.outputs.timestamp }}-read-later-chrome-extension-${{ steps.vars.outputs.branch }}-构建号${{ github.run_number }}
           path: .output/unzipped-chrome-mv3/
@@ -62,7 +62,7 @@ jobs:
           unzip .output/*firefox*.zip -d .output/unzipped-firefox/
 
       - name: Upload Firefox Artifact
-        uses: forgejo/upload-artifact@v4
+        uses: forgejo/upload-artifact@v5
         with:
           name: ${{ steps.vars.outputs.timestamp }}-read-later-firefox-extension-${{ steps.vars.outputs.branch }}-构建号${{ github.run_number }}
           path: .output/unzipped-firefox/
