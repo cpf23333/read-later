@@ -14,10 +14,6 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Write Nexus APT public key
-        run: |
-          echo "${{ vars.NEXUS_APT_PUBLIC_KEY }}" > server/ci/nexus-apt.pub
-
       - name: Build CI image
         run: |
           docker build -t 192.168.1.100:8083/readlater-ci:latest -f server/ci/Dockerfile server/ci
