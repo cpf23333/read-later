@@ -2,8 +2,13 @@
 # 构建命令: docker build -t readlater-ci:latest .
 FROM 192.168.1.100:5443/library/node:24
 
-# 换国内 apt 源（阿里云）
-RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources
+# 导入 Nexus APT proxy 签名公钥
+COPY nexus-apt.pub /tmp/nexus-apt.pub
+RUN apt-key add /tmp/nexus-apt.pub
+
+# 换 Nexus apt proxy
+RUN sed -i 's|deb.debian.org|192.168.1.100:8081/repository/debian-bookworm-proxy|g' /etc/apt/sources.list.d/debian.sources && \
+    sed -i 's|security.debian.org|192.168.1.100:8081/repository/debian-security-bookworm-proxy|g' /etc/apt/sources.list.d/debian.sources
 
 # 使用 Nexus npm proxy 安装依赖 + 国内镜像加速 prebuild/node-gyp
 ENV NPM_CONFIG_REGISTRY=http://192.168.1.100:8081/repository/npm-proxy/

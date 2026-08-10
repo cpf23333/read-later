@@ -17,6 +17,19 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Setup pnpm store
+        run: pnpm config set store-dir /root/.pnpm-store
+
+      - name: Cache pnpm dependencies
+        uses: actions/cache@v6
+        with:
+          path: |
+            /root/.pnpm-store
+            /root/.cache/node-gyp
+          key: ${{ runner.os }}-pnpm-release-${{ hashFiles('package.json', 'pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-release-
+
       - name: Install dependencies
         run: pnpm install
 

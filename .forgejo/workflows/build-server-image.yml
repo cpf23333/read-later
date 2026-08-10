@@ -21,6 +21,19 @@ jobs:
         run: |
           echo "timestamp=$(date +%Y-%m-%d-%H-%M)" >> $GITHUB_OUTPUT
 
+      - name: Setup pnpm store
+        run: pnpm config set store-dir /root/.pnpm-store
+
+      - name: Cache pnpm dependencies
+        uses: actions/cache@v6
+        with:
+          path: |
+            /root/.pnpm-store
+            /root/.cache/node-gyp
+          key: ${{ runner.os }}-pnpm-server-${{ hashFiles('package.json', 'pnpm-lock.yaml', 'server/package.json') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-server-
+
       - name: Install and build server
         run: |
           echo "=== 安装依赖 ==="
