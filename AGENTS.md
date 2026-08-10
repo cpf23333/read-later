@@ -52,11 +52,13 @@
 ## 核心功能模块
 
 ### 1. 链接收藏方式
+
 - **右键菜单**: 在任意链接上右键选择"收好链接"
 - **Popup按钮**: 点击扩展图标，选择"收好当前页面"
 - **自动提取**: 页面截图、附近图片、页面标题
 
 ### 2. 图片处理流程
+
 ```
 扩展提取图片
     ↓
@@ -76,12 +78,14 @@ GET /api/links 返回完整 URL
 ```
 
 ### 3. 回收站机制
+
 - 删除链接时软删除，数据移到 `trash` 表
 - 图片文件移动到 `images/deleted/` 目录（保持原文件名）
 - 还原时移回 `images/` 目录
 - 永久删除时删除文件
 
 ### 4. 数据存储
+
 - **纯服务器存储**: 所有数据直接存到 SQLite
 - **图片存储**: 服务器文件系统，`/images/` 和 `/images/deleted/`
 - **路径格式**: 数据库存相对路径 `/images/xxx.jpg`，前端拼接完整 URL
@@ -100,35 +104,38 @@ Authorization: Bearer <API_KEY>
 - 静态图片访问 (`/images/*`) 无需鉴权
 
 生成随机密钥：
+
 ```bash
 openssl rand -base64 32
 ```
 
 ## API 端点
 
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| GET | /api/health | 健康检查（无需鉴权） |
-| GET | /api/links | 获取链接列表 |
-| POST | /api/links | 添加链接（支持 base64/URL/路径） |
-| DELETE | /api/links/:id | 删除链接（移入回收站） |
-| POST | /api/links/batch | 批量添加 |
-| GET | /api/search | 搜索链接 |
-| GET | /api/trash | 获取回收站 |
-| POST | /api/trash/:id/restore | 还原链接 |
-| DELETE | /api/trash/:id | 永久删除 |
-| GET | /api/stats | 获取统计 |
-| POST | /api/upload | 上传图片（保留兼容） |
+| 方法   | 路径                   | 说明                             |
+| ------ | ---------------------- | -------------------------------- |
+| GET    | /api/health            | 健康检查（无需鉴权）             |
+| GET    | /api/links             | 获取链接列表                     |
+| POST   | /api/links             | 添加链接（支持 base64/URL/路径） |
+| DELETE | /api/links/:id         | 删除链接（移入回收站）           |
+| POST   | /api/links/batch       | 批量添加                         |
+| GET    | /api/search            | 搜索链接                         |
+| GET    | /api/trash             | 获取回收站                       |
+| POST   | /api/trash/:id/restore | 还原链接                         |
+| DELETE | /api/trash/:id         | 永久删除                         |
+| GET    | /api/stats             | 获取统计                         |
+| POST   | /api/upload            | 上传图片（保留兼容）             |
 
 ## 关键代码位置
 
 ### 图片提取 (utils/imageExtractor.ts)
+
 - `extractNearbyImage()` - 主提取函数
 - `imageToBase64()` - 转换 blob/URL 为 base64
 - `defaultImageExtractor()` - 默认提取策略
 - `executeCustomExtractor()` - 执行自定义 JS
 
 ### 后台脚本 (entrypoints/background.ts)
+
 - `handleMessage()` - 消息处理（CAPTURE_TAB, FETCH_TITLE 等）
 - `captureTab()` - 获取页面截图
 - `fetchPageTitle()` - 获取页面标题
@@ -137,12 +144,14 @@ openssl rand -base64 32
 ### 服务器开发 (server/)
 
 **开发模式：**
+
 ```bash
 cd server
 npm run dev    # 使用 tsx watch 热重载
 ```
 
 **构建：**
+
 ```bash
 cd server
 npm run build  # 编译 TypeScript 到 dist/
@@ -150,12 +159,14 @@ npm start      # 运行编译后的代码
 ```
 
 **Docker 构建：**
+
 ```bash
 cd server
 docker-compose up --build -d
 ```
 
 **关键函数：**
+
 - `processImage()` - 处理图片数据（base64/URL/路径）
 - `saveBase64ToFile()` - 保存 base64 为文件
 - `downloadImage()` - 下载网络图片
@@ -163,6 +174,7 @@ docker-compose up --build -d
 - `POST /api/trash/:id/restore` - 还原时移回图片
 
 ### Popup (entrypoints/popup/App.vue)
+
 - `saveCurrentPage()` - 保存当前页面
 - 发送 `CAPTURE_TAB` 消息获取截图
 - 发送 `FETCH_TITLE` 获取标题
@@ -170,12 +182,14 @@ docker-compose up --build -d
 ## 调试方法
 
 ### 查看日志位置
+
 1. **内容脚本**: 网页 F12 → Console
 2. **Background**: 扩展管理 → 详情 → Inspect views: service worker
 3. **Popup**: 右键扩展图标 → 检查弹出窗口
 4. **服务器**: 服务器终端输出
 
 ### 关键日志标记
+
 ```
 [ReadLater]        - background/content 日志
 [Popup]            - popup 日志
@@ -186,6 +200,7 @@ docker-compose up --build -d
 ```
 
 ### 开发模式
+
 ```bash
 pnpm dev    # 开启 sourcemap，保留 console
 pnpm build  # 生产构建，压缩代码，移除 console
@@ -194,6 +209,7 @@ pnpm build  # 生产构建，压缩代码，移除 console
 ## 图片显示优先级
 
 链接列表和回收站中，图片显示优先级：
+
 1. nearbyImage（链接附近图片）
 2. screenshot（页面截图）
 3. 无图片（显示占位）
@@ -214,6 +230,7 @@ pnpm build  # 生产构建，压缩代码，移除 console
 ## 服务器部署
 
 ### 方案一：联网部署
+
 ```bash
 cd server
 docker-compose up -d
@@ -224,19 +241,20 @@ docker-compose up -d
 适用于无外网环境（如内网 NAS）：
 
 **步骤 1：在有网络的机器上构建离线包**
+
 ```bash
 cd server
 ./build-offline.sh
 ```
 
 脚本默认使用阿里云镜像源，无需额外配置。如需使用其他镜像源：
+
 ```bash
 DOCKER_REGISTRY=your.mirror.com ./build-offline.sh
 ```
 
-
-
 **步骤 2：复制到目标服务器**
+
 ```bash
 # 解压
 unzip readlater-offline.zip
@@ -254,6 +272,7 @@ start-offline.bat
 ```
 
 **步骤 3：更新（有新版时）**
+
 ```bash
 # 1. 在新机器上重新执行 prepare-offline.sh 生成新包
 # 2. 复制 readlater-images.tar 到服务器
@@ -264,17 +283,19 @@ update-offline.bat   # Windows
 ```
 
 离线包包含：
+
 - `readlater-images.tar` - Docker 镜像（node:24-alpine + read-later-server）
 - `docker-compose.offline.yml` - 部署配置
 - `start-offline.sh/.bat` - 启动脚本
 - `update-offline.sh/.bat` - 更新脚本
 
 ### 环境变量（必需）
-| 变量 | 说明 | 示例 |
-|------|------|------|
-| `API_KEY` | API 鉴权密钥（必须） | `openssl rand -base64 32` |
-| `PORT` | 服务端口 | `3000` |
-| `DATA_DIR` | 数据目录 | `/app/data` |
+
+| 变量       | 说明                 | 示例                      |
+| ---------- | -------------------- | ------------------------- |
+| `API_KEY`  | API 鉴权密钥（必须） | `openssl rand -base64 32` |
+| `PORT`     | 服务端口             | `3000`                    |
+| `DATA_DIR` | 数据目录             | `/app/data`               |
 
 ## CI 与工作流
 
@@ -282,23 +303,25 @@ update-offline.bat   # Windows
 
 ### 工作流列表
 
-| 工作流 | 说明 | 触发方式 |
-|--------|------|----------|
-| `release.yml` | 构建扩展并创建 Release | `workflow_dispatch`（手动） |
-| `build-extension.yml` | 构建 Chrome/Firefox 扩展产物 | `workflow_dispatch`（手动） |
-| `build-server-image.yml` | 构建服务器 Docker 镜像 | `workflow_dispatch`（手动） |
+| 工作流                   | 说明                         | 触发方式                    |
+| ------------------------ | ---------------------------- | --------------------------- |
+| `release.yml`            | 构建扩展并创建 Release       | `workflow_dispatch`（手动） |
+| `build-extension.yml`    | 构建 Chrome/Firefox 扩展产物 | `workflow_dispatch`（手动） |
+| `build-server-image.yml` | 构建服务器 Docker 镜像       | `workflow_dispatch`（手动） |
 
 > 所有工作流均为**手动触发**，不再关联 push/pull_request 事件。
 
 ### CI 镜像 (`readlater-ci`)
 
 三个工作流共用统一的 CI 镜像 `192.168.1.100:8083/readlater-ci:latest`，基于 `node:24`（Debian），预装：
+
 - `pnpm`（全局）
 - `buildah` + `skopeo`（容器镜像构建）
 - `python3` + `make` + `g++`（原生模块编译）
 - `curl` + `jq`
 
 **构建 CI 镜像：**
+
 ```bash
 cd server/ci
 ./build-and-push.sh [registry] [name] [tag] [alpine-proxy]
@@ -307,17 +330,20 @@ cd server/ci
 ```
 
 **镜像 Dockerfile**: `server/ci/Dockerfile`
+
 - 支持通过 `ARG ALPINE_REPO_URL` 指定 apk 源（默认阿里云）
 - `Batch 脚本 (.bat)` 构建后需确认 **CRLF 换行符**（`unix2dos` 修复）
 
 ## 开发注意事项
 
 ### 文件编码规范
+
 - **Shell 脚本** (`.sh`): UTF-8 无 BOM, LF 换行
 - **Batch 脚本** (`.bat`): UTF-8 无 BOM, CRLF 换行
 - **代码文件**: UTF-8 无 BOM
 
 ### Docker 多阶段构建
+
 ```dockerfile
 # 阶段 1：构建（含编译工具）
 FROM node:24-alpine AS builder
@@ -328,6 +354,7 @@ RUN npm install
 FROM node:24-alpine
 COPY --from=builder /app/node_modules ./node_modules
 ```
+
 镜像体积：~200MB → ~80MB
 
 ## 相关文件

@@ -1,9 +1,5 @@
 import { getEnabledCustomJsConfig } from '@/utils/apiStorage';
-import {
-  addLink,
-  isLinkExists,
-  checkServerHealth,
-} from '@/utils/hybridStorage';
+import { addLink, isLinkExists, checkServerHealth } from '@/utils/hybridStorage';
 
 // 右键菜单ID
 const CONTEXT_MENU_ID = 'read-later-save-link';
@@ -47,20 +43,24 @@ export default defineBackground(() => {
       // 检查服务器是否可用
       const serverAvailable = await checkServerHealth();
       if (!serverAvailable) {
-        browser.tabs.sendMessage(tab.id, {
-          type: 'SAVE_ERROR',
-          error: '服务器未配置或不可用，请先配置服务器',
-        }).catch(() => {});
+        browser.tabs
+          .sendMessage(tab.id, {
+            type: 'SAVE_ERROR',
+            error: '服务器未配置或不可用，请先配置服务器',
+          })
+          .catch(() => {});
         return;
       }
 
       // 检查链接是否已存在
       const exists = await isLinkExists(info.linkUrl);
       if (exists) {
-        browser.tabs.sendMessage(tab.id, {
-          type: 'SAVE_DUPLICATE',
-          data: { message: '该链接已存在' },
-        }).catch(() => {});
+        browser.tabs
+          .sendMessage(tab.id, {
+            type: 'SAVE_DUPLICATE',
+            data: { message: '该链接已存在' },
+          })
+          .catch(() => {});
         return;
       }
 
@@ -73,12 +73,14 @@ export default defineBackground(() => {
       if (result.success) {
         // 获取页面标题
         const pageTitle = await fetchPageTitle(info.linkUrl);
-        
+
         // 尝试获取页面截图
         const screenshot = await captureTab(tab.id);
-        
+
         console.log('[ReadLater] Background received data:', {
-          nearbyImage: result.data.nearbyImage ? `${result.data.nearbyImage.substring(0, 50)}...` : null,
+          nearbyImage: result.data.nearbyImage
+            ? `${result.data.nearbyImage.substring(0, 50)}...`
+            : null,
           isNearbyImageBase64: result.data.nearbyImage?.startsWith('data:'),
           screenshot: screenshot ? `${screenshot.substring(0, 50)}...` : null,
         });
@@ -105,22 +107,26 @@ export default defineBackground(() => {
         });
 
         console.log('[ReadLater] Link saved:', linkItem.id);
-        
+
         // 通知内容脚本保存成功
-        browser.tabs.sendMessage(tab.id, {
-          type: 'SAVE_SUCCESS',
-          data: { id: linkItem.id, title: linkItem.title },
-        }).catch(() => {});
+        browser.tabs
+          .sendMessage(tab.id, {
+            type: 'SAVE_SUCCESS',
+            data: { id: linkItem.id, title: linkItem.title },
+          })
+          .catch(() => {});
       }
     } catch (error) {
       console.error('[ReadLater] Failed to save link:', error);
-      
+
       // 通知内容脚本保存失败
       if (tab.id) {
-        browser.tabs.sendMessage(tab.id, {
-          type: 'SAVE_ERROR',
-          error: error instanceof Error ? error.message : 'Unknown error',
-        }).catch(() => {});
+        browser.tabs
+          .sendMessage(tab.id, {
+            type: 'SAVE_ERROR',
+            error: error instanceof Error ? error.message : 'Unknown error',
+          })
+          .catch(() => {});
       }
     }
   });
@@ -192,7 +198,7 @@ async function fetchPageTitle(url: string): Promise<string | null> {
       method: 'GET',
       signal: controller.signal,
       headers: {
-        'Accept': 'text/html',
+        Accept: 'text/html',
       },
     });
 
@@ -203,16 +209,18 @@ async function fetchPageTitle(url: string): Promise<string | null> {
     }
 
     const html = await response.text();
-    
+
     // 解析标题
     const titleMatch = html.match(/<title[^>]*>([^<]*)<\/title>/i);
-    if (titleMatch) {
+    if (titleMatch?.[1]) {
       return titleMatch[1].trim();
     }
 
     // 尝试获取og:title
-    const ogTitleMatch = html.match(/<meta[^>]*property=["']og:title["'][^>]*content=["']([^"']*)["']/i);
-    if (ogTitleMatch) {
+    const ogTitleMatch = html.match(
+      /<meta[^>]*property=["']og:title["'][^>]*content=["']([^"']*)["']/i
+    );
+    if (ogTitleMatch?.[1]) {
       return ogTitleMatch[1].trim();
     }
 

@@ -17,7 +17,7 @@ export async function fetchOpenGraphImage(pageUrl: string): Promise<string | nul
     const response = await fetch(pageUrl, {
       method: 'GET',
       headers: {
-        'Accept': 'text/html,application/xhtml+xml',
+        Accept: 'text/html,application/xhtml+xml',
       },
       signal: controller.signal,
       redirect: 'follow',
@@ -50,8 +50,7 @@ export async function fetchOpenGraphImage(pageUrl: string): Promise<string | nul
       html.match(/<meta[^>]*name=["']twitter:image["'][^>]*content=["']([^"']+)["']/i)?.[1] ||
       html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*name=["']twitter:image["']/i)?.[1];
 
-    const imageSrc =
-      html.match(/<link[^>]*rel=["']image_src["'][^>]*href=["']([^"']+)["']/i)?.[1];
+    const imageSrc = html.match(/<link[^>]*rel=["']image_src["'][^>]*href=["']([^"']+)["']/i)?.[1];
 
     const imageUrl = ogImage || twitterImage || imageSrc;
     if (!imageUrl) {
@@ -134,13 +133,15 @@ export async function withConcurrencyLimit<T>(
     while (index < items.length) {
       const i = index++;
       try {
-        await fn(items[i], i);
+        await fn(items[i]!, i);
       } catch {
         // 单条失败不影响其他
       }
     }
   }
 
-  const workers = Array(Math.min(limit, items.length)).fill(null).map(() => worker());
+  const workers = Array(Math.min(limit, items.length))
+    .fill(null)
+    .map(() => worker());
   await Promise.all(workers);
 }

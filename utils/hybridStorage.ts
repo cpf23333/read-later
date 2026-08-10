@@ -1,14 +1,14 @@
 // 统一存储接口 - 直接同步到服务器
 
-import { LinkItem, DeleteRecord } from './storage';
-import { 
-  apiGetLinks, 
+import { type LinkItem, type DeleteRecord } from './storage';
+import {
+  apiGetLinks,
   apiSearchLinks,
-  apiAddLink, 
-  apiDeleteLink, 
-  apiGetTrash, 
-  apiRestoreFromTrash, 
-  apiPermanentlyDelete, 
+  apiAddLink,
+  apiDeleteLink,
+  apiGetTrash,
+  apiRestoreFromTrash,
+  apiPermanentlyDelete,
   apiGetStats,
   apiGetDomainStats,
   apiGetAllDomains,
@@ -32,7 +32,7 @@ export async function checkServerHealth(): Promise<boolean> {
   if (!config.enabled || !config.url) {
     return false;
   }
-  
+
   try {
     const result = await testServerConnection(config.url);
     return result.success;
@@ -47,7 +47,7 @@ export async function checkServerHealth(): Promise<boolean> {
 export async function getLinks(
   page: number = 1,
   pageSize: number = 50,
-  options?: { 
+  options?: {
     sortBy?: 'createdAt' | 'title' | 'domain';
     sortDesc?: boolean;
     domain?: string;
@@ -56,7 +56,7 @@ export async function getLinks(
 ): Promise<{ links: LinkItem[]; total: number }> {
   const sortBy = options?.sortBy === 'title' ? 'title' : 'created_at';
   const sortOrder = options?.sortDesc !== false ? 'desc' : 'asc';
-  
+
   return await apiGetLinks(page, pageSize, {
     search: options?.search,
     domain: options?.domain,
@@ -68,7 +68,7 @@ export async function getLinks(
 // 辅助函数：上传图片到服务器
 async function uploadImagesIfNeeded(link: LinkItem): Promise<LinkItem> {
   const updatedLink = { ...link };
-  
+
   // 上传 nearbyImage（如果是 Base64）
   if (link.nearbyImage && link.nearbyImage.startsWith('data:image')) {
     try {
@@ -78,7 +78,7 @@ async function uploadImagesIfNeeded(link: LinkItem): Promise<LinkItem> {
       console.warn('[Storage] Failed to upload nearbyImage:', error);
     }
   }
-  
+
   // 上传 screenshot（如果是 Base64）
   if (link.screenshot && link.screenshot.startsWith('data:image')) {
     try {
@@ -88,7 +88,7 @@ async function uploadImagesIfNeeded(link: LinkItem): Promise<LinkItem> {
       console.warn('[Storage] Failed to upload screenshot:', error);
     }
   }
-  
+
   return updatedLink;
 }
 
@@ -99,10 +99,10 @@ export async function addLink(link: Omit<LinkItem, 'id' | 'createdAt'>): Promise
     id: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
     createdAt: Date.now(),
   };
-  
+
   // 直接发送数据到服务器，由服务器处理图片保存
   await apiAddLink(item);
-  
+
   return item;
 }
 
@@ -118,7 +118,9 @@ export async function deleteLink(id: string): Promise<{ success: boolean; record
 }
 
 // 从回收站还原
-export async function restoreFromTrash(recordId: string): Promise<{ success: boolean; link?: LinkItem }> {
+export async function restoreFromTrash(
+  recordId: string
+): Promise<{ success: boolean; link?: LinkItem }> {
   try {
     const result = await apiRestoreFromTrash(recordId);
     return { success: true };
@@ -154,7 +156,7 @@ export async function isLinkExists(url: string): Promise<boolean> {
   try {
     // 从服务器获取所有链接检查
     const { links } = await apiGetLinks(1, 1000);
-    return links.some(link => link.url === url);
+    return links.some((link) => link.url === url);
   } catch (error) {
     console.warn('[Storage] Failed to check link exists:', error);
     return false;
@@ -183,7 +185,9 @@ export async function exportLinks(): Promise<string> {
 }
 
 // 批量添加链接（用于导入预览后的确认导入）
-export async function batchAddLinks(links: Partial<LinkItem>[]): Promise<{ count: number; failed: number }> {
+export async function batchAddLinks(
+  links: Partial<LinkItem>[]
+): Promise<{ count: number; failed: number }> {
   const now = Date.now();
   const items: LinkItem[] = links.map((link, index) => ({
     url: link.url || '',
@@ -194,13 +198,16 @@ export async function batchAddLinks(links: Partial<LinkItem>[]): Promise<{ count
     createdAt: link.createdAt || now + index,
     id: link.id || `${now}_${Math.random().toString(36).substr(2, 9)}_${index}`,
   }));
-  
+
   const result = await apiBatchAddLinks(items);
   return { count: result.count, failed: result.failed };
 }
 
 // 导入链接
-export async function importLinks(jsonString: string, mode: 'merge' | 'replace' = 'merge'): Promise<{ imported: number; skipped: number; total: number }> {
+export async function importLinks(
+  jsonString: string,
+  mode: 'merge' | 'replace' = 'merge'
+): Promise<{ imported: number; skipped: number; total: number }> {
   let data: LinkItem[];
   try {
     data = JSON.parse(jsonString);
@@ -210,7 +217,7 @@ export async function importLinks(jsonString: string, mode: 'merge' | 'replace' 
   } catch (error) {
     throw new Error('无效的JSON文件');
   }
-  
+
   const result = await apiImport(data, mode);
   return {
     imported: result.imported,

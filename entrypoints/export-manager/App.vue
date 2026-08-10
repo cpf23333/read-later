@@ -1,11 +1,6 @@
 <script lang="ts" setup>
 import { ref, onMounted, onUnmounted, computed } from 'vue';
-import {
-  createExport,
-  getExports,
-  downloadExport,
-  deleteExport,
-} from '@/utils/hybridStorage';
+import { createExport, getExports, downloadExport, deleteExport } from '@/utils/hybridStorage';
 import type { ExportTask } from '@/utils/storage';
 import { showSuccess, showError } from '@/utils/toast';
 
@@ -186,9 +181,7 @@ function goBack() {
           :class="{ 'task-running': task.status === 'running' }"
         >
           <div class="task-info">
-            <div class="task-id" :title="task.id">
-              ID: {{ task.id.slice(0, 24) }}...
-            </div>
+            <div class="task-id" :title="task.id">ID: {{ task.id.slice(0, 24) }}...</div>
             <div class="task-meta">
               <span class="task-date">创建于: {{ formatDate(task.createdAt) }}</span>
               <span v-if="task.completedAt" class="task-date">
@@ -223,9 +216,7 @@ function goBack() {
             </button>
           </div>
 
-          <div v-if="task.error" class="task-error">
-            错误: {{ task.error }}
-          </div>
+          <div v-if="task.error" class="task-error">错误: {{ task.error }}</div>
         </div>
       </div>
     </main>
@@ -366,7 +357,9 @@ function goBack() {
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .empty-state {

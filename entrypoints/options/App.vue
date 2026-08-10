@@ -1,14 +1,8 @@
 <script lang="ts" setup>
 import { ref, onMounted } from 'vue';
-import { 
-  CustomJsConfig,
-} from '@/utils/storage';
-import { 
-  EXTRACTOR_TEMPLATES 
-} from '@/utils/imageExtractor';
-import{
-  importLinks,
-} from '@/utils/hybridStorage';
+import { type CustomJsConfig } from '@/utils/storage';
+import { EXTRACTOR_TEMPLATES } from '@/utils/imageExtractor';
+import { importLinks } from '@/utils/hybridStorage';
 import {
   getServerConfig,
   saveServerConfig,
@@ -37,7 +31,6 @@ const importFile = ref<File | null>(null);
 const importMode = ref<'merge' | 'replace'>('merge');
 const importResult = ref<{ imported: number; skipped: number; total: number } | null>(null);
 const importing = ref(false);
-
 
 // ===== 服务器配置 =====
 interface ServerConfig {
@@ -119,7 +112,7 @@ async function deleteConfig(id: string) {
 
 async function toggleConfig(config: CustomJsConfig) {
   config.enabled = !config.enabled;
-  
+
   if (config.enabled) {
     for (const c of configs.value) {
       if (c.id !== config.id && c.enabled) {
@@ -128,7 +121,7 @@ async function toggleConfig(config: CustomJsConfig) {
       }
     }
   }
-  
+
   await saveCustomJsConfig(config);
   await loadConfigs();
 }
@@ -161,9 +154,11 @@ async function handleImport() {
     const text = await importFile.value.text();
     const result = await importLinks(text, importMode.value);
     importResult.value = result;
-    
+
     if (result.imported > 0) {
-      showSuccess(`导入成功！导入了 ${result.imported} 个链接，跳过了 ${result.skipped} 个重复链接。`);
+      showSuccess(
+        `导入成功！导入了 ${result.imported} 个链接，跳过了 ${result.skipped} 个重复链接。`
+      );
     } else {
       showSuccess(`导入完成，没有新链接被导入（${result.skipped} 个重复链接被跳过）。`);
     }
@@ -186,7 +181,7 @@ async function loadServerConfig() {
 async function testServer() {
   testingServer.value = true;
   serverStatus.value = null;
-  
+
   try {
     const result = await testServerConnection(serverConfig.value.url, serverConfig.value.apiKey);
     serverStatus.value = result;
@@ -206,7 +201,7 @@ async function saveServer() {
       return;
     }
   }
-  
+
   savingServer.value = true;
   try {
     await saveServerConfig(serverConfig.value);
@@ -216,8 +211,6 @@ async function saveServer() {
     savingServer.value = false;
   }
 }
-
-
 </script>
 
 <template>
@@ -229,22 +222,22 @@ async function saveServer() {
 
     <!-- Tab 导航 -->
     <nav class="tab-nav">
-      <button 
-        class="tab-btn" 
+      <button
+        class="tab-btn"
         :class="{ active: activeTab === 'extractor' }"
         @click="activeTab = 'extractor'"
       >
         图片提取器
       </button>
-      <button 
-        class="tab-btn" 
+      <button
+        class="tab-btn"
         :class="{ active: activeTab === 'import' }"
         @click="activeTab = 'import'"
       >
         导入/导出
       </button>
-      <button 
-        class="tab-btn" 
+      <button
+        class="tab-btn"
         :class="{ active: activeTab === 'server' }"
         @click="activeTab = 'server'"
       >
@@ -257,14 +250,12 @@ async function saveServer() {
       <section v-if="activeTab === 'extractor'" class="section">
         <div class="section-header">
           <h2>自定义图片提取器</h2>
-          <button class="btn btn-primary" @click="openAddModal">
-            + 添加配置
-          </button>
+          <button class="btn btn-primary" @click="openAddModal">+ 添加配置</button>
         </div>
 
         <div class="config-list" v-if="configs.length > 0">
-          <div 
-            v-for="config in configs" 
+          <div
+            v-for="config in configs"
             :key="config.id"
             class="config-item"
             :class="{ active: config.enabled }"
@@ -276,19 +267,15 @@ async function saveServer() {
               </span>
             </div>
             <div class="config-actions">
-              <button 
+              <button
                 class="btn btn-sm"
                 :class="config.enabled ? 'btn-success' : 'btn-default'"
                 @click="toggleConfig(config)"
               >
                 {{ config.enabled ? '禁用' : '启用' }}
               </button>
-              <button class="btn btn-sm btn-default" @click="editConfig(config)">
-                编辑
-              </button>
-              <button class="btn btn-sm btn-danger" @click="deleteConfig(config.id)">
-                删除
-              </button>
+              <button class="btn btn-sm btn-default" @click="editConfig(config)">编辑</button>
+              <button class="btn btn-sm btn-danger" @click="deleteConfig(config.id)">删除</button>
             </div>
           </div>
         </div>
@@ -314,22 +301,20 @@ async function saveServer() {
       <!-- 导入导出 Tab -->
       <section v-if="activeTab === 'import'" class="section">
         <h2>导入/导出数据</h2>
-        
+
         <div class="import-export-grid">
           <!-- 导出 -->
           <div class="card">
             <h3>📥 导出数据</h3>
             <p>将"稍后再看"的数据库和图片打包为压缩文件，用于完整备份或迁移。</p>
-            <button class="btn btn-primary" @click="openExportManager">
-              打开导出管理
-            </button>
+            <button class="btn btn-primary" @click="openExportManager">打开导出管理</button>
           </div>
 
           <!-- 导入 -->
           <div class="card">
             <h3>📤 导入数据</h3>
             <p>从 JSON 文件导入链接到"稍后再看"。</p>
-            
+
             <div class="form-group">
               <label>导入模式</label>
               <div class="radio-group">
@@ -346,17 +331,12 @@ async function saveServer() {
 
             <div class="form-group">
               <label>选择文件</label>
-              <input 
-                id="import-file"
-                type="file" 
-                accept=".json"
-                @change="handleFileSelect"
-              />
+              <input id="import-file" type="file" accept=".json" @change="handleFileSelect" />
             </div>
 
-            <button 
-              class="btn btn-primary" 
-              @click="handleImport" 
+            <button
+              class="btn btn-primary"
+              @click="handleImport"
               :disabled="!importFile || importing"
             >
               {{ importing ? '导入中...' : '导入数据' }}
@@ -385,9 +365,9 @@ async function saveServer() {
 
           <div class="form-group">
             <label>服务器地址</label>
-            <input 
-              v-model="serverConfig.url" 
-              type="url" 
+            <input
+              v-model="serverConfig.url"
+              type="url"
               placeholder="http://192.168.1.100:3000"
               :disabled="!serverConfig.enabled"
             />
@@ -395,10 +375,10 @@ async function saveServer() {
           </div>
 
           <div class="form-group">
-            <label>API Key <span style="color: #ef4444;">*</span></label>
-            <input 
-              v-model="serverConfig.apiKey" 
-              type="password" 
+            <label>API Key <span style="color: #ef4444">*</span></label>
+            <input
+              v-model="serverConfig.apiKey"
+              type="password"
               placeholder="请输入 API Key"
               :disabled="!serverConfig.enabled"
             />
@@ -406,27 +386,27 @@ async function saveServer() {
           </div>
 
           <div class="form-actions">
-            <button 
-              class="btn btn-default" 
-              @click="testServer" 
+            <button
+              class="btn btn-default"
+              @click="testServer"
               :disabled="!serverConfig.enabled || !serverConfig.url || testingServer"
             >
               {{ testingServer ? '测试中...' : '测试连接' }}
             </button>
-            <button 
-              class="btn btn-primary" 
-              @click="saveServer" 
-              :disabled="savingServer"
-            >
+            <button class="btn btn-primary" @click="saveServer" :disabled="savingServer">
               {{ savingServer ? '保存中...' : '保存配置' }}
             </button>
           </div>
 
-          <div v-if="serverStatus" class="connection-status" :class="serverStatus.success ? 'success' : 'error'">
+          <div
+            v-if="serverStatus"
+            class="connection-status"
+            :class="serverStatus.success ? 'success' : 'error'"
+          >
             {{ serverStatus.message }}
           </div>
 
-          <div class="help-content" style="margin-top: 24px;">
+          <div class="help-content" style="margin-top: 24px">
             <h3>部署指南</h3>
             <ol>
               <li>在 NAS/服务器上安装 Docker</li>
@@ -444,22 +424,18 @@ async function saveServer() {
     <div v-if="showAddModal" class="modal-overlay" @click.self="showAddModal = false">
       <div class="modal">
         <h3>{{ isEditing ? '编辑配置' : '添加配置' }}</h3>
-        
+
         <div class="form-group">
           <label>配置名称</label>
-          <input 
-            v-model="editingConfig.name" 
-            type="text" 
-            placeholder="例如：自定义提取器"
-          />
+          <input v-model="editingConfig.name" type="text" placeholder="例如：自定义提取器" />
         </div>
 
         <div class="form-group">
           <label>代码模板</label>
           <select @change="applyTemplate(($event.target as HTMLSelectElement).value)">
             <option value="">选择模板...</option>
-            <option 
-              v-for="template in EXTRACTOR_TEMPLATES" 
+            <option
+              v-for="template in EXTRACTOR_TEMPLATES"
               :key="template.name"
               :value="template.code"
             >
@@ -470,8 +446,8 @@ async function saveServer() {
 
         <div class="form-group">
           <label>JavaScript 代码</label>
-          <textarea 
-            v-model="editingConfig.code" 
+          <textarea
+            v-model="editingConfig.code"
             rows="15"
             placeholder="在此输入 JavaScript 代码..."
           ></textarea>
@@ -490,8 +466,6 @@ async function saveServer() {
         </div>
       </div>
     </div>
-
-
   </div>
 </template>
 
@@ -527,7 +501,7 @@ async function saveServer() {
   background: white;
   padding: 8px;
   border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
 .tab-btn {
@@ -562,7 +536,7 @@ async function saveServer() {
   background: white;
   border-radius: 12px;
   padding: 24px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 .section h2 {
@@ -737,11 +711,11 @@ async function saveServer() {
   color: #374151;
 }
 
-.form-group input[type="text"],
-.form-group input[type="url"],
-.form-group input[type="password"],
-.form-group input[type="number"],
-.form-group input[type="file"],
+.form-group input[type='text'],
+.form-group input[type='url'],
+.form-group input[type='password'],
+.form-group input[type='number'],
+.form-group input[type='file'],
 .form-group select,
 .form-group textarea {
   width: 100%;
@@ -935,7 +909,7 @@ async function saveServer() {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.5);
+  background: rgba(0, 0, 0, 0.5);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -976,7 +950,9 @@ async function saveServer() {
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .loading {

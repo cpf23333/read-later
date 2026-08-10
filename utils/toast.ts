@@ -9,21 +9,21 @@ interface ToastOptions {
 
 export function showToast(message: string, type: ToastType = 'info', options: ToastOptions = {}) {
   const { duration = 3000 } = options;
-  
+
   // 创建容器
   const container = document.createElement('div');
   document.body.appendChild(container);
-  
+
   // 创建 vnode
   const vnode = h(Toast, {
     message,
     type,
     duration,
   });
-  
+
   // 渲染
   render(vnode, container);
-  
+
   // 动画结束后清理
   setTimeout(() => {
     render(null, container);

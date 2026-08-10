@@ -2,7 +2,7 @@
  * 限流中间件
  */
 
-import { createMiddleware } from "hono/factory";
+import { createMiddleware } from 'hono/factory';
 
 // 简单的内存限流存储
 interface RateLimitStore {
@@ -18,7 +18,8 @@ const store: RateLimitStore = {};
 function cleanupStore(): void {
   const now = Date.now();
   for (const key in store) {
-    if (store[key].resetTime < now) {
+    const entry = store[key];
+    if (entry && entry.resetTime < now) {
       delete store[key];
     }
   }
@@ -37,16 +38,11 @@ interface RateLimitOptions {
  * 创建限流中间件
  */
 export function createRateLimit(options: RateLimitOptions) {
-  const {
-    windowMs,
-    max,
-    message = "Too many requests, please try again later",
-  } = options;
+  const { windowMs, max, message = 'Too many requests, please try again later' } = options;
 
   return createMiddleware(async (c, next) => {
     // 获取客户端标识（优先使用 IP）
-    const clientId =
-      c.req.header("x-forwarded-for") || c.req.header("x-real-ip") || "unknown";
+    const clientId = c.req.header('x-forwarded-for') || c.req.header('x-real-ip') || 'unknown';
 
     const key = `${c.req.path}:${clientId}`;
     const now = Date.now();
@@ -77,7 +73,7 @@ export function createRateLimit(options: RateLimitOptions) {
 export const generalRateLimit = createRateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
-  message: "Too many requests, please try again later",
+  message: 'Too many requests, please try again later',
 });
 
 /**
@@ -86,5 +82,5 @@ export const generalRateLimit = createRateLimit({
 export const apiRateLimit = createRateLimit({
   windowMs: 1 * 60 * 1000,
   max: 30,
-  message: "Too many API requests, please slow down",
+  message: 'Too many API requests, please slow down',
 });

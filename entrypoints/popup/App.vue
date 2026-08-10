@@ -89,7 +89,7 @@ async function saveCurrentPage() {
     console.log('[Popup] Link added successfully');
 
     await loadLinkCount();
-    
+
     // 显示成功提示
     showSuccess('已收好！稍后记得来看哦~');
   } catch (error) {
@@ -109,22 +109,16 @@ async function saveCurrentPage() {
     </header>
 
     <main class="main">
-      <p class="description">
-        看到好内容来不及看？右键或长按链接收好，稍后有空再看
-      </p>
+      <p class="description">看到好内容来不及看？右键或长按链接收好，稍后有空再看</p>
 
       <div class="actions">
         <button class="btn btn-primary" @click="saveCurrentPage" :disabled="saving">
           {{ saving ? '收好中...' : '📥 收好当前页面' }}
         </button>
-        
-        <button class="btn btn-secondary" @click="openLinkManager">
-          📚 查看列表
-        </button>
-        
-        <button class="btn btn-default" @click="openSettings">
-          ⚙️ 设置
-        </button>
+
+        <button class="btn btn-secondary" @click="openLinkManager">📚 查看列表</button>
+
+        <button class="btn btn-default" @click="openSettings">⚙️ 设置</button>
       </div>
 
       <div class="tips">
@@ -165,7 +159,7 @@ async function saveCurrentPage() {
 }
 
 .badge {
-  background: rgba(255,255,255,0.2);
+  background: rgba(255, 255, 255, 0.2);
   padding: 4px 10px;
   border-radius: 20px;
   font-size: 12px;

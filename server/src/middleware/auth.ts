@@ -2,10 +2,10 @@
  * 鉴权中间件
  */
 
-import { createMiddleware } from "hono/factory";
+import { createMiddleware } from 'hono/factory';
 
 // API Key 存储
-let API_KEY = "";
+let API_KEY = '';
 
 export function setApiKey(key: string): void {
   API_KEY = key;
@@ -26,29 +26,26 @@ export function checkApiKeyConfigured(): boolean {
  * API Key 鉴权中间件
  */
 export const authMiddleware = createMiddleware(async (c, next) => {
-  const authHeader = c.req.header("authorization");
+  const authHeader = c.req.header('authorization');
 
   if (!authHeader) {
-    return c.json(
-      { success: false, error: "Missing Authorization header" },
-      401,
-    );
+    return c.json({ success: false, error: 'Missing Authorization header' }, 401);
   }
 
-  const parts = authHeader.split(" ");
-  if (parts.length !== 2 || parts[0] !== "Bearer") {
+  const parts = authHeader.split(' ');
+  if (parts.length !== 2 || parts[0] !== 'Bearer') {
     return c.json(
       {
         success: false,
-        error: "Invalid Authorization format. Use: Bearer <token>",
+        error: 'Invalid Authorization format. Use: Bearer <token>',
       },
-      401,
+      401
     );
   }
 
   const token = parts[1];
   if (token !== API_KEY) {
-    return c.json({ success: false, error: "Invalid API Key" }, 401);
+    return c.json({ success: false, error: 'Invalid API Key' }, 401);
   }
 
   await next();
@@ -60,7 +57,7 @@ export const authMiddleware = createMiddleware(async (c, next) => {
  */
 export const optionalAuthMiddleware = createMiddleware(async (c, next) => {
   // 健康检查不需要鉴权，直接通过
-  if (c.req.path === "/api/health") {
+  if (c.req.path === '/api/health') {
     await next();
     return;
   }

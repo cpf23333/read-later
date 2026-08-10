@@ -1,10 +1,6 @@
 <script lang="ts" setup>
 import { ref, onMounted, computed, watch } from 'vue';
-import { 
-  LinkItem,
-  DeleteRecord,
-  normalizeUrl,
-} from '@/utils/storage';
+import { type LinkItem, type DeleteRecord, normalizeUrl } from '@/utils/storage';
 
 import {
   getLinks,
@@ -104,12 +100,12 @@ async function loadLinks() {
       sortBy: sortBy.value,
       sortDesc: sortOrder.value === 'desc',
     });
-    
+
     // 在客户端进行域名和日期过滤
     let filteredLinks = result.links;
-    
+
     if (domainFilter.value) {
-      filteredLinks = filteredLinks.filter(link => {
+      filteredLinks = filteredLinks.filter((link) => {
         try {
           const domain = new URL(link.url).hostname;
           return domain === domainFilter.value;
@@ -118,17 +114,17 @@ async function loadLinks() {
         }
       });
     }
-    
+
     if (dateFrom.value) {
       const fromTime = new Date(dateFrom.value).getTime();
-      filteredLinks = filteredLinks.filter(link => link.createdAt >= fromTime);
+      filteredLinks = filteredLinks.filter((link) => link.createdAt >= fromTime);
     }
-    
+
     if (dateTo.value) {
       const toTime = new Date(dateTo.value).getTime() + 86400000;
-      filteredLinks = filteredLinks.filter(link => link.createdAt <= toTime);
+      filteredLinks = filteredLinks.filter((link) => link.createdAt <= toTime);
     }
-    
+
     links.value = filteredLinks;
     total.value = result.total;
     selectedIds.value.clear();
@@ -138,17 +134,21 @@ async function loadLinks() {
 }
 
 // 当排序或过滤条件改变时重新加载
-watch([sortBy, sortOrder, domainFilter, dateFrom, dateTo], () => {
-  currentPage.value = 1;
-  loadLinks();
-}, { deep: true });
+watch(
+  [sortBy, sortOrder, domainFilter, dateFrom, dateTo],
+  () => {
+    currentPage.value = 1;
+    loadLinks();
+  },
+  { deep: true }
+);
 
 async function handleSearch() {
   if (!searchQuery.value.trim()) {
     await loadLinks();
     return;
   }
-  
+
   loading.value = true;
   try {
     const results = await searchLinks(searchQuery.value);
@@ -174,7 +174,7 @@ async function handleSearch() {
       }
       return sortOrder.value === 'desc' ? -comparison : comparison;
     });
-    
+
     links.value = results;
     total.value = results.length;
     currentPage.value = 1;
@@ -226,10 +226,7 @@ async function handleDelete(id: string) {
     console.log('[LinkManager] Delete result:', result);
     await loadLinks();
     // 更新统计和回收站数据
-    const [stats, domainStatsResult] = await Promise.all([
-      getStats(),
-      getDomainStats(),
-    ]);
+    const [stats, domainStatsResult] = await Promise.all([getStats(), getDomainStats()]);
     totalCount.value = stats.linkCount;
     domainStats.value = domainStatsResult;
     // 如果回收站已加载，刷新回收站
@@ -243,14 +240,15 @@ async function handleDelete(id: string) {
 }
 
 async function handleBatchDelete() {
-  if (!confirm(`确定要删除选中的 ${selectedIds.value.size} 个链接吗？（删除后可在回收站还原）`)) return;
-  
+  if (!confirm(`确定要删除选中的 ${selectedIds.value.size} 个链接吗？（删除后可在回收站还原）`))
+    return;
+
   const ids = Array.from(selectedIds.value);
-  
+
   for (const id of ids) {
     await deleteLink(id);
   }
-  
+
   selectedIds.value.clear();
   await loadLinks();
   // 更新统计和回收站数据
@@ -282,22 +280,19 @@ function switchTab(tab: TabView) {
 
 async function restoreItem(recordId: string) {
   if (!confirm('确定要还原这个链接吗？')) return;
-  
+
   await restoreFromTrash(recordId);
   await loadTrash();
   // 刷新链接列表和统计
   await loadLinks();
-  const [stats, domainStatsResult] = await Promise.all([
-    getStats(),
-    getDomainStats(),
-  ]);
+  const [stats, domainStatsResult] = await Promise.all([getStats(), getDomainStats()]);
   totalCount.value = stats.linkCount;
   domainStats.value = domainStatsResult;
 }
 
 async function permanentlyDeleteItem(recordId: string) {
   if (!confirm('确定要永久删除这个链接吗？此操作不可撤销！')) return;
-  
+
   await permanentlyDeleteFromTrash(recordId);
   await loadTrash();
   // 更新统计
@@ -306,11 +301,11 @@ async function permanentlyDeleteItem(recordId: string) {
 
 async function emptyTrash() {
   if (!confirm('确定要清空回收站吗？所有项目将被永久删除！')) return;
-  
+
   for (const item of trashItems.value) {
     await permanentlyDeleteFromTrash(item.id);
   }
-  
+
   await loadTrash();
   // 更新统计
   await updateStats();
@@ -326,30 +321,28 @@ function toggleTrashSelection(id: string) {
 
 async function restoreSelected() {
   if (!confirm(`确定要还原选中的 ${selectedTrashIds.value.size} 个链接吗？`)) return;
-  
+
   for (const id of selectedTrashIds.value) {
     await restoreFromTrash(id);
   }
-  
+
   selectedTrashIds.value.clear();
   await loadTrash();
   // 刷新链接列表和统计
   await loadLinks();
-  const [stats, domainStatsResult] = await Promise.all([
-    getStats(),
-    getDomainStats(),
-  ]);
+  const [stats, domainStatsResult] = await Promise.all([getStats(), getDomainStats()]);
   totalCount.value = stats.linkCount;
   domainStats.value = domainStatsResult;
 }
 
 async function deleteSelected() {
-  if (!confirm(`确定要永久删除选中的 ${selectedTrashIds.value.size} 个链接吗？此操作不可撤销！`)) return;
-  
+  if (!confirm(`确定要永久删除选中的 ${selectedTrashIds.value.size} 个链接吗？此操作不可撤销！`))
+    return;
+
   for (const id of selectedTrashIds.value) {
     await permanentlyDeleteFromTrash(id);
   }
-  
+
   selectedTrashIds.value.clear();
   await loadTrash();
   // 更新统计
@@ -384,7 +377,7 @@ async function handleImport(event: Event) {
     // 获取现有链接 URL 用于重复检测（使用统一的标准化逻辑）
     try {
       const { links: existingLinks } = await getLinks(1, 10000);
-      const existingSet = new Set(existingLinks.map(link => normalizeUrl(link.url)));
+      const existingSet = new Set(existingLinks.map((link) => normalizeUrl(link.url)));
       previewExistingUrls.value = existingSet;
     } catch {
       previewExistingUrls.value = new Set();
@@ -404,14 +397,18 @@ async function confirmImport(selected: ParsedLink[]) {
   importing.value = true;
   try {
     // 自动去重：过滤掉数据库中已存在的链接
-    const newLinks = selected.filter(link => !previewExistingUrls.value.has(normalizeUrl(link.url)));
+    const newLinks = selected.filter(
+      (link) => !previewExistingUrls.value.has(normalizeUrl(link.url))
+    );
     const skipped = selected.length - newLinks.length;
 
     if (newLinks.length === 0) {
       showImportPreview.value = false;
       parsedLinks.value = [];
       previewExistingUrls.value = new Set();
-      showSuccess(skipped > 0 ? `已跳过 ${skipped} 个重复链接，没有新链接需要导入` : '没有新链接需要导入');
+      showSuccess(
+        skipped > 0 ? `已跳过 ${skipped} 个重复链接，没有新链接需要导入` : '没有新链接需要导入'
+      );
       return;
     }
 
@@ -451,7 +448,7 @@ function selectAll() {
   if (selectedIds.value.size === links.value.length) {
     selectedIds.value.clear();
   } else {
-    links.value.forEach(link => selectedIds.value.add(link.id));
+    links.value.forEach((link) => selectedIds.value.add(link.id));
   }
 }
 
@@ -499,21 +496,19 @@ onMounted(() => {
           <span class="badge">{{ totalCount }} 个链接</span>
         </div>
         <div class="header-actions">
-          <input 
+          <input
             ref="importInput"
-            type="file" 
-            accept=".json,.html,.htm" 
+            type="file"
+            accept=".json,.html,.htm"
             style="display: none"
             @change="handleImport"
           />
           <button class="btn btn-default" @click="triggerImport" :disabled="importing">
             {{ importing ? '导入中...' : '导入' }}
           </button>
-          <button class="btn btn-default" @click="openExportManager">
-            导出管理
-          </button>
-          <button 
-            class="btn btn-danger" 
+          <button class="btn btn-default" @click="openExportManager">导出管理</button>
+          <button
+            class="btn btn-danger"
             @click="handleBatchDelete"
             :disabled="selectedIds.size === 0"
           >
@@ -534,15 +529,15 @@ onMounted(() => {
     <main class="main">
       <!-- Tab 导航 -->
       <nav class="tab-nav">
-        <button 
-          class="tab-btn" 
+        <button
+          class="tab-btn"
           :class="{ active: currentTab === 'links' }"
           @click="switchTab('links')"
         >
           📚 链接列表
         </button>
-        <button 
-          class="tab-btn" 
+        <button
+          class="tab-btn"
           :class="{ active: currentTab === 'trash' }"
           @click="switchTab('trash')"
         >
@@ -552,233 +547,219 @@ onMounted(() => {
 
       <!-- 链接列表视图 -->
       <template v-if="currentTab === 'links'">
-      <!-- 搜索和过滤工具栏 -->
-      <div class="toolbar">
-        <div class="search-box">
-          <input 
-            v-model="searchQuery"
-            type="text"
-            placeholder="搜索链接或标题..."
-            @keyup.enter="handleSearch"
-          />
-          <button class="btn btn-primary" @click="handleSearch">搜索</button>
-          <button v-if="searchQuery" class="btn btn-default" @click="clearSearch">清除</button>
-        </div>
-        <div class="toolbar-right">
-          <button 
-            class="btn btn-default"
-            :class="{ active: showFilters }"
-            @click="showFilters = !showFilters"
-          >
-            筛选 {{ filterDescription }}
-          </button>
-          <div class="view-toggle">
-            <button 
-              class="btn btn-sm"
-              :class="viewMode === 'grid' ? 'btn-primary' : 'btn-default'"
-              @click="viewMode = 'grid'"
-            >
-              网格
-            </button>
-            <button 
-              class="btn btn-sm"
-              :class="viewMode === 'list' ? 'btn-primary' : 'btn-default'"
-              @click="viewMode = 'list'"
-            >
-              列表
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <!-- 筛选面板 -->
-      <div v-if="showFilters" class="filter-panel">
-        <div class="filter-section">
-          <h4>排序方式</h4>
-          <div class="sort-options">
-            <button 
-              class="btn btn-sm"
-              :class="sortBy === 'createdAt' ? 'btn-primary' : 'btn-default'"
-              @click="setSort('createdAt')"
-            >
-              添加时间 {{ getSortIcon('createdAt') }}
-            </button>
-            <button 
-              class="btn btn-sm"
-              :class="sortBy === 'title' ? 'btn-primary' : 'btn-default'"
-              @click="setSort('title')"
-            >
-              标题 {{ getSortIcon('title') }}
-            </button>
-            <button 
-              class="btn btn-sm"
-              :class="sortBy === 'domain' ? 'btn-primary' : 'btn-default'"
-              @click="setSort('domain')"
-            >
-              域名 {{ getSortIcon('domain') }}
-            </button>
-          </div>
-        </div>
-
-        <div class="filter-section">
-          <h4>域名筛选</h4>
-          <div class="domain-tags">
-            <button 
-              class="tag"
-              :class="{ active: domainFilter === '' }"
-              @click="domainFilter = ''"
-            >
-              全部 ({{ totalCount }})
-            </button>
-            <button 
-              v-for="stat in domainStats.slice(0, 20)" 
-              :key="stat.domain"
-              class="tag"
-              :class="{ active: domainFilter === stat.domain }"
-              @click="domainFilter = stat.domain"
-            >
-              {{ truncate(stat.domain, 25) }} ({{ stat.count }})
-            </button>
-          </div>
-          <select v-if="domains.length > 20" v-model="domainFilter" class="domain-select">
-            <option value="">选择域名...</option>
-            <option v-for="domain in domains" :key="domain" :value="domain">
-              {{ domain }}
-            </option>
-          </select>
-        </div>
-
-        <div class="filter-section">
-          <h4>日期范围</h4>
-          <div class="date-range">
-            <input 
-              type="date" 
-              v-model="dateFrom"
-              :max="dateTo || undefined"
+        <!-- 搜索和过滤工具栏 -->
+        <div class="toolbar">
+          <div class="search-box">
+            <input
+              v-model="searchQuery"
+              type="text"
+              placeholder="搜索链接或标题..."
+              @keyup.enter="handleSearch"
             />
-            <span>至</span>
-            <input 
-              type="date" 
-              v-model="dateTo"
-              :min="dateFrom || undefined"
-            />
+            <button class="btn btn-primary" @click="handleSearch">搜索</button>
+            <button v-if="searchQuery" class="btn btn-default" @click="clearSearch">清除</button>
+          </div>
+          <div class="toolbar-right">
+            <button
+              class="btn btn-default"
+              :class="{ active: showFilters }"
+              @click="showFilters = !showFilters"
+            >
+              筛选 {{ filterDescription }}
+            </button>
+            <div class="view-toggle">
+              <button
+                class="btn btn-sm"
+                :class="viewMode === 'grid' ? 'btn-primary' : 'btn-default'"
+                @click="viewMode = 'grid'"
+              >
+                网格
+              </button>
+              <button
+                class="btn btn-sm"
+                :class="viewMode === 'list' ? 'btn-primary' : 'btn-default'"
+                @click="viewMode = 'list'"
+              >
+                列表
+              </button>
+            </div>
           </div>
         </div>
 
-        <div class="filter-actions">
-          <button class="btn btn-default" @click="clearFilters">清除筛选</button>
-          <button class="btn btn-primary" @click="showFilters = false">应用</button>
-        </div>
-      </div>
-
-      <!-- 结果信息 -->
-      <div class="results-info" v-if="!searchQuery">
-        <span v-if="total !== totalCount">
-          显示 {{ total }} 个结果（共 {{ totalCount }} 个）
-        </span>
-        <span v-else>
-          共 {{ total }} 个链接
-        </span>
-        <span v-if="filterDescription" class="filter-desc">
-          {{ filterDescription }}
-        </span>
-      </div>
-
-      <!-- 全选 -->
-      <div class="select-all-bar" v-if="links.length > 0">
-        <label class="checkbox">
-          <input 
-            type="checkbox" 
-            :checked="selectedIds.size === links.length && links.length > 0"
-            @change="selectAll"
-          />
-          <span>全选本页（{{ links.length }} 个）</span>
-        </label>
-      </div>
-
-      <!-- 链接列表 -->
-      <div v-if="loading" class="loading">
-        <div class="spinner"></div>
-        <p>加载中...</p>
-      </div>
-
-      <div v-else-if="links.length === 0" class="empty-state">
-        <p>暂无链接</p>
-        <p class="hint" v-if="filterDescription">
-          当前筛选条件下没有结果，<a href="#" @click.prevent="clearFilters">清除筛选</a>
-        </p>
-        <p class="hint" v-else>
-          右键或长按网页链接，选择"收好链接（稍后再看）"
-        </p>
-      </div>
-
-      <div v-else :class="['links-container', viewMode]">
-        <div 
-          v-for="link in links" 
-          :key="link.id"
-          :class="['link-card', { selected: selectedIds.has(link.id) }]"
-          @click="toggleSelection(link.id)"
-        >
-          <div class="card-checkbox">
-            <input 
-              type="checkbox" 
-              :checked="selectedIds.has(link.id)"
-              @click.stop
-              @change="toggleSelection(link.id)"
-            />
-          </div>
-
-          <div class="card-image" v-if="link.nearbyImage || link.screenshot">
-            <img :src="link.nearbyImage || link.screenshot || ''" :alt="link.title" loading="lazy" />
-          </div>
-          <div v-else class="card-image empty">
-            <span>无图片</span>
-          </div>
-
-          <div class="card-content">
-            <h3 class="card-title" :title="link.title">
-              {{ truncate(link.title, 60) }}
-            </h3>
-            <p class="card-url" :title="link.url">
-              {{ truncate(link.url, 80) }}
-            </p>
-            <div class="card-meta">
-              <span class="domain">{{ getDomain(link.url) }}</span>
-              <span class="date">{{ formatDateOnly(link.createdAt) }}</span>
+        <!-- 筛选面板 -->
+        <div v-if="showFilters" class="filter-panel">
+          <div class="filter-section">
+            <h4>排序方式</h4>
+            <div class="sort-options">
+              <button
+                class="btn btn-sm"
+                :class="sortBy === 'createdAt' ? 'btn-primary' : 'btn-default'"
+                @click="setSort('createdAt')"
+              >
+                添加时间 {{ getSortIcon('createdAt') }}
+              </button>
+              <button
+                class="btn btn-sm"
+                :class="sortBy === 'title' ? 'btn-primary' : 'btn-default'"
+                @click="setSort('title')"
+              >
+                标题 {{ getSortIcon('title') }}
+              </button>
+              <button
+                class="btn btn-sm"
+                :class="sortBy === 'domain' ? 'btn-primary' : 'btn-default'"
+                @click="setSort('domain')"
+              >
+                域名 {{ getSortIcon('domain') }}
+              </button>
             </div>
           </div>
 
-          <div class="card-actions" @click.stop>
-            <button class="btn btn-sm btn-primary" @click="openLink(link.url)">
-              打开
-            </button>
-            <button class="btn btn-sm btn-danger" @click="handleDelete(link.id)">
-              删除
-            </button>
+          <div class="filter-section">
+            <h4>域名筛选</h4>
+            <div class="domain-tags">
+              <button
+                class="tag"
+                :class="{ active: domainFilter === '' }"
+                @click="domainFilter = ''"
+              >
+                全部 ({{ totalCount }})
+              </button>
+              <button
+                v-for="stat in domainStats.slice(0, 20)"
+                :key="stat.domain"
+                class="tag"
+                :class="{ active: domainFilter === stat.domain }"
+                @click="domainFilter = stat.domain"
+              >
+                {{ truncate(stat.domain, 25) }} ({{ stat.count }})
+              </button>
+            </div>
+            <select v-if="domains.length > 20" v-model="domainFilter" class="domain-select">
+              <option value="">选择域名...</option>
+              <option v-for="domain in domains" :key="domain" :value="domain">
+                {{ domain }}
+              </option>
+            </select>
+          </div>
+
+          <div class="filter-section">
+            <h4>日期范围</h4>
+            <div class="date-range">
+              <input type="date" v-model="dateFrom" :max="dateTo || undefined" />
+              <span>至</span>
+              <input type="date" v-model="dateTo" :min="dateFrom || undefined" />
+            </div>
+          </div>
+
+          <div class="filter-actions">
+            <button class="btn btn-default" @click="clearFilters">清除筛选</button>
+            <button class="btn btn-primary" @click="showFilters = false">应用</button>
           </div>
         </div>
-      </div>
 
-      <!-- 分页 -->
-      <div v-if="totalPages > 1" class="pagination">
-        <button 
-          class="btn btn-sm btn-default" 
-          :disabled="currentPage === 1"
-          @click="changePage(currentPage - 1)"
-        >
-          上一页
-        </button>
-        <span class="page-info">
-          第 {{ currentPage }} / {{ totalPages }} 页
-        </span>
-        <button 
-          class="btn btn-sm btn-default" 
-          :disabled="currentPage === totalPages"
-          @click="changePage(currentPage + 1)"
-        >
-          下一页
-        </button>
-      </div>
+        <!-- 结果信息 -->
+        <div class="results-info" v-if="!searchQuery">
+          <span v-if="total !== totalCount">
+            显示 {{ total }} 个结果（共 {{ totalCount }} 个）
+          </span>
+          <span v-else> 共 {{ total }} 个链接 </span>
+          <span v-if="filterDescription" class="filter-desc">
+            {{ filterDescription }}
+          </span>
+        </div>
+
+        <!-- 全选 -->
+        <div class="select-all-bar" v-if="links.length > 0">
+          <label class="checkbox">
+            <input
+              type="checkbox"
+              :checked="selectedIds.size === links.length && links.length > 0"
+              @change="selectAll"
+            />
+            <span>全选本页（{{ links.length }} 个）</span>
+          </label>
+        </div>
+
+        <!-- 链接列表 -->
+        <div v-if="loading" class="loading">
+          <div class="spinner"></div>
+          <p>加载中...</p>
+        </div>
+
+        <div v-else-if="links.length === 0" class="empty-state">
+          <p>暂无链接</p>
+          <p class="hint" v-if="filterDescription">
+            当前筛选条件下没有结果，<a href="#" @click.prevent="clearFilters">清除筛选</a>
+          </p>
+          <p class="hint" v-else>右键或长按网页链接，选择"收好链接（稍后再看）"</p>
+        </div>
+
+        <div v-else :class="['links-container', viewMode]">
+          <div
+            v-for="link in links"
+            :key="link.id"
+            :class="['link-card', { selected: selectedIds.has(link.id) }]"
+            @click="toggleSelection(link.id)"
+          >
+            <div class="card-checkbox">
+              <input
+                type="checkbox"
+                :checked="selectedIds.has(link.id)"
+                @click.stop
+                @change="toggleSelection(link.id)"
+              />
+            </div>
+
+            <div class="card-image" v-if="link.nearbyImage || link.screenshot">
+              <img
+                :src="link.nearbyImage || link.screenshot || ''"
+                :alt="link.title"
+                loading="lazy"
+              />
+            </div>
+            <div v-else class="card-image empty">
+              <span>无图片</span>
+            </div>
+
+            <div class="card-content">
+              <h3 class="card-title" :title="link.title">
+                {{ truncate(link.title, 60) }}
+              </h3>
+              <p class="card-url" :title="link.url">
+                {{ truncate(link.url, 80) }}
+              </p>
+              <div class="card-meta">
+                <span class="domain">{{ getDomain(link.url) }}</span>
+                <span class="date">{{ formatDateOnly(link.createdAt) }}</span>
+              </div>
+            </div>
+
+            <div class="card-actions" @click.stop>
+              <button class="btn btn-sm btn-primary" @click="openLink(link.url)">打开</button>
+              <button class="btn btn-sm btn-danger" @click="handleDelete(link.id)">删除</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 分页 -->
+        <div v-if="totalPages > 1" class="pagination">
+          <button
+            class="btn btn-sm btn-default"
+            :disabled="currentPage === 1"
+            @click="changePage(currentPage - 1)"
+          >
+            上一页
+          </button>
+          <span class="page-info"> 第 {{ currentPage }} / {{ totalPages }} 页 </span>
+          <button
+            class="btn btn-sm btn-default"
+            :disabled="currentPage === totalPages"
+            @click="changePage(currentPage + 1)"
+          >
+            下一页
+          </button>
+        </div>
       </template>
 
       <!-- 回收站视图 -->
@@ -787,25 +768,21 @@ onMounted(() => {
           <h2>🗑️ 回收站</h2>
           <p class="trash-desc">已删除的链接会在这里保留 30 天，之后自动清理</p>
           <div class="trash-actions">
-            <button 
-              class="btn btn-primary" 
-              @click="restoreSelected" 
+            <button
+              class="btn btn-primary"
+              @click="restoreSelected"
               :disabled="selectedTrashIds.size === 0"
             >
               还原选中 ({{ selectedTrashIds.size }})
             </button>
-            <button 
-              class="btn btn-danger" 
-              @click="deleteSelected" 
+            <button
+              class="btn btn-danger"
+              @click="deleteSelected"
               :disabled="selectedTrashIds.size === 0"
             >
               永久删除选中 ({{ selectedTrashIds.size }})
             </button>
-            <button 
-              class="btn btn-default" 
-              @click="emptyTrash"
-              :disabled="trashItems.length === 0"
-            >
+            <button class="btn btn-default" @click="emptyTrash" :disabled="trashItems.length === 0">
               清空回收站
             </button>
           </div>
@@ -822,20 +799,20 @@ onMounted(() => {
         </div>
 
         <div v-else class="trash-list">
-          <div 
-            v-for="item in trashItems" 
-            :key="item.id"
-            class="trash-item"
-          >
+          <div v-for="item in trashItems" :key="item.id" class="trash-item">
             <div class="trash-checkbox">
-              <input 
-                type="checkbox" 
+              <input
+                type="checkbox"
                 :checked="selectedTrashIds.has(item.id)"
                 @change="toggleTrashSelection(item.id)"
               />
             </div>
             <div class="trash-image" v-if="item.nearbyImage || item.screenshot">
-              <img :src="item.nearbyImage || item.screenshot || ''" :alt="item.title" loading="lazy" />
+              <img
+                :src="item.nearbyImage || item.screenshot || ''"
+                :alt="item.title"
+                loading="lazy"
+              />
             </div>
             <div v-else class="trash-image empty">
               <span>无图片</span>
@@ -850,9 +827,7 @@ onMounted(() => {
               </div>
             </div>
             <div class="trash-actions-row">
-              <button class="btn btn-sm btn-primary" @click="restoreItem(item.id)">
-                还原
-              </button>
+              <button class="btn btn-sm btn-primary" @click="restoreItem(item.id)">还原</button>
               <button class="btn btn-sm btn-danger" @click="permanentlyDeleteItem(item.id)">
                 永久删除
               </button>
@@ -898,7 +873,7 @@ onMounted(() => {
 }
 
 .logo .badge {
-  background: rgba(255,255,255,0.2);
+  background: rgba(255, 255, 255, 0.2);
   padding: 4px 12px;
   border-radius: 20px;
   font-size: 13px;
@@ -1013,7 +988,7 @@ onMounted(() => {
   border-radius: 12px;
   padding: 20px;
   margin-bottom: 20px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 .filter-section {
@@ -1122,7 +1097,7 @@ onMounted(() => {
   padding: 12px 16px;
   background: white;
   border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
 .checkbox {
@@ -1164,7 +1139,9 @@ onMounted(() => {
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .empty-state {
@@ -1217,7 +1194,7 @@ onMounted(() => {
   background: white;
   border-radius: 12px;
   overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
   transition: all 0.2s;
   cursor: pointer;
   position: relative;
@@ -1226,7 +1203,7 @@ onMounted(() => {
 }
 
 .link-card:hover {
-  box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
   transform: translateY(-2px);
 }
 
@@ -1364,7 +1341,7 @@ onMounted(() => {
   border-radius: 12px;
   padding: 24px;
   margin-bottom: 20px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
 .trash-header h2 {
@@ -1393,7 +1370,7 @@ onMounted(() => {
   background: white;
   border-radius: 12px;
   padding: 16px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
   display: flex;
   align-items: center;
   gap: 16px;

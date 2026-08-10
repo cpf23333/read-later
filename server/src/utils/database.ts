@@ -94,7 +94,7 @@ export function getLinks(
   domain?: string
 ): { links: Link[]; total: number } {
   const database = getDatabase();
-  
+
   let sql = 'SELECT * FROM links';
   let countSql = 'SELECT COUNT(*) as count FROM links';
   const params: (string | number)[] = [];
@@ -127,7 +127,7 @@ export function getLinks(
   params.push(pageSize, offset);
 
   const links = database.prepare(sql).all(...params) as Link[];
-  
+
   const countParams = conditions.length > 0 ? params.slice(0, -2) : [];
   const total = (database.prepare(countSql).get(...countParams) as { count: number }).count;
 
@@ -140,12 +140,14 @@ export function getLinks(
 export function searchLinks(query: string): Link[] {
   const database = getDatabase();
   const searchParam = `%${query}%`;
-  
-  return database.prepare(
-    `SELECT * FROM links 
+
+  return database
+    .prepare(
+      `SELECT * FROM links 
      WHERE url LIKE ? OR title LIKE ? OR source_page LIKE ?
      ORDER BY created_at DESC`
-  ).all(searchParam, searchParam, searchParam) as Link[];
+    )
+    .all(searchParam, searchParam, searchParam) as Link[];
 }
 
 /**
@@ -162,21 +164,23 @@ export function getLinkById(id: string): Link | undefined {
 export function addLink(link: Omit<Link, 'updated_at'>): void {
   const database = getDatabase();
   const now = Date.now();
-  
-  database.prepare(
-    `INSERT INTO links (id, url, title, nearby_image, screenshot, source_page, created_at, updated_at, custom_data)
+
+  database
+    .prepare(
+      `INSERT INTO links (id, url, title, nearby_image, screenshot, source_page, created_at, updated_at, custom_data)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).run(
-    link.id,
-    link.url,
-    link.title || '',
-    link.nearby_image,
-    link.screenshot,
-    link.source_page || '',
-    link.created_at,
-    now,
-    link.custom_data
-  );
+    )
+    .run(
+      link.id,
+      link.url,
+      link.title || '',
+      link.nearby_image,
+      link.screenshot,
+      link.source_page || '',
+      link.created_at,
+      now,
+      link.custom_data
+    );
 }
 
 /**
@@ -194,22 +198,24 @@ export function deleteLink(id: string): void {
  */
 export function addToTrash(item: Omit<TrashItem, 'id'>, trashId: string): void {
   const database = getDatabase();
-  
-  database.prepare(
-    `INSERT INTO trash (id, link_id, url, title, nearby_image, screenshot, source_page, created_at, deleted_at, custom_data)
+
+  database
+    .prepare(
+      `INSERT INTO trash (id, link_id, url, title, nearby_image, screenshot, source_page, created_at, deleted_at, custom_data)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).run(
-    trashId,
-    item.link_id,
-    item.url,
-    item.title,
-    item.nearby_image,
-    item.screenshot,
-    item.source_page,
-    item.created_at,
-    item.deleted_at,
-    item.custom_data
-  );
+    )
+    .run(
+      trashId,
+      item.link_id,
+      item.url,
+      item.title,
+      item.nearby_image,
+      item.screenshot,
+      item.source_page,
+      item.created_at,
+      item.deleted_at,
+      item.custom_data
+    );
 }
 
 /**
@@ -243,10 +249,14 @@ export function deleteFromTrash(id: string): void {
  */
 export function getStats(): { linkCount: number; trashCount: number } {
   const database = getDatabase();
-  
-  const linkCount = (database.prepare('SELECT COUNT(*) as count FROM links').get() as { count: number }).count;
-  const trashCount = (database.prepare('SELECT COUNT(*) as count FROM trash').get() as { count: number }).count;
-  
+
+  const linkCount = (
+    database.prepare('SELECT COUNT(*) as count FROM links').get() as { count: number }
+  ).count;
+  const trashCount = (
+    database.prepare('SELECT COUNT(*) as count FROM trash').get() as { count: number }
+  ).count;
+
   return { linkCount, trashCount };
 }
 
@@ -255,10 +265,12 @@ export function getStats(): { linkCount: number; trashCount: number } {
  */
 export function getDomainStats(): Array<{ domain: string; count: number }> {
   const database = getDatabase();
-  const links = database.prepare('SELECT source_page FROM links').all() as Array<{ source_page: string }>;
-  
+  const links = database.prepare('SELECT source_page FROM links').all() as Array<{
+    source_page: string;
+  }>;
+
   const domainCounts = new Map<string, number>();
-  
+
   for (const link of links) {
     try {
       const domain = new URL(link.source_page).hostname;
@@ -269,7 +281,7 @@ export function getDomainStats(): Array<{ domain: string; count: number }> {
       // 忽略无效 URL
     }
   }
-  
+
   return Array.from(domainCounts.entries())
     .map(([domain, count]) => ({ domain, count }))
     .sort((a, b) => b.count - a.count);
@@ -342,33 +354,43 @@ import type { ExportTask } from '../types/index.ts';
 
 export function createExportTask(id: string): void {
   const database = getDatabase();
-  database.prepare(
-    `INSERT INTO export_tasks (id, status, created_at) VALUES (?, ?, ?)`
-  ).run(id, 'running', Date.now());
+  database
+    .prepare(`INSERT INTO export_tasks (id, status, created_at) VALUES (?, ?, ?)`)
+    .run(id, 'running', Date.now());
 }
 
-export function completeExportTask(id: string, filename: string, filePath: string, fileSize: number): void {
+export function completeExportTask(
+  id: string,
+  filename: string,
+  filePath: string,
+  fileSize: number
+): void {
   const database = getDatabase();
-  database.prepare(
-    `UPDATE export_tasks SET status = ?, completed_at = ?, filename = ?, file_path = ?, file_size = ? WHERE id = ?`
-  ).run('completed', Date.now(), filename, filePath, fileSize, id);
+  database
+    .prepare(
+      `UPDATE export_tasks SET status = ?, completed_at = ?, filename = ?, file_path = ?, file_size = ? WHERE id = ?`
+    )
+    .run('completed', Date.now(), filename, filePath, fileSize, id);
 }
 
 export function failExportTask(id: string, error: string): void {
   const database = getDatabase();
-  database.prepare(
-    `UPDATE export_tasks SET status = ?, completed_at = ?, error = ? WHERE id = ?`
-  ).run('failed', Date.now(), error, id);
+  database
+    .prepare(`UPDATE export_tasks SET status = ?, completed_at = ?, error = ? WHERE id = ?`)
+    .run('failed', Date.now(), error, id);
 }
 
 export function getExportTasks(): ExportTask[] {
   const database = getDatabase();
-  return database.prepare('SELECT * FROM export_tasks ORDER BY created_at DESC').all() as ExportTask[];
+  return database
+    .prepare('SELECT * FROM export_tasks ORDER BY created_at DESC')
+    .all() as ExportTask[];
 }
 
 export function getExportTaskById(id: string): ExportTask | undefined {
   const database = getDatabase();
-  return database.prepare('SELECT * FROM export_tasks WHERE id = ?').get(id) as ExportTask | undefined;
+  return database.prepare('SELECT * FROM export_tasks WHERE id = ?').get(id) as
+    ExportTask | undefined;
 }
 
 export function deleteExportTask(id: string): void {

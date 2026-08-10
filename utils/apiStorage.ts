@@ -1,6 +1,6 @@
 // HTTP API 存储适配器 - 连接 SQLite 后端
 
-import { LinkItem, DeleteRecord, CustomJsConfig, ImportResult, ExportTask } from './storage';
+import { type LinkItem, type DeleteRecord, type CustomJsConfig, type ImportResult, type ExportTask } from './storage';
 
 export interface ServerConfig {
   enabled: boolean;
@@ -27,24 +27,27 @@ export async function saveServerConfig(config: ServerConfig): Promise<void> {
 }
 
 // 测试连接
-export async function testServerConnection(url: string, apiKey?: string): Promise<{ success: boolean; message: string }> {
+export async function testServerConnection(
+  url: string,
+  apiKey?: string
+): Promise<{ success: boolean; message: string }> {
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 5000); // 5秒超时
-    
+
     const headers: Record<string, string> = {};
     if (apiKey) {
       headers['Authorization'] = `Bearer ${apiKey}`;
     }
-    
-    const response = await fetch(`${url}/api/health`, { 
+
+    const response = await fetch(`${url}/api/health`, {
       method: 'GET',
       signal: controller.signal,
       headers,
     });
-    
+
     clearTimeout(timeoutId);
-    
+
     if (response.ok) {
       return { success: true, message: '连接成功' };
     } else {
@@ -54,7 +57,10 @@ export async function testServerConnection(url: string, apiKey?: string): Promis
     if (error instanceof Error && error.name === 'AbortError') {
       return { success: false, message: '连接超时' };
     }
-    return { success: false, message: `连接失败: ${error instanceof Error ? error.message : '未知错误'}` };
+    return {
+      success: false,
+      message: `连接失败: ${error instanceof Error ? error.message : '未知错误'}`,
+    };
   }
 }
 
@@ -64,38 +70,38 @@ async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promi
   if (!config.enabled || !config.url) {
     throw new Error('服务器未配置');
   }
-  
+
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 10000); // 10秒超时
-  
+
   try {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      ...options.headers as Record<string, string>,
+      ...(options.headers as Record<string, string>),
     };
-    
+
     // 添加 API Key 鉴权头
     if (config.apiKey) {
       headers['Authorization'] = `Bearer ${config.apiKey}`;
     }
-    
+
     const response = await fetch(`${config.url}${endpoint}`, {
       ...options,
       signal: controller.signal,
       headers,
     });
-    
+
     clearTimeout(timeoutId);
-    
+
     if (!response.ok) {
       throw new Error(`API 错误: ${response.status}`);
     }
-    
+
     const result = await response.json();
     if (!result.success) {
       throw new Error(result.error || '未知错误');
     }
-    
+
     return result.data;
   } catch (error) {
     clearTimeout(timeoutId);
@@ -110,7 +116,7 @@ async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promi
 async function dbToLinkItem(item: any): Promise<LinkItem> {
   const config = await getServerConfig();
   const baseUrl = config.url || '';
-  
+
   // 辅助函数：确保图片路径是完整URL
   const resolveImageUrl = (imgPath: string | null): string | null => {
     if (!imgPath) return null;
@@ -124,7 +130,7 @@ async function dbToLinkItem(item: any): Promise<LinkItem> {
     }
     return imgPath;
   };
-  
+
   const result = {
     id: item.id,
     url: item.url,
@@ -135,20 +141,20 @@ async function dbToLinkItem(item: any): Promise<LinkItem> {
     createdAt: item.created_at,
     customData: item.custom_data ? JSON.parse(item.custom_data) : undefined,
   };
-  
+
   console.log('[dbToLinkItem] Converted:', {
     url: result.url,
     nearbyImage: result.nearbyImage,
     screenshot: result.screenshot,
   });
-  
+
   return result;
 }
 
 // ===== 链接 API =====
 
 export async function apiGetLinks(
-  page: number = 1, 
+  page: number = 1,
   pageSize: number = 50,
   options?: {
     search?: string;
@@ -161,28 +167,28 @@ export async function apiGetLinks(
   if (!config.enabled || !config.url) {
     throw new Error('服务器未配置');
   }
-  
+
   let url = `${config.url}/api/links?page=${page}&pageSize=${pageSize}`;
   if (options?.search) url += `&search=${encodeURIComponent(options.search)}`;
   if (options?.domain) url += `&domain=${encodeURIComponent(options.domain)}`;
   if (options?.sortBy) url += `&sortBy=${options.sortBy}`;
   if (options?.sortOrder) url += `&sortOrder=${options.sortOrder}`;
-  
+
   const headers: Record<string, string> = {};
   if (config.apiKey) {
     headers['Authorization'] = `Bearer ${config.apiKey}`;
   }
-  
+
   const response = await fetch(url, { headers });
   if (!response.ok) {
     throw new Error(`API 错误: ${response.status}`);
   }
-  
+
   const result = await response.json();
   if (!result.success) {
     throw new Error(result.error || '未知错误');
   }
-  
+
   const links = await Promise.all(result.data.map(dbToLinkItem));
   return {
     links,
@@ -195,22 +201,24 @@ export async function apiSearchLinks(query: string): Promise<LinkItem[]> {
   if (!config.enabled || !config.url) {
     throw new Error('服务器未配置');
   }
-  
+
   const headers: Record<string, string> = {};
   if (config.apiKey) {
     headers['Authorization'] = `Bearer ${config.apiKey}`;
   }
-  
-  const response = await fetch(`${config.url}/api/search?q=${encodeURIComponent(query)}`, { headers });
+
+  const response = await fetch(`${config.url}/api/search?q=${encodeURIComponent(query)}`, {
+    headers,
+  });
   if (!response.ok) {
     throw new Error(`API 错误: ${response.status}`);
   }
-  
+
   const result = await response.json();
   if (!result.success) {
     throw new Error(result.error || '未知错误');
   }
-  
+
   return await Promise.all(result.data.map(dbToLinkItem));
 }
 
@@ -239,7 +247,9 @@ export async function apiDeleteLink(id: string): Promise<void> {
   await apiRequest(`/api/links/${id}`, { method: 'DELETE' });
 }
 
-export async function apiBatchAddLinks(links: LinkItem[]): Promise<{ count: number; total: number; failed: number }> {
+export async function apiBatchAddLinks(
+  links: LinkItem[]
+): Promise<{ count: number; total: number; failed: number }> {
   return await apiRequest<{ count: number; total: number; failed: number }>('/api/links/batch', {
     method: 'POST',
     body: JSON.stringify({ links }),
@@ -252,7 +262,7 @@ export async function apiGetTrash(): Promise<DeleteRecord[]> {
   const data = await apiRequest<any[]>('/api/trash');
   const config = await getServerConfig();
   const baseUrl = config.url || '';
-  
+
   // 辅助函数：确保图片路径是完整URL
   const resolveImageUrl = (imgPath: string | null): string | null => {
     if (!imgPath) return null;
@@ -264,8 +274,8 @@ export async function apiGetTrash(): Promise<DeleteRecord[]> {
     }
     return imgPath;
   };
-  
-  return data.map(item => ({
+
+  return data.map((item) => ({
     id: item.id,
     linkId: item.link_id,
     url: item.url,
@@ -296,17 +306,17 @@ export async function apiUploadImage(base64Image: string, filename?: string): Pr
   if (config.apiKey) {
     headers['Authorization'] = `Bearer ${config.apiKey}`;
   }
-  
+
   const response = await fetch(`${config.url}/api/upload`, {
     method: 'POST',
     headers,
     body: JSON.stringify({ image: base64Image, filename }),
   });
-  
+
   if (!response.ok) throw new Error('上传失败');
   const result = await response.json();
   if (!result.success) throw new Error(result.error);
-  
+
   return `${config.url}${result.data.url}`;
 }
 
@@ -321,28 +331,28 @@ export async function apiGetDomainStats(): Promise<{ domain: string; count: numb
   if (!config.enabled || !config.url) {
     throw new Error('服务器未配置');
   }
-  
+
   const headers: Record<string, string> = {};
   if (config.apiKey) {
     headers['Authorization'] = `Bearer ${config.apiKey}`;
   }
-  
+
   const response = await fetch(`${config.url}/api/domains`, { headers });
   if (!response.ok) {
     throw new Error(`API 错误: ${response.status}`);
   }
-  
+
   const result = await response.json();
   if (!result.success) {
     throw new Error(result.error || '未知错误');
   }
-  
+
   return result.data;
 }
 
 export async function apiGetAllDomains(): Promise<string[]> {
   const stats = await apiGetDomainStats();
-  return stats.map(s => s.domain).sort();
+  return stats.map((s) => s.domain).sort();
 }
 
 // ===== 导入/导出 =====
@@ -352,7 +362,10 @@ export async function apiExport(): Promise<LinkItem[]> {
   return await Promise.all(data.map(dbToLinkItem));
 }
 
-export async function apiImport(links: LinkItem[], mode: 'merge' | 'replace' = 'merge'): Promise<{ imported: number; total: number }> {
+export async function apiImport(
+  links: LinkItem[],
+  mode: 'merge' | 'replace' = 'merge'
+): Promise<{ imported: number; total: number }> {
   return await apiRequest<{ imported: number; total: number }>('/api/import', {
     method: 'POST',
     body: JSON.stringify({ links, mode }),
@@ -369,7 +382,7 @@ export async function apiCreateExport(): Promise<{ taskId: string; status: strin
 
 export async function apiGetExports(): Promise<ExportTask[]> {
   const data = await apiRequest<any[]>('/api/exports');
-  return data.map(item => ({
+  return data.map((item) => ({
     id: item.id,
     status: item.status,
     createdAt: item.created_at,
@@ -419,24 +432,24 @@ export async function getCustomJsConfigs(): Promise<CustomJsConfig[]> {
 
 export async function saveCustomJsConfig(config: CustomJsConfig): Promise<void> {
   const configs = await getCustomJsConfigs();
-  const index = configs.findIndex(c => c.id === config.id);
-  
+  const index = configs.findIndex((c) => c.id === config.id);
+
   if (index >= 0) {
     configs[index] = config;
   } else {
     configs.push(config);
   }
-  
+
   await browser.storage.sync.set({ [CUSTOM_JS_KEY]: configs });
 }
 
 export async function deleteCustomJsConfig(id: string): Promise<void> {
   const configs = await getCustomJsConfigs();
-  const filtered = configs.filter(c => c.id !== id);
+  const filtered = configs.filter((c) => c.id !== id);
   await browser.storage.sync.set({ [CUSTOM_JS_KEY]: filtered });
 }
 
 export async function getEnabledCustomJsConfig(): Promise<CustomJsConfig | null> {
   const configs = await getCustomJsConfigs();
-  return configs.find(c => c.enabled) || null;
+  return configs.find((c) => c.enabled) || null;
 }

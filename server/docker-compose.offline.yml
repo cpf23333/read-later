@@ -7,7 +7,7 @@ services:
     image: read-later-server:latest
     container_name: readlater
     ports:
-      - "3000:3000"
+      - '3000:3000'
     volumes:
       # 修改为你实际的数据目录
       - ./data:/app/data

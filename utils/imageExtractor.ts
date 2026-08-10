@@ -79,11 +79,11 @@ export function executeCustomExtractor(
     );
 
     const result = extractorFn(targetElement, url, document, window);
-    
+
     if (typeof result === 'string') {
       return result;
     }
-    
+
     return null;
   } catch (error) {
     console.error('[ReadLater] Custom image extractor error:', error);
@@ -108,13 +108,13 @@ export async function imageToBase64(url: string): Promise<string | null> {
         console.log('[ReadLater] Blob fetch response:', response.status, response.type);
         const blob = await response.blob();
         console.log('[ReadLater] Blob size:', blob.size, 'type:', blob.type);
-        
+
         // 检查文件大小
         if (blob.size > 5 * 1024 * 1024) {
           console.warn('[ReadLater] Blob image too large');
           return null;
         }
-        
+
         const result = await new Promise<string | null>((resolve, reject) => {
           const reader = new FileReader();
           reader.onloadend = () => {
@@ -140,13 +140,13 @@ export async function imageToBase64(url: string): Promise<string | null> {
       mode: 'cors',
       credentials: 'omit',
     });
-    
+
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
     }
 
     const blob = await response.blob();
-    
+
     // 检查文件大小（限制5MB）
     if (blob.size > 5 * 1024 * 1024) {
       console.warn('[ReadLater] Image too large, skipping base64 conversion');
@@ -278,7 +278,7 @@ return null;`,
   
   // 提取 URL
   if (bgImage && bgImage !== 'none') {
-    const match = bgImage.match(/url\(["']?([^"')]+)["']?\)/);
+    const match = bgImage.match(/url[(]["']?([^"')]+)["']?[)]/);
     if (match) return match[1];
   }
   

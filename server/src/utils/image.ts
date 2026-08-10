@@ -7,7 +7,7 @@ import path from 'path';
 import { ALLOWED_IMAGE_TYPES, isSafeFilePath, isValidImageUrl } from './security.ts';
 
 // 从环境变量获取配置
-const MAX_IMAGE_SIZE = (parseInt(process.env.MAX_IMAGE_SIZE_MB || '10', 10)) * 1024 * 1024;
+const MAX_IMAGE_SIZE = parseInt(process.env.MAX_IMAGE_SIZE_MB || '10', 10) * 1024 * 1024;
 
 // 图片目录（需要在初始化后设置）
 let IMAGES_DIR = '';
@@ -38,7 +38,7 @@ export function saveBase64ToFile(base64Data: string, prefix: string): string | n
     const mimeMatch = base64Data.match(/^data:(image\/\w+);base64,/);
     if (mimeMatch) {
       const mimeType = mimeMatch[1];
-      if (!ALLOWED_IMAGE_TYPES.includes(mimeType as typeof ALLOWED_IMAGE_TYPES[number])) {
+      if (!ALLOWED_IMAGE_TYPES.includes(mimeType as (typeof ALLOWED_IMAGE_TYPES)[number])) {
         console.error('[saveBase64ToFile] Invalid image type:', mimeType);
         return null;
       }
@@ -114,7 +114,7 @@ export async function downloadImage(url: string, prefix: string): Promise<string
     }
 
     // 验证图片类型
-    if (!ALLOWED_IMAGE_TYPES.some(type => contentType.includes(type.replace('image/', '')))) {
+    if (!ALLOWED_IMAGE_TYPES.some((type) => contentType.includes(type.replace('image/', '')))) {
       console.warn(`[downloadImage] Unsupported image type: ${contentType}`);
       return null;
     }
@@ -126,12 +126,8 @@ export async function downloadImage(url: string, prefix: string): Promise<string
       return null;
     }
 
-    const ext = prefix === 'screenshot'
-      ? 'jpg'
-      : contentType.includes('png')
-        ? 'png'
-        : 'jpg';
-    
+    const ext = prefix === 'screenshot' ? 'jpg' : contentType.includes('png') ? 'png' : 'jpg';
+
     const filename = `${Date.now()}_${prefix}_${Math.random().toString(36).substring(2, 9)}.${ext}`;
     const filepath = path.join(IMAGES_DIR, filename);
 
@@ -152,7 +148,10 @@ export async function downloadImage(url: string, prefix: string): Promise<string
 /**
  * 处理图片数据（base64 / URL / 路径）
  */
-export async function processImage(imageData: string | undefined, prefix: string): Promise<string | null> {
+export async function processImage(
+  imageData: string | undefined,
+  prefix: string
+): Promise<string | null> {
   if (!imageData) return null;
 
   console.log(`[processImage] ${prefix}:`, imageData.substring(0, 60) + '...');

@@ -3,6 +3,7 @@
 ## 部署前安全检查清单
 
 ### 1. CORS 配置
+
 **生产环境必须配置允许的来源**
 
 ```yaml
@@ -12,6 +13,7 @@ environment:
 ```
 
 ### 2. 数据目录权限
+
 确保数据目录有正确的权限：
 
 ```bash
@@ -21,6 +23,7 @@ chown 1000:1000 /path/to/data
 ```
 
 ### 3. 反向代理配置（推荐）
+
 使用 Nginx 或 Traefik 作为反向代理：
 
 ```nginx
@@ -51,6 +54,7 @@ server {
 ```
 
 ### 4. 防火墙配置
+
 只开放必要的端口：
 
 ```bash
@@ -88,13 +92,13 @@ sudo ufw allow from YOUR_IP to any port 3000
 
 ## 环境变量说明
 
-| 变量 | 默认值 | 说明 |
-|------|--------|------|
-| `PORT` | 3000 | 服务器端口 |
-| `DATA_DIR` | ./data | 数据存储目录 |
-| `ALLOWED_ORIGINS` | * | CORS 允许来源 |
-| `NODE_ENV` | development | 运行环境 |
-| `MAX_IMAGE_SIZE_MB` | 10 | 图片大小限制 |
+| 变量                | 默认值      | 说明          |
+| ------------------- | ----------- | ------------- |
+| `PORT`              | 3000        | 服务器端口    |
+| `DATA_DIR`          | ./data      | 数据存储目录  |
+| `ALLOWED_ORIGINS`   | *           | CORS 允许来源 |
+| `NODE_ENV`          | development | 运行环境      |
+| `MAX_IMAGE_SIZE_MB` | 10          | 图片大小限制  |
 
 ## 安全更新
 

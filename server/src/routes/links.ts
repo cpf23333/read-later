@@ -3,11 +3,27 @@
  */
 
 import { Hono } from 'hono';
-import { getLinks, searchLinks, getLinkById, addLink, deleteLink, addToTrash, exportLinks, batchInsertLinks } from '../utils/database.ts';
+import {
+  getLinks,
+  searchLinks,
+  getLinkById,
+  addLink,
+  deleteLink,
+  addToTrash,
+  exportLinks,
+  batchInsertLinks,
+} from '../utils/database.ts';
 import { processImage } from '../utils/image.ts';
 import { sanitizeId, sanitizeSearchQuery } from '../utils/security.ts';
 import { apiRateLimit } from '../middleware/ratelimit.ts';
-import type { Link, CreateLinkBody, BatchCreateBody, ImportBody, ApiResponse, PaginatedResponse } from '../types/index.ts';
+import type {
+  Link,
+  CreateLinkBody,
+  BatchCreateBody,
+  ImportBody,
+  ApiResponse,
+  PaginatedResponse,
+} from '../types/index.ts';
 
 const app = new Hono();
 
@@ -17,7 +33,7 @@ const app = new Hono();
  */
 app.get('/', async (c) => {
   const query = c.req.query();
-  
+
   const page = parseInt(query.page || '1', 10);
   const pageSize = parseInt(query.pageSize || '50', 10);
   const sortBy = query.sortBy || 'created_at';
@@ -30,15 +46,15 @@ app.get('/', async (c) => {
   // 日志输出第一个链接的图片字段
   if (links.length > 0) {
     console.log('[getLinks] First link images:', {
-      url: links[0].url,
-      nearby_image: links[0].nearby_image,
-      screenshot: links[0].screenshot,
+      url: links[0]!.url,
+      nearby_image: links[0]!.nearby_image,
+      screenshot: links[0]!.screenshot,
     });
   }
 
   return c.json<ApiResponse<PaginatedResponse<Link>>>({
     success: true,
-    data: { data: links, total }
+    data: { data: links, total },
   });
 });
 
@@ -48,7 +64,7 @@ app.get('/', async (c) => {
  */
 app.get('/search', async (c) => {
   const { q } = c.req.query();
-  
+
   if (!q || typeof q !== 'string') {
     return c.json<ApiResponse<Link[]>>({ success: true, data: [] });
   }
@@ -59,7 +75,7 @@ app.get('/search', async (c) => {
   }
 
   const links = searchLinks(sanitizedQuery);
-  
+
   return c.json<ApiResponse<Link[]>>({ success: true, data: links });
 });
 
@@ -69,17 +85,8 @@ app.get('/search', async (c) => {
  */
 app.post('/', apiRateLimit, async (c) => {
   const body = await c.req.json<CreateLinkBody>();
-  
-  const {
-    id,
-    url,
-    title,
-    nearby_image,
-    screenshot,
-    source_page,
-    created_at,
-    custom_data,
-  } = body;
+
+  const { id, url, title, nearby_image, screenshot, source_page, created_at, custom_data } = body;
 
   console.log('[Server] Received link:', {
     url,
@@ -97,7 +104,7 @@ app.post('/', apiRateLimit, async (c) => {
   });
 
   const now = Date.now();
-  
+
   addLink({
     id: id || `${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
     url,
@@ -139,10 +146,7 @@ app.post('/batch', apiRateLimit, async (c) => {
       continue;
     }
     try {
-      const nearbyImagePath = await processImage(
-        item.nearby_image || item.nearbyImage,
-        'nearby',
-      );
+      const nearbyImagePath = await processImage(item.nearby_image || item.nearbyImage, 'nearby');
       const screenshotPath = await processImage(item.screenshot, 'screenshot');
 
       processed.push({
@@ -165,7 +169,7 @@ app.post('/batch', apiRateLimit, async (c) => {
 
   return c.json<ApiResponse<{ count: number; total: number; failed: number }>>({
     success: true,
-    data: { count: succeeded, total: links.length, failed }
+    data: { count: succeeded, total: links.length, failed },
   });
 });
 
@@ -175,7 +179,7 @@ app.post('/batch', apiRateLimit, async (c) => {
  */
 app.delete('/:id', apiRateLimit, async (c) => {
   const id = sanitizeId(c.req.param('id'));
-  
+
   if (!id) {
     return c.json<ApiResponse>({ success: false, error: 'Invalid ID' }, 400);
   }
@@ -187,18 +191,21 @@ app.delete('/:id', apiRateLimit, async (c) => {
 
   // 移入回收站
   const trashId = `delete_${link.id}_${Date.now()}`;
-  
-  addToTrash({
-    link_id: link.id,
-    url: link.url,
-    title: link.title,
-    nearby_image: link.nearby_image,
-    screenshot: link.screenshot,
-    source_page: link.source_page,
-    created_at: link.created_at,
-    deleted_at: Date.now(),
-    custom_data: link.custom_data,
-  }, trashId);
+
+  addToTrash(
+    {
+      link_id: link.id,
+      url: link.url,
+      title: link.title,
+      nearby_image: link.nearby_image,
+      screenshot: link.screenshot,
+      source_page: link.source_page,
+      created_at: link.created_at,
+      deleted_at: Date.now(),
+      custom_data: link.custom_data,
+    },
+    trashId
+  );
 
   // 从主表删除
   deleteLink(id);
@@ -239,14 +246,8 @@ app.post('/import', apiRateLimit, async (c) => {
   for (const item of links) {
     try {
       // 处理图片
-      const nearbyImagePath = await processImage(
-        item.nearby_image || item.nearbyImage,
-        'nearby',
-      );
-      const screenshotPath = await processImage(
-        item.screenshot,
-        'screenshot',
-      );
+      const nearbyImagePath = await processImage(item.nearby_image || item.nearbyImage, 'nearby');
+      const screenshotPath = await processImage(item.screenshot, 'screenshot');
 
       addLink({
         id: item.id || `${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
@@ -256,9 +257,10 @@ app.post('/import', apiRateLimit, async (c) => {
         screenshot: screenshotPath,
         source_page: item.source_page || item.sourcePage || '',
         created_at: item.created_at || item.createdAt || Date.now(),
-        custom_data: typeof item.custom_data === 'string'
-          ? item.custom_data
-          : JSON.stringify(item.custom_data || item.customData || {}),
+        custom_data:
+          typeof item.custom_data === 'string'
+            ? item.custom_data
+            : JSON.stringify(item.custom_data || item.customData || {}),
       });
       imported++;
     } catch (e) {
@@ -268,7 +270,7 @@ app.post('/import', apiRateLimit, async (c) => {
 
   return c.json<ApiResponse<{ imported: number; total: number }>>({
     success: true,
-    data: { imported, total: links.length }
+    data: { imported, total: links.length },
   });
 });
 

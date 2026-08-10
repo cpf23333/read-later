@@ -30,12 +30,14 @@ cd server
 ```
 
 Windows:
+
 ```cmd
 cd server
 build-offline.bat
 ```
 
 可选配置（环境变量）：
+
 ```bash
 # 使用其他镜像源（覆盖默认阿里云）
 DOCKER_REGISTRY=docker.xuanyuan.me ./build-offline.sh
@@ -44,6 +46,7 @@ DOCKER_REGISTRY=docker.xuanyuan.me ./build-offline.sh
 输出：`readlater-offline.zip`
 
 包含内容：
+
 - `readlater-images.tar` 或 `read-later-server.tar` - Docker 镜像
 - `docker-compose.offline.yml` - 部署配置
 - `start-offline.sh/.bat` - 启动脚本
@@ -98,6 +101,7 @@ curl http://localhost:3000/api/health
 ### 1. 准备新的离线包
 
 在有网络的机器上重新执行：
+
 ```bash
 ./prepare-offline.sh
 ```
@@ -115,6 +119,7 @@ update-offline.bat
 ```
 
 更新脚本会自动：
+
 1. 加载新的 Docker 镜像
 2. 停止并删除旧容器（数据保留）
 3. 清理旧镜像
@@ -142,11 +147,11 @@ server/
 
 ## 环境变量（必需）
 
-| 变量 | 必需 | 说明 | 示例 |
-|------|------|------|------|
-| `API_KEY` | ✅ | API 鉴权密钥 | `openssl rand -base64 32` |
-| `PORT` | ❌ | 服务端口 | `3000` |
-| `DATA_DIR` | ❌ | 数据目录 | `/app/data` |
+| 变量       | 必需 | 说明         | 示例                      |
+| ---------- | ---- | ------------ | ------------------------- |
+| `API_KEY`  | ✅   | API 鉴权密钥 | `openssl rand -base64 32` |
+| `PORT`     | ❌   | 服务端口     | `3000`                    |
+| `DATA_DIR` | ❌   | 数据目录     | `/app/data`               |
 
 ---
 
@@ -159,6 +164,7 @@ server/
 ### 2. 数据持久化
 
 务必修改 `docker-compose.offline.yml` 中的 volumes 为实际存储路径：
+
 ```yaml
 volumes:
   - /vol1/backup/readlater:/app/data
@@ -167,14 +173,16 @@ volumes:
 ### 3. 端口冲突
 
 修改 `docker-compose.offline.yml`：
+
 ```yaml
 ports:
-  - "3001:3000"  # 主机 3001 映射到容器 3000
+  - '3001:3000' # 主机 3001 映射到容器 3000
 ```
 
 ### 4. API Key 未配置
 
 服务端启动必须配置 `API_KEY`，否则拒绝启动。生成命令：
+
 ```bash
 openssl rand -base64 32
 ```
@@ -186,12 +194,14 @@ openssl rand -base64 32
 ### API Key 鉴权（必须）
 
 1. **生成密钥**：
+
    ```bash
    openssl rand -base64 32
    ```
 
 2. **配置服务端**：
    编辑 `docker-compose.offline.yml`：
+
    ```yaml
    environment:
      - API_KEY=your-generated-api-key
@@ -204,7 +214,7 @@ openssl rand -base64 32
    ```bash
    # 未带 Key 应返回 401
    curl http://localhost:3000/api/links
-   
+
    # 带 Key 应正常返回
    curl -H "Authorization: Bearer your-api-key" http://localhost:3000/api/links
    ```

@@ -1,0 +1,8 @@
+.output
+node_modules
+server/node_modules
+server/dist
+.wxt
+pnpm-lock.yaml
+*.min.js
+*.min.css

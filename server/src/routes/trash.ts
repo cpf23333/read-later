@@ -19,7 +19,7 @@ const app = new Hono();
  */
 app.get('/', async (c) => {
   const items = getTrashItems();
-  
+
   // 转换图片路径为 deleted 目录
   const itemsWithFixedPaths = items.map((item) => ({
     ...item,
@@ -32,10 +32,10 @@ app.get('/', async (c) => {
         ? item.screenshot.replace('/images/', '/images/deleted/')
         : item.screenshot,
   }));
-  
-  return c.json<ApiResponse<TrashItem[]>>({ 
-    success: true, 
-    data: itemsWithFixedPaths 
+
+  return c.json<ApiResponse<TrashItem[]>>({
+    success: true,
+    data: itemsWithFixedPaths,
   });
 });
 
@@ -45,7 +45,7 @@ app.get('/', async (c) => {
  */
 app.post('/:id/restore', apiRateLimit, async (c) => {
   const id = sanitizeId(c.req.param('id'));
-  
+
   if (!id) {
     return c.json<ApiResponse>({ success: false, error: 'Invalid ID' }, 400);
   }
@@ -73,7 +73,7 @@ app.post('/:id/restore', apiRateLimit, async (c) => {
   // 还原图片（保持原文件名）
   const IMAGES_DIR = getImagesDir();
   const DELETED_IMAGES_DIR = path.join(IMAGES_DIR, 'deleted');
-  
+
   [item.nearby_image, item.screenshot].forEach((imgPath) => {
     if (imgPath && imgPath.startsWith('/images/')) {
       const filename = path.basename(imgPath);
@@ -85,9 +85,9 @@ app.post('/:id/restore', apiRateLimit, async (c) => {
     }
   });
 
-  return c.json<ApiResponse<{ newId: string }>>({ 
-    success: true, 
-    data: { newId } 
+  return c.json<ApiResponse<{ newId: string }>>({
+    success: true,
+    data: { newId },
   });
 });
 
@@ -97,7 +97,7 @@ app.post('/:id/restore', apiRateLimit, async (c) => {
  */
 app.delete('/:id', apiRateLimit, async (c) => {
   const id = sanitizeId(c.req.param('id'));
-  
+
   if (!id) {
     return c.json<ApiResponse>({ success: false, error: 'Invalid ID' }, 400);
   }
@@ -107,7 +107,7 @@ app.delete('/:id', apiRateLimit, async (c) => {
     // 删除图片（使用原文件名）
     const IMAGES_DIR = getImagesDir();
     const DELETED_IMAGES_DIR = path.join(IMAGES_DIR, 'deleted');
-    
+
     [item.nearby_image, item.screenshot].forEach((imgPath) => {
       if (imgPath && imgPath.startsWith('/images/')) {
         const filename = path.basename(imgPath);
@@ -118,7 +118,7 @@ app.delete('/:id', apiRateLimit, async (c) => {
   }
 
   deleteFromTrash(id);
-  
+
   return c.json<ApiResponse>({ success: true });
 });
 

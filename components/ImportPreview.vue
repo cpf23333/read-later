@@ -40,9 +40,7 @@ const filteredLinks = computed(() => {
   if (!searchQuery.value.trim()) return localLinks.value;
   const q = searchQuery.value.toLowerCase();
   return localLinks.value.filter(
-    (link) =>
-      link.title.toLowerCase().includes(q) ||
-      link.url.toLowerCase().includes(q)
+    (link) => link.title.toLowerCase().includes(q) || link.url.toLowerCase().includes(q)
   );
 });
 
@@ -52,9 +50,7 @@ const filteredIndexes = computed(() => {
   return localLinks.value
     .map((link, i) => ({ link, i }))
     .filter(
-      ({ link }) =>
-        link.title.toLowerCase().includes(q) ||
-        link.url.toLowerCase().includes(q)
+      ({ link }) => link.title.toLowerCase().includes(q) || link.url.toLowerCase().includes(q)
     )
     .map(({ i }) => i);
 });
@@ -66,16 +62,18 @@ const allFilteredSelected = computed(() => {
 
 const selectedCount = computed(() => selectedIndexes.value.size);
 const duplicateCount = computed(() => {
-  return Array.from(selectedIndexes.value).filter((i) =>
-    props.existingUrls.has(normalizeUrl(localLinks.value[i].url))
-  ).length;
+  return Array.from(selectedIndexes.value).filter((i) => {
+    const link = localLinks.value[i];
+    return link && props.existingUrls.has(normalizeUrl(link.url));
+  }).length;
 });
 
 // 是否有已选中但无图片的链接
 const hasSelectedWithoutImage = computed(() => {
-  return Array.from(selectedIndexes.value).some(
-    (i) => !localLinks.value[i].nearbyImage
-  );
+  return Array.from(selectedIndexes.value).some((i) => {
+    const link = localLinks.value[i];
+    return link && !link.nearbyImage;
+  });
 });
 
 function toggleIndex(index: number) {
@@ -104,8 +102,8 @@ function toggleSelectAllFiltered() {
 
 async function fetchImages() {
   const targets = Array.from(selectedIndexes.value)
-    .filter((i) => !localLinks.value[i].nearbyImage)
-    .map((i) => ({ index: i, link: localLinks.value[i] }));
+    .map((i) => ({ index: i, link: localLinks.value[i] }))
+    .filter((item): item is { index: number; link: ParsedLink } => !!item.link);
 
   if (targets.length === 0) return;
 
@@ -115,7 +113,7 @@ async function fetchImages() {
   await withConcurrencyLimit(targets, 3, async ({ index, link }) => {
     const base64 = await fetchOpenGraphImage(link.url);
     if (base64) {
-      localLinks.value[index].nearbyImage = base64;
+      localLinks.value[index]!.nearbyImage = base64;
     }
     fetchProgress.value.current++;
   });
@@ -127,7 +125,8 @@ function handleConfirm() {
   if (selectedCount.value === 0) return;
   const selected = Array.from(selectedIndexes.value)
     .sort((a, b) => a - b)
-    .map((i) => localLinks.value[i]);
+    .map((i) => localLinks.value[i])
+    .filter((link): link is ParsedLink => !!link);
   emit('confirm', selected);
 }
 
@@ -167,8 +166,7 @@ function formatDate(ts: number | undefined): string {
           <div class="preview-header">
             <h2>📥 导入预览</h2>
             <p class="preview-subtitle">
-              共解析到 {{ localLinks.length }} 个链接，已选
-              <strong>{{ selectedCount }}</strong> 个
+              共解析到 {{ localLinks.length }} 个链接，已选 <strong>{{ selectedCount }}</strong> 个
               <span v-if="duplicateCount > 0" class="duplicate-warning">
                 （其中 {{ duplicateCount }} 个可能已存在）
               </span>
@@ -178,11 +176,7 @@ function formatDate(ts: number | undefined): string {
 
           <div class="preview-toolbar">
             <div class="preview-search">
-              <input
-                v-model="searchQuery"
-                type="text"
-                placeholder="搜索标题或 URL..."
-              />
+              <input v-model="searchQuery" type="text" placeholder="搜索标题或 URL..." />
             </div>
             <label class="checkbox">
               <input
@@ -234,9 +228,7 @@ function formatDate(ts: number | undefined): string {
               </div>
             </div>
 
-            <div v-if="filteredLinks.length === 0" class="preview-empty">
-              没有匹配的链接
-            </div>
+            <div v-if="filteredLinks.length === 0" class="preview-empty">没有匹配的链接</div>
           </div>
 
           <div class="preview-footer">

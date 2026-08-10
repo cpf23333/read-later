@@ -5,7 +5,7 @@ export interface LinkItem {
   url: string;
   title: string;
   nearbyImage: string | null; // base64 或 URL
-  screenshot: string | null;  // base64
+  screenshot: string | null; // base64
   sourcePage: string;
   createdAt: number;
   customData?: any;
@@ -19,8 +19,8 @@ export interface CustomJsConfig {
 }
 
 export interface DeleteRecord {
-  id: string;  // delete_{url} 格式
-  linkId: string;  // 原始链接ID
+  id: string; // delete_{url} 格式
+  linkId: string; // 原始链接ID
   url: string;
   title: string;
   sourcePage: string;
@@ -59,11 +59,19 @@ export function normalizeUrl(url: string): string {
     }
     // 忽略hash
     // 可选：忽略常见的tracking参数
-    const trackingParams = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'fbclid', 'gclid'];
+    const trackingParams = [
+      'utm_source',
+      'utm_medium',
+      'utm_campaign',
+      'utm_term',
+      'utm_content',
+      'fbclid',
+      'gclid',
+    ];
     const searchParams = new URLSearchParams(urlObj.search);
-    trackingParams.forEach(param => searchParams.delete(param));
+    trackingParams.forEach((param) => searchParams.delete(param));
     const search = searchParams.toString();
-    
+
     return `${urlObj.protocol}//${urlObj.hostname}${pathname}${search ? '?' + search : ''}`;
   } catch {
     return url.toLowerCase().trim();

@@ -1,4 +1,4 @@
-import { extractNearbyImage, ImageExtractionResult } from '@/utils/imageExtractor';
+import { extractNearbyImage, type ImageExtractionResult } from '@/utils/imageExtractor';
 import { getEnabledCustomJsConfig } from '@/utils/apiStorage';
 
 // 记录最后右键点击的元素
@@ -16,31 +16,43 @@ export default defineContentScript({
     let longPressTimer: number | null = null;
     let touchStartElement: HTMLElement | null = null;
 
-    document.addEventListener('touchstart', (e) => {
-      const target = e.target as HTMLElement;
-      const linkElement = findLinkElement(target);
-      
-      if (linkElement) {
-        touchStartElement = linkElement;
-        longPressTimer = window.setTimeout(() => {
-          lastRightClickedElement = linkElement;
-        }, 500); // 500ms视为长按
-      }
-    }, { passive: true });
+    document.addEventListener(
+      'touchstart',
+      (e) => {
+        const target = e.target as HTMLElement;
+        const linkElement = findLinkElement(target);
 
-    document.addEventListener('touchend', () => {
-      if (longPressTimer) {
-        clearTimeout(longPressTimer);
-        longPressTimer = null;
-      }
-    }, { passive: true });
+        if (linkElement) {
+          touchStartElement = linkElement;
+          longPressTimer = window.setTimeout(() => {
+            lastRightClickedElement = linkElement;
+          }, 500); // 500ms视为长按
+        }
+      },
+      { passive: true }
+    );
 
-    document.addEventListener('touchmove', () => {
-      if (longPressTimer) {
-        clearTimeout(longPressTimer);
-        longPressTimer = null;
-      }
-    }, { passive: true });
+    document.addEventListener(
+      'touchend',
+      () => {
+        if (longPressTimer) {
+          clearTimeout(longPressTimer);
+          longPressTimer = null;
+        }
+      },
+      { passive: true }
+    );
+
+    document.addEventListener(
+      'touchmove',
+      () => {
+        if (longPressTimer) {
+          clearTimeout(longPressTimer);
+          longPressTimer = null;
+        }
+      },
+      { passive: true }
+    );
 
     // 监听来自后台脚本的消息
     browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -92,7 +104,9 @@ async function handleMessage(message: any) {
       return { success: true };
 
     case 'SAVE_DUPLICATE':
-      const date = message.data.createdAt ? new Date(message.data.createdAt).toLocaleDateString('zh-CN') : '';
+      const date = message.data.createdAt
+        ? new Date(message.data.createdAt).toLocaleDateString('zh-CN')
+        : '';
       showToast(`链接已存在 (${date})`, 'warning');
       return { success: true };
 
@@ -106,7 +120,9 @@ async function handleMessage(message: any) {
 }
 
 // 提取链接信息
-async function extractLinkInfo(url: string): Promise<{ success: boolean; data?: any; error?: string }> {
+async function extractLinkInfo(
+  url: string
+): Promise<{ success: boolean; data?: any; error?: string }> {
   if (!lastRightClickedElement) {
     return { success: false, error: 'No element selected' };
   }
@@ -127,11 +143,7 @@ async function extractLinkInfo(url: string): Promise<{ success: boolean; data?: 
     const customJsConfig = await getEnabledCustomJsConfig();
 
     // 提取附近的图片
-    const imageResult = await extractNearbyImage(
-      linkElement,
-      url,
-      customJsConfig?.code || null
-    );
+    const imageResult = await extractNearbyImage(linkElement, url, customJsConfig?.code || null);
 
     console.log('[ReadLater] Extracted link info:', {
       url,
@@ -173,7 +185,7 @@ function getNearbyText(element: HTMLElement): string {
     // 排除链接本身的文本
     const clone = parent.cloneNode(true) as HTMLElement;
     const links = clone.querySelectorAll('a');
-    links.forEach(a => a.remove());
+    links.forEach((a) => a.remove());
     const text = clone.textContent?.trim();
     if (text && text.length > 5) return text;
   }
@@ -186,21 +198,21 @@ function getNearbyText(element: HTMLElement): string {
 // Vue 组件请使用 @/utils/toast
 function showToast(message: string, type: 'success' | 'error' | 'warning' | 'info' = 'success') {
   const notification = document.createElement('div');
-  
+
   const icons = {
     success: '✅',
     error: '❌',
     warning: '⚠️',
     info: 'ℹ️',
   };
-  
+
   const colors = {
     success: 'background: #ecfdf5; color: #065f46; border: 1px solid #10b981;',
     error: 'background: #fef2f2; color: #991b1b; border: 1px solid #ef4444;',
     warning: 'background: #fffbeb; color: #92400e; border: 1px solid #f59e0b;',
     info: 'background: #eff6ff; color: #1e40af; border: 1px solid #3b82f6;',
   };
-  
+
   notification.style.cssText = `
     position: fixed;
     top: 20px;
@@ -221,14 +233,14 @@ function showToast(message: string, type: 'success' | 'error' | 'warning' | 'inf
     gap: 8px;
     ${colors[type]}
   `;
-  
+
   const icon = document.createElement('span');
   icon.textContent = icons[type];
   icon.style.cssText = 'font-size: 16px;';
-  
+
   const text = document.createElement('span');
   text.textContent = message;
-  
+
   notification.appendChild(icon);
   notification.appendChild(text);
 

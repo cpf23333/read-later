@@ -12,9 +12,9 @@ const app = new Hono();
  * GET /api/health
  */
 app.get('/', async (c) => {
-  return c.json<ApiResponse<{ message: string }>>({ 
-    success: true, 
-    data: { message: 'ReadLater Server OK' } 
+  return c.json<ApiResponse<{ message: string }>>({
+    success: true,
+    data: { message: 'ReadLater Server OK' },
   });
 });
 

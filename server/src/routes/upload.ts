@@ -15,22 +15,25 @@ const app = new Hono();
 app.post('/', async (c) => {
   const body = await c.req.json<UploadBody>();
   const { image } = body;
-  
+
   if (!image) {
     return c.json<ApiResponse>({ success: false, error: 'No image' }, 400);
   }
 
   const result = await processImage(image, 'upload');
   if (!result) {
-    return c.json<ApiResponse>({ 
-      success: false, 
-      error: 'Invalid image data' 
-    }, 400);
+    return c.json<ApiResponse>(
+      {
+        success: false,
+        error: 'Invalid image data',
+      },
+      400
+    );
   }
 
-  return c.json<ApiResponse<{ url: string }>>({ 
-    success: true, 
-    data: { url: result } 
+  return c.json<ApiResponse<{ url: string }>>({
+    success: true,
+    data: { url: result },
   });
 });
 

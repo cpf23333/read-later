@@ -34,9 +34,13 @@ export function isValidImageUrl(url: string): boolean {
     }
     // 生产环境禁止访问私有 IP
     const hostname = parsed.hostname;
-    if (hostname === 'localhost' || hostname === '127.0.0.1' || 
-        hostname.startsWith('192.168.') || hostname.startsWith('10.') ||
-        hostname.startsWith('172.')) {
+    if (
+      hostname === 'localhost' ||
+      hostname === '127.0.0.1' ||
+      hostname.startsWith('192.168.') ||
+      hostname.startsWith('10.') ||
+      hostname.startsWith('172.')
+    ) {
       if (process.env.NODE_ENV === 'production') {
         return false;
       }
@@ -50,10 +54,10 @@ export function isValidImageUrl(url: string): boolean {
 // 允许的图片类型
 export const ALLOWED_IMAGE_TYPES = [
   'image/jpeg',
-  'image/png', 
+  'image/png',
   'image/gif',
   'image/webp',
-  'image/bmp'
+  'image/bmp',
 ] as const;
 
 // 允许的图片扩展名
@@ -61,5 +65,5 @@ export const ALLOWED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.b
 
 // 检查是否是允许的图片扩展名
 export function isAllowedExtension(ext: string): boolean {
-  return ALLOWED_EXTENSIONS.includes(ext.toLowerCase() as typeof ALLOWED_EXTENSIONS[number]);
+  return ALLOWED_EXTENSIONS.includes(ext.toLowerCase() as (typeof ALLOWED_EXTENSIONS)[number]);
 }

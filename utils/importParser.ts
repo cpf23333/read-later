@@ -55,7 +55,12 @@ function parseJson(text: string): ParsedLink[] {
 
   if (Array.isArray(data)) {
     links = data;
-  } else if (data && typeof data === 'object' && 'links' in data && Array.isArray((data as any).links)) {
+  } else if (
+    data &&
+    typeof data === 'object' &&
+    'links' in data &&
+    Array.isArray((data as any).links)
+  ) {
     links = (data as any).links;
   } else {
     throw new Error('JSON 格式错误：未找到链接数组（期望顶层为数组或包含 links 字段的对象）');
@@ -74,7 +79,12 @@ function parseJson(text: string): ParsedLink[] {
         sourcePage: String(item.sourcePage || item.source_page || ''),
         nearbyImage: item.nearbyImage || item.nearby_image || null,
         screenshot: item.screenshot || null,
-        createdAt: typeof item.createdAt === 'number' ? item.createdAt : typeof item.created_at === 'number' ? item.created_at : undefined,
+        createdAt:
+          typeof item.createdAt === 'number'
+            ? item.createdAt
+            : typeof item.created_at === 'number'
+              ? item.created_at
+              : undefined,
       };
     })
     .filter((link): link is ParsedLink => link !== null);
