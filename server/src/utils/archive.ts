@@ -3,7 +3,7 @@
  */
 
 import fs from 'fs';
-import archiver from 'archiver';
+import { ZipArchive } from 'archiver';
 
 /**
  * 创建备份压缩包（包含数据库文件和图片目录）
@@ -15,7 +15,7 @@ export async function createBackupArchive(
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const output = fs.createWriteStream(outputPath);
-    const archive = archiver('zip', { zlib: { level: 6 } });
+    const archive = new ZipArchive({ zlib: { level: 6 } });
 
     output.on('close', () => {
       console.log(`[archive] Created: ${outputPath} (${archive.pointer()} bytes)`);
