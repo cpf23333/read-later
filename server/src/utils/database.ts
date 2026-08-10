@@ -3,11 +3,10 @@
  */
 
 import Database from 'better-sqlite3';
-import fs from 'fs';
 import path from 'path';
 import { tokenizeSearchQuery } from './security.ts';
 import { normalizeUrl } from './url.ts';
-import { getImagesDir } from './image.ts';
+import { moveImageToTrash, restoreImageFromTrash, deleteImageFile } from './image.ts';
 import type { Link, TrashItem } from '../types/index.ts';
 
 let db: Database.Database | null = null;
@@ -322,6 +321,13 @@ export function batchDeleteLinks(ids: string[]): { succeeded: number; failed: nu
         trashId
       );
       deleteLink(id);
+
+      for (const imgPath of [link.nearby_image, link.screenshot]) {
+        if (imgPath) {
+          moveImageToTrash(imgPath);
+        }
+      }
+
       succeeded++;
     }
   });
@@ -339,8 +345,6 @@ export function batchRestoreFromTrash(ids: string[]): {
   newIds: string[];
 } {
   const database = getDatabase();
-  const IMAGES_DIR = getImagesDir();
-  const DELETED_IMAGES_DIR = path.join(IMAGES_DIR, 'deleted');
   const newIds: string[] = [];
   const imagePathsToRestore: string[] = [];
   let succeeded = 0;
@@ -379,14 +383,9 @@ export function batchRestoreFromTrash(ids: string[]): {
 
   restoreMany(ids);
 
-  // 还原图片文件（在 SQL 事务外执行）
+  // 还原图片文件（包括缩略图，在 SQL 事务外执行）
   for (const imgPath of imagePathsToRestore) {
-    const filename = path.basename(imgPath);
-    const oldPath = path.join(DELETED_IMAGES_DIR, filename);
-    const newPath = path.join(IMAGES_DIR, filename);
-    if (fs.existsSync(oldPath)) {
-      fs.renameSync(oldPath, newPath);
-    }
+    restoreImageFromTrash(imgPath);
   }
 
   return { succeeded, failed, newIds };
@@ -400,8 +399,6 @@ export function batchPermanentlyDelete(ids: string[]): {
   failed: number;
 } {
   const database = getDatabase();
-  const IMAGES_DIR = getImagesDir();
-  const DELETED_IMAGES_DIR = path.join(IMAGES_DIR, 'deleted');
   const imagePathsToDelete: string[] = [];
   let succeeded = 0;
   let failed = 0;
@@ -425,13 +422,9 @@ export function batchPermanentlyDelete(ids: string[]): {
 
   deleteMany(ids);
 
-  // 删除图片文件（在 SQL 事务外执行）
+  // 删除图片文件（包括缩略图，在 SQL 事务外执行）
   for (const imgPath of imagePathsToDelete) {
-    const filename = path.basename(imgPath);
-    const filePath = path.join(DELETED_IMAGES_DIR, filename);
-    if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
-    }
+    deleteImageFile(imgPath);
   }
 
   return { succeeded, failed };

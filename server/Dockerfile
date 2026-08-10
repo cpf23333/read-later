@@ -12,8 +12,8 @@ FROM node:24-alpine AS builder
 
 WORKDIR /app
 
-# 安装编译工具（better-sqlite3 需要）+ pnpm
-RUN apk add --no-cache python3 make g++ && \
+# 安装编译工具（better-sqlite3 / sharp 需要）+ pnpm
+RUN apk add --no-cache python3 make g++ vips-dev && \
     npm install -g pnpm
 
 # 复制 workspace 配置（完整项目，entrypoints 存在，wxt prepare 可正常执行）
@@ -36,6 +36,9 @@ RUN pnpm deploy --filter=read-later-server --prod /app/deploy
 FROM node:24-alpine
 
 WORKDIR /app
+
+# sharp 运行时依赖
+RUN apk add --no-cache vips
 
 COPY --from=builder /app/deploy/node_modules ./node_modules
 COPY --from=builder /app/deploy/dist ./dist

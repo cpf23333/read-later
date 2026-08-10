@@ -20,6 +20,7 @@ import {
 } from '@/utils/hybridStorage';
 import { showSuccess, showError, showWarning } from '@/utils/toast';
 import { parseImportFile, type ParsedLink } from '@/utils/importParser';
+import { getThumbUrl, handleThumbError } from '@/utils/imageUrl';
 import ImportPreview from '@/components/ImportPreview.vue';
 
 type SortBy = 'createdAt' | 'title' | 'domain';
@@ -729,9 +730,10 @@ onMounted(() => {
 
             <div class="card-image" v-if="link.nearbyImage || link.screenshot">
               <img
-                :src="link.nearbyImage || link.screenshot || ''"
+                :src="getThumbUrl(link.nearbyImage || link.screenshot) || (link.nearbyImage || link.screenshot) || ''"
                 :alt="link.title"
                 loading="lazy"
+                @error="handleThumbError($event, link.nearbyImage || link.screenshot)"
               />
             </div>
             <div v-else class="card-image empty">
@@ -825,9 +827,10 @@ onMounted(() => {
             </div>
             <div class="trash-image" v-if="item.nearbyImage || item.screenshot">
               <img
-                :src="item.nearbyImage || item.screenshot || ''"
+                :src="getThumbUrl(item.nearbyImage || item.screenshot) || (item.nearbyImage || item.screenshot) || ''"
                 :alt="item.title"
                 loading="lazy"
+                @error="handleThumbError($event, item.nearbyImage || item.screenshot)"
               />
             </div>
             <div v-else class="trash-image empty">

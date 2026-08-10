@@ -15,7 +15,7 @@ import {
   batchInsertLinks,
   batchDeleteLinks,
 } from '../utils/database.ts';
-import { processImage } from '../utils/image.ts';
+import { processImage, moveImageToTrash } from '../utils/image.ts';
 import { sanitizeId, sanitizeSearchQuery } from '../utils/security.ts';
 import { apiRateLimit } from '../middleware/ratelimit.ts';
 import type {
@@ -278,6 +278,13 @@ app.delete('/:id', apiRateLimit, async (c) => {
 
   // 从主表删除
   deleteLink(id);
+
+  // 移动图片到回收站目录
+  for (const imgPath of [link.nearby_image, link.screenshot]) {
+    if (imgPath) {
+      moveImageToTrash(imgPath);
+    }
+  }
 
   return c.json<ApiResponse>({ success: true });
 });

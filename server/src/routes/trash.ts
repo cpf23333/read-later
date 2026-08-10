@@ -14,9 +14,7 @@ import {
 import { apiRateLimit } from '../middleware/ratelimit.ts';
 import { sanitizeId } from '../utils/security.ts';
 import type { TrashItem, ApiResponse } from '../types/index.ts';
-import fs from 'fs';
-import path from 'path';
-import { getImagesDir } from '../utils/image.ts';
+import { restoreImageFromTrash, deleteImageFile } from '../utils/image.ts';
 
 const app = new Hono();
 
@@ -77,20 +75,12 @@ app.post('/:id/restore', apiRateLimit, async (c) => {
 
   deleteFromTrash(id);
 
-  // 还原图片（保持原文件名）
-  const IMAGES_DIR = getImagesDir();
-  const DELETED_IMAGES_DIR = path.join(IMAGES_DIR, 'deleted');
-
-  [item.nearby_image, item.screenshot].forEach((imgPath) => {
-    if (imgPath && imgPath.startsWith('/images/')) {
-      const filename = path.basename(imgPath);
-      const oldPath = path.join(DELETED_IMAGES_DIR, filename);
-      const newPath = path.join(IMAGES_DIR, filename);
-      if (fs.existsSync(oldPath)) {
-        fs.renameSync(oldPath, newPath);
-      }
+  // 还原图片（包括缩略图）
+  for (const imgPath of [item.nearby_image, item.screenshot]) {
+    if (imgPath) {
+      restoreImageFromTrash(imgPath);
     }
-  });
+  }
 
   return c.json<ApiResponse<{ newId: string }>>({
     success: true,
@@ -111,17 +101,12 @@ app.delete('/:id', apiRateLimit, async (c) => {
 
   const item = getTrashItemById(id);
   if (item) {
-    // 删除图片（使用原文件名）
-    const IMAGES_DIR = getImagesDir();
-    const DELETED_IMAGES_DIR = path.join(IMAGES_DIR, 'deleted');
-
-    [item.nearby_image, item.screenshot].forEach((imgPath) => {
-      if (imgPath && imgPath.startsWith('/images/')) {
-        const filename = path.basename(imgPath);
-        const filePath = path.join(DELETED_IMAGES_DIR, filename);
-        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    // 删除图片（包括缩略图）
+    for (const imgPath of [item.nearby_image, item.screenshot]) {
+      if (imgPath) {
+        deleteImageFile(imgPath);
       }
-    });
+    }
   }
 
   deleteFromTrash(id);

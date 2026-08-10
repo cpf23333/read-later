@@ -4,6 +4,7 @@
 
 import fs from 'fs';
 import path from 'path';
+import sharp from 'sharp';
 import { ALLOWED_IMAGE_TYPES, isSafeFilePath, isValidImageUrl } from './security.ts';
 
 // 从环境变量获取配置
@@ -161,19 +162,152 @@ export async function processImage(
     return imageData;
   }
 
+  let filename: string | null = null;
+
   // 如果是 Base64，保存为文件
   if (imageData.startsWith('data:image')) {
-    const filename = saveBase64ToFile(imageData, prefix);
-    return filename ? `/images/${filename}` : null;
+    filename = saveBase64ToFile(imageData, prefix);
   }
 
   // 如果是网络图片 URL，下载并保存
   if (imageData.startsWith('http://') || imageData.startsWith('https://')) {
     console.log(`[processImage] Downloading ${prefix}...`);
-    const filename = await downloadImage(imageData, prefix);
-    return filename ? `/images/${filename}` : null;
+    filename = await downloadImage(imageData, prefix);
   }
 
-  console.log(`[processImage] Unknown format for ${prefix}`);
-  return null;
+  if (!filename) {
+    console.log(`[processImage] Unknown format for ${prefix}`);
+    return null;
+  }
+
+  // 异步生成缩略图（失败不影响主流程）
+  createThumbnail(filename).catch((error) => {
+    console.warn('[processImage] Failed to create thumbnail:', (error as Error).message);
+  });
+
+  return `/images/${filename}`;
+}
+
+/**
+ * 生成缩略图
+ */
+async function createThumbnail(originalFilename: string): Promise<string | null> {
+  if (!IMAGES_DIR) return null;
+
+  const inputPath = path.join(IMAGES_DIR, originalFilename);
+  if (!fs.existsSync(inputPath)) return null;
+
+  const thumbsDir = path.join(IMAGES_DIR, 'thumbs');
+  if (!fs.existsSync(thumbsDir)) {
+    fs.mkdirSync(thumbsDir, { recursive: true });
+  }
+
+  const thumbName = `${path.parse(originalFilename).name}_thumb.jpg`;
+  const thumbPath = path.join(thumbsDir, thumbName);
+
+  await sharp(inputPath)
+    .resize(320, 240, { fit: 'cover', withoutEnlargement: true })
+    .jpeg({ quality: 80, progressive: true })
+    .toFile(thumbPath);
+
+  console.log(`[createThumbnail] Created: ${thumbName}`);
+  return thumbName;
+}
+
+/**
+ * 根据原图路径获取缩略图路径
+ */
+export function getThumbPath(originalPath: string): string | null {
+  if (!originalPath || originalPath.startsWith('/images/deleted/')) return null;
+  if (!originalPath.startsWith('/images/')) return null;
+
+  const filename = path.basename(originalPath);
+  const thumbName = `${path.parse(filename).name}_thumb.jpg`;
+  return `/images/thumbs/${thumbName}`;
+}
+
+/**
+ * 根据原图 URL 获取缩略图 URL
+ */
+export function getThumbUrl(originalUrl: string): string | null {
+  try {
+    const url = new URL(originalUrl);
+    const thumbPath = getThumbPath(url.pathname);
+    if (!thumbPath) return null;
+    url.pathname = thumbPath;
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 移动图片到回收站目录
+ */
+export function moveImageToTrash(imgPath: string): void {
+  if (!imgPath || !imgPath.startsWith('/images/') || imgPath.startsWith('/images/deleted/')) return;
+  if (!IMAGES_DIR) return;
+
+  const filename = path.basename(imgPath);
+  const src = path.join(IMAGES_DIR, filename);
+  const dest = path.join(IMAGES_DIR, 'deleted', filename);
+  if (fs.existsSync(src)) {
+    fs.renameSync(src, dest);
+  }
+
+  // 同时移动缩略图
+  const thumbName = `${path.parse(filename).name}_thumb.jpg`;
+  const thumbSrc = path.join(IMAGES_DIR, 'thumbs', thumbName);
+  const thumbDest = path.join(IMAGES_DIR, 'deleted', thumbName);
+  if (fs.existsSync(thumbSrc)) {
+    fs.renameSync(thumbSrc, thumbDest);
+  }
+}
+
+/**
+ * 从回收站目录还原图片
+ */
+export function restoreImageFromTrash(imgPath: string): void {
+  if (!imgPath || !imgPath.startsWith('/images/')) return;
+  if (!IMAGES_DIR) return;
+
+  const filename = path.basename(imgPath);
+  const src = path.join(IMAGES_DIR, 'deleted', filename);
+  const dest = path.join(IMAGES_DIR, filename);
+  if (fs.existsSync(src)) {
+    fs.renameSync(src, dest);
+  }
+
+  // 同时还原缩略图
+  const thumbName = `${path.parse(filename).name}_thumb.jpg`;
+  const thumbSrc = path.join(IMAGES_DIR, 'deleted', thumbName);
+  const thumbDest = path.join(IMAGES_DIR, 'thumbs', thumbName);
+  if (fs.existsSync(thumbSrc)) {
+    const thumbsDir = path.join(IMAGES_DIR, 'thumbs');
+    if (!fs.existsSync(thumbsDir)) {
+      fs.mkdirSync(thumbsDir, { recursive: true });
+    }
+    fs.renameSync(thumbSrc, thumbDest);
+  }
+}
+
+/**
+ * 永久删除回收站中的图片文件
+ */
+export function deleteImageFile(imgPath: string): void {
+  if (!imgPath || !imgPath.startsWith('/images/')) return;
+  if (!IMAGES_DIR) return;
+
+  const filename = path.basename(imgPath);
+  const filePath = path.join(IMAGES_DIR, 'deleted', filename);
+  if (fs.existsSync(filePath)) {
+    fs.unlinkSync(filePath);
+  }
+
+  // 同时删除缩略图
+  const thumbName = `${path.parse(filename).name}_thumb.jpg`;
+  const thumbPath = path.join(IMAGES_DIR, 'deleted', thumbName);
+  if (fs.existsSync(thumbPath)) {
+    fs.unlinkSync(thumbPath);
+  }
 }

@@ -68,10 +68,14 @@ if (!fs.existsSync(DATA_DIR)) {
 
 // 图片存储目录
 const IMAGES_DIR = path.join(DATA_DIR, 'images');
+const THUMBS_DIR = path.join(DATA_DIR, 'images', 'thumbs');
 const DELETED_IMAGES_DIR = path.join(DATA_DIR, 'images', 'deleted');
 
 if (!fs.existsSync(IMAGES_DIR)) {
   fs.mkdirSync(IMAGES_DIR, { recursive: true });
+}
+if (!fs.existsSync(THUMBS_DIR)) {
+  fs.mkdirSync(THUMBS_DIR, { recursive: true });
 }
 if (!fs.existsSync(DELETED_IMAGES_DIR)) {
   fs.mkdirSync(DELETED_IMAGES_DIR, { recursive: true });
