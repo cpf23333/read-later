@@ -10,7 +10,7 @@ jobs:
       image: 192.168.1.100:8083/readlater-ci:latest
       options: --privileged
     env:
-      DOCKER_HOST: tcp://docker-in-docker:2375
+      DOCKER_HOST: tcp://localhost:2375
     steps:
       - uses: actions/checkout@v4
 
