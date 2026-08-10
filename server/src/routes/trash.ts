@@ -3,7 +3,14 @@
  */
 
 import { Hono } from 'hono';
-import { getTrashItems, getTrashItemById, deleteFromTrash, addLink } from '../utils/database.ts';
+import {
+  getTrashItems,
+  getTrashItemById,
+  deleteFromTrash,
+  addLink,
+  batchRestoreFromTrash,
+  batchPermanentlyDelete,
+} from '../utils/database.ts';
 import { apiRateLimit } from '../middleware/ratelimit.ts';
 import { sanitizeId } from '../utils/security.ts';
 import type { TrashItem, ApiResponse } from '../types/index.ts';
@@ -120,6 +127,46 @@ app.delete('/:id', apiRateLimit, async (c) => {
   deleteFromTrash(id);
 
   return c.json<ApiResponse>({ success: true });
+});
+
+/**
+ * 批量还原回收站项目
+ * POST /api/trash/batch-restore
+ */
+app.post('/batch-restore', apiRateLimit, async (c) => {
+  const body = await c.req.json<{ ids?: string[] }>();
+  const ids = body.ids;
+
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return c.json<ApiResponse>({ success: false, error: 'ids must be a non-empty array' }, 400);
+  }
+
+  const { succeeded, failed, newIds } = batchRestoreFromTrash(ids);
+
+  return c.json<ApiResponse<{ succeeded: number; failed: number; newIds: string[] }>>({
+    success: true,
+    data: { succeeded, failed, newIds },
+  });
+});
+
+/**
+ * 批量永久删除回收站项目
+ * POST /api/trash/batch-delete
+ */
+app.post('/batch-delete', apiRateLimit, async (c) => {
+  const body = await c.req.json<{ ids?: string[] }>();
+  const ids = body.ids;
+
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return c.json<ApiResponse>({ success: false, error: 'ids must be a non-empty array' }, 400);
+  }
+
+  const { succeeded, failed } = batchPermanentlyDelete(ids);
+
+  return c.json<ApiResponse<{ succeeded: number; failed: number }>>({
+    success: true,
+    data: { succeeded, failed },
+  });
 });
 
 export default app;

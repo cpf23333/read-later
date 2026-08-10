@@ -247,6 +247,15 @@ export async function apiDeleteLink(id: string): Promise<void> {
   await apiRequest(`/api/links/${id}`, { method: 'DELETE' });
 }
 
+export async function apiBatchDeleteLinks(
+  ids: string[]
+): Promise<{ succeeded: number; failed: number }> {
+  return await apiRequest<{ succeeded: number; failed: number }>('/api/links/batch-delete', {
+    method: 'POST',
+    body: JSON.stringify({ ids }),
+  });
+}
+
 export async function apiBatchAddLinks(
   links: LinkItem[]
 ): Promise<{ count: number; total: number; failed: number }> {
@@ -315,6 +324,27 @@ export async function apiRestoreFromTrash(id: string): Promise<{ newId: string }
 
 export async function apiPermanentlyDelete(id: string): Promise<void> {
   await apiRequest(`/api/trash/${id}`, { method: 'DELETE' });
+}
+
+export async function apiBatchRestore(
+  ids: string[]
+): Promise<{ succeeded: number; failed: number; newIds: string[] }> {
+  return await apiRequest<{ succeeded: number; failed: number; newIds: string[] }>(
+    '/api/trash/batch-restore',
+    {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
+    }
+  );
+}
+
+export async function apiBatchPermanentlyDelete(
+  ids: string[]
+): Promise<{ succeeded: number; failed: number }> {
+  return await apiRequest<{ succeeded: number; failed: number }>('/api/trash/batch-delete', {
+    method: 'POST',
+    body: JSON.stringify({ ids }),
+  });
 }
 
 // ===== 图片上传 =====

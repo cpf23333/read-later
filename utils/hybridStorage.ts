@@ -6,11 +6,14 @@ import {
   apiSearchLinks,
   apiAddLink,
   apiDeleteLink,
+  apiBatchDeleteLinks,
   apiCheckLinkExists,
   apiCheckExistingUrls,
   apiGetTrash,
   apiRestoreFromTrash,
   apiPermanentlyDelete,
+  apiBatchRestore,
+  apiBatchPermanentlyDelete,
   apiGetStats,
   apiGetDomainStats,
   apiGetAllDomains,
@@ -140,6 +143,46 @@ export async function permanentlyDeleteFromTrash(recordId: string): Promise<bool
   } catch (error) {
     console.error('[Storage] Permanent delete failed:', error);
     return false;
+  }
+}
+
+// 批量删除链接
+export async function batchDeleteLinks(ids: string[]): Promise<{
+  succeeded: number;
+  failed: number;
+}> {
+  try {
+    return await apiBatchDeleteLinks(ids);
+  } catch (error) {
+    console.error('[Storage] Batch delete failed:', error);
+    return { succeeded: 0, failed: ids.length };
+  }
+}
+
+// 批量从回收站还原
+export async function batchRestoreFromTrash(ids: string[]): Promise<{
+  succeeded: number;
+  failed: number;
+}> {
+  try {
+    const result = await apiBatchRestore(ids);
+    return { succeeded: result.succeeded, failed: result.failed };
+  } catch (error) {
+    console.error('[Storage] Batch restore failed:', error);
+    return { succeeded: 0, failed: ids.length };
+  }
+}
+
+// 批量永久删除
+export async function batchPermanentlyDeleteFromTrash(ids: string[]): Promise<{
+  succeeded: number;
+  failed: number;
+}> {
+  try {
+    return await apiBatchPermanentlyDelete(ids);
+  } catch (error) {
+    console.error('[Storage] Batch permanent delete failed:', error);
+    return { succeeded: 0, failed: ids.length };
   }
 }
 

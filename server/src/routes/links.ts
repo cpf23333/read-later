@@ -13,6 +13,7 @@ import {
   addToTrash,
   exportLinks,
   batchInsertLinks,
+  batchDeleteLinks,
 } from '../utils/database.ts';
 import { processImage } from '../utils/image.ts';
 import { sanitizeId, sanitizeSearchQuery } from '../utils/security.ts';
@@ -218,6 +219,26 @@ app.post('/check-batch', apiRateLimit, async (c) => {
   return c.json<ApiResponse<{ existingUrls: string[] }>>({
     success: true,
     data: { existingUrls: Array.from(existingNormalizedUrls) },
+  });
+});
+
+/**
+ * 批量删除链接（移入回收站）
+ * POST /api/links/batch-delete
+ */
+app.post('/batch-delete', apiRateLimit, async (c) => {
+  const body = await c.req.json<{ ids?: string[] }>();
+  const ids = body.ids;
+
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return c.json<ApiResponse>({ success: false, error: 'ids must be a non-empty array' }, 400);
+  }
+
+  const { succeeded, failed } = batchDeleteLinks(ids);
+
+  return c.json<ApiResponse<{ succeeded: number; failed: number }>>({
+    success: true,
+    data: { succeeded, failed },
   });
 });
 

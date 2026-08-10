@@ -3,9 +3,11 @@
  */
 
 import Database from 'better-sqlite3';
+import fs from 'fs';
 import path from 'path';
 import { tokenizeSearchQuery } from './security.ts';
 import { normalizeUrl } from './url.ts';
+import { getImagesDir } from './image.ts';
 import type { Link, TrashItem } from '../types/index.ts';
 
 let db: Database.Database | null = null;
@@ -286,6 +288,153 @@ export function getTrashItemById(id: string): TrashItem | undefined {
 export function deleteFromTrash(id: string): void {
   const database = getDatabase();
   database.prepare('DELETE FROM trash WHERE id = ?').run(id);
+}
+
+/**
+ * 批量删除链接（移入回收站）
+ */
+export function batchDeleteLinks(ids: string[]): { succeeded: number; failed: number } {
+  const database = getDatabase();
+  let succeeded = 0;
+  let failed = 0;
+
+  const deleteMany = database.transaction((idsToDelete: typeof ids) => {
+    for (const id of idsToDelete) {
+      const link = getLinkById(id);
+      if (!link) {
+        failed++;
+        continue;
+      }
+
+      const trashId = `delete_${link.id}_${Date.now()}`;
+      addToTrash(
+        {
+          link_id: link.id,
+          url: link.url,
+          title: link.title,
+          nearby_image: link.nearby_image,
+          screenshot: link.screenshot,
+          source_page: link.source_page,
+          created_at: link.created_at,
+          deleted_at: Date.now(),
+          custom_data: link.custom_data,
+        },
+        trashId
+      );
+      deleteLink(id);
+      succeeded++;
+    }
+  });
+
+  deleteMany(ids);
+  return { succeeded, failed };
+}
+
+/**
+ * 批量从回收站还原
+ */
+export function batchRestoreFromTrash(ids: string[]): {
+  succeeded: number;
+  failed: number;
+  newIds: string[];
+} {
+  const database = getDatabase();
+  const IMAGES_DIR = getImagesDir();
+  const DELETED_IMAGES_DIR = path.join(IMAGES_DIR, 'deleted');
+  const newIds: string[] = [];
+  const imagePathsToRestore: string[] = [];
+  let succeeded = 0;
+  let failed = 0;
+
+  const restoreMany = database.transaction((idsToRestore: typeof ids) => {
+    for (const id of idsToRestore) {
+      const item = getTrashItemById(id);
+      if (!item) {
+        failed++;
+        continue;
+      }
+
+      const newId = `${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+      addLink({
+        id: newId,
+        url: item.url,
+        title: item.title,
+        nearby_image: item.nearby_image,
+        screenshot: item.screenshot,
+        source_page: item.source_page,
+        created_at: Date.now(),
+        custom_data: item.custom_data,
+      });
+      deleteFromTrash(id);
+      newIds.push(newId);
+      succeeded++;
+
+      for (const imgPath of [item.nearby_image, item.screenshot]) {
+        if (imgPath && imgPath.startsWith('/images/')) {
+          imagePathsToRestore.push(imgPath);
+        }
+      }
+    }
+  });
+
+  restoreMany(ids);
+
+  // 还原图片文件（在 SQL 事务外执行）
+  for (const imgPath of imagePathsToRestore) {
+    const filename = path.basename(imgPath);
+    const oldPath = path.join(DELETED_IMAGES_DIR, filename);
+    const newPath = path.join(IMAGES_DIR, filename);
+    if (fs.existsSync(oldPath)) {
+      fs.renameSync(oldPath, newPath);
+    }
+  }
+
+  return { succeeded, failed, newIds };
+}
+
+/**
+ * 批量永久删除回收站项目
+ */
+export function batchPermanentlyDelete(ids: string[]): {
+  succeeded: number;
+  failed: number;
+} {
+  const database = getDatabase();
+  const IMAGES_DIR = getImagesDir();
+  const DELETED_IMAGES_DIR = path.join(IMAGES_DIR, 'deleted');
+  const imagePathsToDelete: string[] = [];
+  let succeeded = 0;
+  let failed = 0;
+
+  const deleteMany = database.transaction((idsToDelete: typeof ids) => {
+    for (const id of idsToDelete) {
+      const item = getTrashItemById(id);
+      if (item) {
+        for (const imgPath of [item.nearby_image, item.screenshot]) {
+          if (imgPath && imgPath.startsWith('/images/')) {
+            imagePathsToDelete.push(imgPath);
+          }
+        }
+        deleteFromTrash(id);
+        succeeded++;
+      } else {
+        failed++;
+      }
+    }
+  });
+
+  deleteMany(ids);
+
+  // 删除图片文件（在 SQL 事务外执行）
+  for (const imgPath of imagePathsToDelete) {
+    const filename = path.basename(imgPath);
+    const filePath = path.join(DELETED_IMAGES_DIR, filename);
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+  }
+
+  return { succeeded, failed };
 }
 
 // ===== 统计操作 =====

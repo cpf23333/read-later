@@ -8,6 +8,9 @@ import {
   getTrashItems,
   restoreFromTrash,
   permanentlyDeleteFromTrash,
+  batchDeleteLinks,
+  batchRestoreFromTrash,
+  batchPermanentlyDeleteFromTrash,
   getStats,
   searchLinks,
   getAllDomains,
@@ -15,7 +18,7 @@ import {
   batchAddLinks,
   getExistingUrls,
 } from '@/utils/hybridStorage';
-import { showSuccess, showError } from '@/utils/toast';
+import { showSuccess, showError, showWarning } from '@/utils/toast';
 import { parseImportFile, type ParsedLink } from '@/utils/importParser';
 import ImportPreview from '@/components/ImportPreview.vue';
 
@@ -251,10 +254,7 @@ async function handleBatchDelete() {
     return;
 
   const ids = Array.from(selectedIds.value);
-
-  for (const id of ids) {
-    await deleteLink(id);
-  }
+  const result = await batchDeleteLinks(ids);
 
   selectedIds.value.clear();
   await loadLinks();
@@ -264,6 +264,10 @@ async function handleBatchDelete() {
   // 如果回收站已加载，刷新回收站
   if (trashItems.value.length > 0 || currentTab.value === 'trash') {
     await loadTrash();
+  }
+
+  if (result.failed > 0) {
+    showWarning(`成功删除 ${result.succeeded} 个，${result.failed} 个失败`);
   }
 }
 
@@ -329,9 +333,8 @@ function toggleTrashSelection(id: string) {
 async function restoreSelected() {
   if (!confirm(`确定要还原选中的 ${selectedTrashIds.value.size} 个链接吗？`)) return;
 
-  for (const id of selectedTrashIds.value) {
-    await restoreFromTrash(id);
-  }
+  const ids = Array.from(selectedTrashIds.value);
+  const result = await batchRestoreFromTrash(ids);
 
   selectedTrashIds.value.clear();
   await loadTrash();
@@ -340,20 +343,27 @@ async function restoreSelected() {
   const [stats, domainStatsResult] = await Promise.all([getStats(), getDomainStats()]);
   totalCount.value = stats.linkCount;
   domainStats.value = domainStatsResult;
+
+  if (result.failed > 0) {
+    showWarning(`成功还原 ${result.succeeded} 个，${result.failed} 个失败`);
+  }
 }
 
 async function deleteSelected() {
   if (!confirm(`确定要永久删除选中的 ${selectedTrashIds.value.size} 个链接吗？此操作不可撤销！`))
     return;
 
-  for (const id of selectedTrashIds.value) {
-    await permanentlyDeleteFromTrash(id);
-  }
+  const ids = Array.from(selectedTrashIds.value);
+  const result = await batchPermanentlyDeleteFromTrash(ids);
 
   selectedTrashIds.value.clear();
   await loadTrash();
   // 更新统计
   await updateStats();
+
+  if (result.failed > 0) {
+    showWarning(`成功删除 ${result.succeeded} 个，${result.failed} 个失败`);
+  }
 }
 
 async function updateStats() {
