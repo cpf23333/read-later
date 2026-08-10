@@ -99,21 +99,11 @@ async function loadLinks() {
     const result = await getLinks(currentPage.value, pageSize.value, {
       sortBy: sortBy.value,
       sortDesc: sortOrder.value === 'desc',
+      domain: domainFilter.value,
     });
 
-    // 在客户端进行域名和日期过滤
+    // 在客户端进行日期过滤（域名过滤已交给后端）
     let filteredLinks = result.links;
-
-    if (domainFilter.value) {
-      filteredLinks = filteredLinks.filter((link) => {
-        try {
-          const domain = new URL(link.url).hostname;
-          return domain === domainFilter.value;
-        } catch {
-          return false;
-        }
-      });
-    }
 
     if (dateFrom.value) {
       const fromTime = new Date(dateFrom.value).getTime();
@@ -187,6 +177,22 @@ function clearSearch() {
   searchQuery.value = '';
   loadLinks();
 }
+
+// 搜索输入防抖，300ms 后自动触发
+let searchTimeout: number | null = null;
+watch(searchQuery, (newQuery) => {
+  if (searchTimeout) {
+    clearTimeout(searchTimeout);
+    searchTimeout = null;
+  }
+  if (!newQuery.trim()) {
+    loadLinks();
+    return;
+  }
+  searchTimeout = window.setTimeout(() => {
+    handleSearch();
+  }, 300);
+});
 
 function clearFilters() {
   domainFilter.value = '';

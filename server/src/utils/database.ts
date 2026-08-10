@@ -4,6 +4,7 @@
 
 import Database from 'better-sqlite3';
 import path from 'path';
+import { tokenizeSearchQuery } from './security.ts';
 import type { Link, TrashItem } from '../types/index.ts';
 
 let db: Database.Database | null = null;
@@ -100,17 +101,18 @@ export function getLinks(
   const params: (string | number)[] = [];
   const conditions: string[] = [];
 
-  // 搜索条件
-  if (search) {
-    conditions.push('(url LIKE ? OR title LIKE ? OR source_page LIKE ?)');
-    const searchParam = `%${search}%`;
-    params.push(searchParam, searchParam, searchParam);
-  }
-
   // 域名过滤
   if (domain) {
     conditions.push('source_page LIKE ?');
     params.push(`%${domain}%`);
+  }
+
+  // 搜索条件：多 token AND 匹配
+  const searchTokens = search ? tokenizeSearchQuery(search) : [];
+  for (const token of searchTokens) {
+    conditions.push('(url LIKE ? OR title LIKE ? OR source_page LIKE ?)');
+    const searchParam = `%${token}%`;
+    params.push(searchParam, searchParam, searchParam);
   }
 
   // 添加 WHERE 子句
@@ -139,15 +141,24 @@ export function getLinks(
  */
 export function searchLinks(query: string): Link[] {
   const database = getDatabase();
-  const searchParam = `%${query}%`;
+  const tokens = tokenizeSearchQuery(query);
 
-  return database
-    .prepare(
-      `SELECT * FROM links 
-     WHERE url LIKE ? OR title LIKE ? OR source_page LIKE ?
-     ORDER BY created_at DESC`
-    )
-    .all(searchParam, searchParam, searchParam) as Link[];
+  if (tokens.length === 0) {
+    return [];
+  }
+
+  const conditions: string[] = [];
+  const params: string[] = [];
+
+  for (const token of tokens) {
+    conditions.push('(url LIKE ? OR title LIKE ? OR source_page LIKE ?)');
+    const searchParam = `%${token}%`;
+    params.push(searchParam, searchParam, searchParam);
+  }
+
+  const sql = `SELECT * FROM links WHERE ${conditions.join(' AND ')} ORDER BY created_at DESC`;
+
+  return database.prepare(sql).all(...params) as Link[];
 }
 
 /**

@@ -17,6 +17,18 @@ export function sanitizeSearchQuery(query: string): string {
   return query.slice(0, 200).replace(/[<>"']/g, '');
 }
 
+// 将搜索查询拆分为多个 token，用于多关键字 AND 搜索
+export function tokenizeSearchQuery(query: string): string[] {
+  if (typeof query !== 'string') return [];
+  const tokens = query
+    .trim()
+    .split(/\s+/)
+    .map((t) => sanitizeSearchQuery(t))
+    .filter((t) => t.length > 0);
+  // 限制 token 数量，避免生成过长的 SQL
+  return tokens.slice(0, 10);
+}
+
 // 验证文件路径安全（防止路径遍历）
 export function isSafeFilePath(filename: string, baseDir: string): boolean {
   const resolvedPath = path.resolve(baseDir, filename);
