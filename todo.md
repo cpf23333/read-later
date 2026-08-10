@@ -2,18 +2,18 @@
 
 ## 1. 代码质量与可维护性
 
-- [ ] 添加测试（server 单元测试、扩展 e2e）
-- [ ] 检查并开启 TypeScript strict 模式
-- [ ] 配置 ESLint + Prettier
-- [ ] 检查并更新过期依赖
+- [x] 添加测试框架（Vitest）
+- [x] 检查并开启 TypeScript strict 模式
+- [x] 配置 ESLint + Prettier
+- [x] 检查并更新过期依赖
 
 ## 2. 功能完善
 
-- [ ] 导入导出增强（JSON/HTML/Netscape bookmarks）
-- [ ] 搜索优化（全文搜索、标签过滤）
-- [ ] 链接去重
-- [ ] 批量操作
-- [ ] 图片处理优化（缩略图、懒加载）
+- [ ] 导入导出增强（JSON/HTML/Netscape bookmarks）—— 暂不实现
+- [x] 搜索优化（多关键字 AND 匹配、域名过滤后端化、搜索防抖）
+- [x] 链接去重（服务端标准化 URL 检查）
+- [x] 批量操作（后端事务批量删除/还原/永久删除）
+- [x] 图片处理优化（sharp 缩略图、删除/还原时同步图片）
 
 ## 3. 安全与运维
 

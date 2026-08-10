@@ -27,13 +27,14 @@
 │   ├── storage.ts         # 类型定义
 │   ├── apiStorage.ts      # 服务器 API 调用
 │   ├── hybridStorage.ts   # 统一存储接口
-│   └── imageExtractor.ts  # 图片提取逻辑
+│   ├── imageExtractor.ts  # 图片提取逻辑
+│   └── imageUrl.ts        # 图片 URL 处理（缩略图）
 ├── server/                # 后端服务器
 │   ├── src/               # TypeScript 源代码
 │   │   ├── index.ts       # 主入口
 │   │   ├── routes/        # 路由定义
 │   │   ├── middleware/    # 中间件（鉴权、限流）
-│   │   ├── utils/         # 工具函数（数据库、图片处理）
+│   │   ├── utils/         # 工具函数（数据库、图片处理、URL 标准化）
 │   │   └── types/         # 类型定义
 │   ├── dist/              # 编译后的 JavaScript
 │   ├── Dockerfile         # Docker 多阶段构建
@@ -68,13 +69,15 @@ addLink() → apiAddLink() → POST /api/links (发送 base64)
     ↓
 服务器 processImage() 处理
     ↓
-├─ data:image/* → saveBase64ToFile() 保存
-├─ http(s)://   → downloadImage() 下载保存
+├─ data:image/* → saveBase64ToFile() 保存原图
+├─ http(s)://   → downloadImage() 下载保存原图
 └─ /images/*    → 直接返回路径
     ↓
-数据库存储文件路径
+sharp 生成缩略图到 /images/thumbs/
     ↓
-GET /api/links 返回完整 URL
+数据库存储原图路径
+    ↓
+GET /api/links 返回完整 URL（列表优先使用缩略图）
 ```
 
 ### 3. 回收站机制
@@ -111,19 +114,24 @@ openssl rand -base64 32
 
 ## API 端点
 
-| 方法   | 路径                   | 说明                             |
-| ------ | ---------------------- | -------------------------------- |
-| GET    | /api/health            | 健康检查（无需鉴权）             |
-| GET    | /api/links             | 获取链接列表                     |
-| POST   | /api/links             | 添加链接（支持 base64/URL/路径） |
-| DELETE | /api/links/:id         | 删除链接（移入回收站）           |
-| POST   | /api/links/batch       | 批量添加                         |
-| GET    | /api/search            | 搜索链接                         |
-| GET    | /api/trash             | 获取回收站                       |
-| POST   | /api/trash/:id/restore | 还原链接                         |
-| DELETE | /api/trash/:id         | 永久删除                         |
-| GET    | /api/stats             | 获取统计                         |
-| POST   | /api/upload            | 上传图片（保留兼容）             |
+| 方法   | 路径                       | 说明                                   |
+| ------ | -------------------------- | -------------------------------------- |
+| GET    | /api/health                | 健康检查（无需鉴权）                   |
+| GET    | /api/links                 | 获取链接列表                           |
+| POST   | /api/links                 | 添加链接（支持 base64/URL/路径）       |
+| DELETE | /api/links/:id             | 删除链接（移入回收站）                 |
+| POST   | /api/links/batch           | 批量添加                               |
+| POST   | /api/links/batch-delete    | 批量删除（移入回收站）                 |
+| GET    | /api/links/exists          | 检查链接是否已存在（标准化 URL）       |
+| POST   | /api/links/check-batch     | 批量检查链接是否已存在                 |
+| GET    | /api/search                | 搜索链接（多关键字 AND 匹配）          |
+| GET    | /api/trash                 | 获取回收站                             |
+| POST   | /api/trash/:id/restore     | 还原链接                               |
+| DELETE | /api/trash/:id             | 永久删除                               |
+| POST   | /api/trash/batch-restore   | 批量还原回收站项目                     |
+| POST   | /api/trash/batch-delete    | 批量永久删除回收站项目                 |
+| GET    | /api/stats                 | 获取统计                               |
+| POST   | /api/upload                | 上传图片（保留兼容）                   |
 
 ## 关键代码位置
 
@@ -133,6 +141,15 @@ openssl rand -base64 32
 - `imageToBase64()` - 转换 blob/URL 为 base64
 - `defaultImageExtractor()` - 默认提取策略
 - `executeCustomExtractor()` - 执行自定义 JS
+
+### 图片 URL 处理 (utils/imageUrl.ts)
+
+- `getThumbUrl()` - 根据原图 URL 生成缩略图 URL
+- `handleThumbError()` - 缩略图加载失败回退到原图
+
+### URL 标准化 (server/src/utils/url.ts)
+
+- `normalizeUrl()` - 与前端统一的标准化逻辑，用于链接去重
 
 ### 后台脚本 (entrypoints/background.ts)
 
@@ -167,9 +184,12 @@ docker-compose up --build -d
 
 **关键函数：**
 
-- `processImage()` - 处理图片数据（base64/URL/路径）
+- `processImage()` - 处理图片数据（base64/URL/路径），并生成缩略图
 - `saveBase64ToFile()` - 保存 base64 为文件
 - `downloadImage()` - 下载网络图片
+- `createThumbnail()` - 使用 sharp 生成缩略图
+- `findLinkByNormalizedUrl()` - 基于标准化 URL 的去重查询
+- `batchDeleteLinks()` / `batchRestoreFromTrash()` / `batchPermanentlyDelete()` - 批量操作
 - `DELETE /api/links/:id` - 删除时移动图片到 deleted
 - `POST /api/trash/:id/restore` - 还原时移回图片
 
@@ -202,8 +222,13 @@ docker-compose up --build -d
 ### 开发模式
 
 ```bash
-pnpm dev    # 开启 sourcemap，保留 console
-pnpm build  # 生产构建，压缩代码，移除 console
+pnpm dev              # 开启 sourcemap，保留 console
+pnpm build            # 生产构建
+pnpm typecheck        # 前端类型检查
+pnpm typecheck:server # 后端类型检查
+pnpm test:unit run    # 运行单元测试
+pnpm lint             # 代码检查
+pnpm format           # 格式化
 ```
 
 ## 图片显示优先级
@@ -308,12 +333,13 @@ update-offline.bat   # Windows
 | `release.yml`            | 构建扩展并创建 Release       | `workflow_dispatch`（手动） |
 | `build-extension.yml`    | 构建 Chrome/Firefox 扩展产物 | `workflow_dispatch`（手动） |
 | `build-server-image.yml` | 构建服务器 Docker 镜像       | `workflow_dispatch`（手动） |
+| `update-ci-image.yml`    | 构建并推送 `readlater-ci`    | `workflow_dispatch`（手动） |
 
 > 所有工作流均为**手动触发**，不再关联 push/pull_request 事件。
 
 ### CI 镜像 (`readlater-ci`)
 
-三个工作流共用统一的 CI 镜像 `192.168.1.100:8083/readlater-ci:latest`，基于 `node:24`（Debian），预装：
+工作流共用统一的 CI 镜像 `192.168.1.100:8083/readlater-ci:latest`，基于 `node:24`（Debian），预装：
 
 - `pnpm`（全局）
 - `buildah` + `skopeo`（容器镜像构建）
@@ -333,6 +359,15 @@ cd server/ci
 
 - 支持通过 `ARG ALPINE_REPO_URL` 指定 apk 源（默认阿里云）
 - `Batch 脚本 (.bat)` 构建后需确认 **CRLF 换行符**（`unix2dos` 修复）
+
+### 工作流关键配置
+
+- `actions/checkout@v7`
+- `actions/cache@v6`（缓存 `pnpm store` 与 `node-gyp` 缓存）
+- `forgejo/upload-artifact@v5`
+- npm 源指向内网 Nexus：`http://192.168.1.100:8081/repository/npm-proxy/`
+- Docker 基础镜像优先走内网镜像代理：`192.168.1.100:5443`
+- `build-server-image.yml` 使用 Buildah + Skopeo 构建并导出离线部署包
 
 ## 开发注意事项
 
@@ -357,8 +392,19 @@ COPY --from=builder /app/node_modules ./node_modules
 
 镜像体积：~200MB → ~80MB
 
+## 版本策略
+
+项目采用 **SemVer** 语义化版本：
+
+- 扩展版本号维护在根目录 `package.json` 的 `version` 字段。
+- 服务器版本号维护在 `server/package.json` 的 `version` 字段。
+- 发布扩展：给当前 commit 打标签 `v<扩展版本号>`（如 `v1.0.0`），然后手动触发 `release.yml`。
+- 发布服务器镜像：给当前 commit 打标签 `server-v<服务器版本号>`（如 `server-v2.0.0`），然后手动触发 `build-server-image.yml`。
+- 详细的变更记录见 [CHANGELOG.md](./CHANGELOG.md)。
+
 ## 相关文件
 
 - [FEATURES.md](./FEATURES.md) - 功能清单
+- [CHANGELOG.md](./CHANGELOG.md) - 变更日志
 - [server/README-DEPLOY.md](./server/README-DEPLOY.md) - 服务器部署指南
 - [server/SECURITY.md](./server/SECURITY.md) - 安全配置说明
