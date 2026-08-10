@@ -12,6 +12,7 @@ import {
   deleteCustomJsConfig,
 } from '@/utils/apiStorage';
 import { showSuccess, showError } from '@/utils/toast';
+import ThemeToggle from '@/components/ThemeToggle.vue';
 
 type TabType = 'extractor' | 'import' | 'server';
 const activeTab = ref<TabType>('server');
@@ -216,8 +217,11 @@ async function saveServer() {
 <template>
   <div class="settings-container">
     <header class="header">
-      <h1>稍后再看 - 设置</h1>
-      <p>配置图片提取规则和同步选项</p>
+      <div>
+        <h1>稍后再看 - 设置</h1>
+        <p>配置图片提取规则和同步选项</p>
+      </div>
+      <ThemeToggle />
     </header>
 
     <!-- Tab 导航 -->
@@ -375,7 +379,7 @@ async function saveServer() {
           </div>
 
           <div class="form-group">
-            <label>API Key <span style="color: #ef4444">*</span></label>
+            <label>API Key <span style="color: var(--rl-danger)">*</span></label>
             <input
               v-model="serverConfig.apiKey"
               type="password"
@@ -477,11 +481,14 @@ async function saveServer() {
 }
 
 .header {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--rl-primary) 0%, var(--rl-secondary) 100%);
   color: white;
   padding: 40px;
   border-radius: 12px;
   margin-bottom: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
 }
 
 .header h1 {
@@ -509,7 +516,7 @@ async function saveServer() {
   padding: 12px 20px;
   border: none;
   background: transparent;
-  color: #6b7280;
+  color: var(--rl-text-muted);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
@@ -518,11 +525,11 @@ async function saveServer() {
 }
 
 .tab-btn:hover {
-  background: #f3f4f6;
+  background: var(--rl-bg-hover);
 }
 
 .tab-btn.active {
-  background: #667eea;
+  background: var(--rl-primary);
   color: white;
 }
 
@@ -541,12 +548,12 @@ async function saveServer() {
 
 .section h2 {
   font-size: 20px;
-  color: #333;
+  color: var(--rl-text);
   margin-bottom: 8px;
 }
 
 .section-desc {
-  color: #6b7280;
+  color: var(--rl-text-muted);
   margin-bottom: 24px;
 }
 
@@ -571,39 +578,39 @@ async function saveServer() {
 }
 
 .btn-primary {
-  background: #667eea;
+  background: var(--rl-primary);
   color: white;
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: #5568d3;
+  background: var(--rl-primary-hover);
 }
 
 .btn-default {
-  background: #e5e7eb;
-  color: #374151;
+  background: var(--rl-border);
+  color: var(--rl-text-secondary);
 }
 
 .btn-default:hover:not(:disabled) {
-  background: #d1d5db;
+  background: var(--rl-border-strong);
 }
 
 .btn-success {
-  background: #10b981;
+  background: var(--rl-success);
   color: white;
 }
 
 .btn-success:hover:not(:disabled) {
-  background: #059669;
+  background: var(--rl-success-hover);
 }
 
 .btn-danger {
-  background: #ef4444;
+  background: var(--rl-danger);
   color: white;
 }
 
 .btn-danger:hover:not(:disabled) {
-  background: #dc2626;
+  background: var(--rl-danger-hover);
 }
 
 .btn:disabled {
@@ -628,15 +635,15 @@ async function saveServer() {
   justify-content: space-between;
   align-items: center;
   padding: 16px;
-  background: #f9fafb;
+  background: var(--rl-bg-subtle);
   border-radius: 8px;
   border: 2px solid transparent;
   transition: all 0.2s;
 }
 
 .config-item.active {
-  border-color: #10b981;
-  background: #ecfdf5;
+  border-color: var(--rl-success);
+  background: var(--rl-success-light);
 }
 
 .config-info {
@@ -658,13 +665,13 @@ async function saveServer() {
 }
 
 .badge-success {
-  background: #d1fae5;
-  color: #065f46;
+  background: var(--rl-success-light);
+  color: var(--rl-success);
 }
 
 .badge-default {
-  background: #e5e7eb;
-  color: #6b7280;
+  background: var(--rl-border);
+  color: var(--rl-text-muted);
 }
 
 .config-actions {
@@ -680,7 +687,7 @@ async function saveServer() {
 }
 
 .card {
-  background: #f9fafb;
+  background: var(--rl-bg-subtle);
   padding: 24px;
   border-radius: 12px;
 }
@@ -691,7 +698,7 @@ async function saveServer() {
 }
 
 .card p {
-  color: #6b7280;
+  color: var(--rl-text-muted);
   margin-bottom: 20px;
 }
 
@@ -708,7 +715,7 @@ async function saveServer() {
   display: block;
   margin-bottom: 8px;
   font-weight: 500;
-  color: #374151;
+  color: var(--rl-text-secondary);
 }
 
 .form-group input[type='text'],
@@ -720,7 +727,7 @@ async function saveServer() {
 .form-group textarea {
   width: 100%;
   padding: 10px 14px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--rl-border-strong);
   border-radius: 8px;
   font-size: 14px;
   font-family: inherit;
@@ -730,14 +737,14 @@ async function saveServer() {
 .form-group select:focus,
 .form-group textarea:focus {
   outline: none;
-  border-color: #667eea;
+  border-color: var(--rl-primary);
 }
 
 .form-group .hint {
   display: block;
   margin-top: 6px;
   font-size: 13px;
-  color: #6b7280;
+  color: var(--rl-text-muted);
   font-weight: normal;
 }
 
@@ -745,7 +752,7 @@ async function saveServer() {
   display: block;
   margin-top: 6px;
   font-size: 12px;
-  color: #dc2626;
+  color: var(--rl-danger-hover);
   font-weight: normal;
 }
 
@@ -806,19 +813,19 @@ async function saveServer() {
 }
 
 .connection-status.success {
-  background: #d1fae5;
-  color: #065f46;
+  background: var(--rl-success-light);
+  color: var(--rl-success);
 }
 
 .connection-status.error {
-  background: #fee2e2;
-  color: #991b1b;
+  background: var(--rl-danger-light);
+  color: var(--rl-danger-hover);
 }
 
 .sync-actions {
   margin-top: 32px;
   padding-top: 24px;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--rl-border);
 }
 
 .sync-actions h4 {
@@ -834,7 +841,7 @@ async function saveServer() {
 .sync-hint {
   margin-top: 16px;
   font-size: 13px;
-  color: #6b7280;
+  color: var(--rl-text-muted);
   line-height: 1.6;
 }
 
@@ -842,13 +849,13 @@ async function saveServer() {
   margin-top: 16px;
   padding: 16px;
   border-radius: 8px;
-  background: #f0fdf4;
-  border: 1px solid #86efac;
+  background: var(--rl-success-light);
+  border: 1px solid var(--rl-success-light);
 }
 
 .result-box.error {
-  background: #fef2f2;
-  border-color: #fca5a5;
+  background: var(--rl-danger-light);
+  border-color: var(--rl-danger-light);
 }
 
 .result-box .details {
@@ -856,14 +863,14 @@ async function saveServer() {
   display: flex;
   gap: 16px;
   font-size: 13px;
-  color: #6b7280;
+  color: var(--rl-text-muted);
 }
 
 /* 通用 */
 .empty-state {
   text-align: center;
   padding: 40px;
-  color: #6b7280;
+  color: var(--rl-text-muted);
 }
 
 .empty-state .hint {
@@ -874,14 +881,14 @@ async function saveServer() {
 .help-content {
   margin-top: 32px;
   padding-top: 24px;
-  border-top: 1px solid #e5e7eb;
-  color: #4b5563;
+  border-top: 1px solid var(--rl-border);
+  color: var(--rl-text-secondary);
 }
 
 .help-content h3 {
   font-size: 16px;
   margin: 20px 0 10px;
-  color: #111827;
+  color: var(--rl-text);
 }
 
 .help-content h3:first-child {
@@ -898,7 +905,7 @@ async function saveServer() {
 }
 
 .help-content code {
-  background: #f3f4f6;
+  background: var(--rl-bg-hover);
   padding: 2px 6px;
   border-radius: 4px;
   font-family: 'Monaco', 'Menlo', monospace;
@@ -942,8 +949,8 @@ async function saveServer() {
 .spinner {
   width: 32px;
   height: 32px;
-  border: 3px solid #e5e7eb;
-  border-top-color: #667eea;
+  border: 3px solid var(--rl-border);
+  border-top-color: var(--rl-primary);
   border-radius: 50%;
   animation: spin 1s linear infinite;
   margin: 0 auto 12px;
@@ -958,7 +965,7 @@ async function saveServer() {
 .loading {
   text-align: center;
   padding: 40px;
-  color: #6b7280;
+  color: var(--rl-text-muted);
 }
 
 /* 响应式 */

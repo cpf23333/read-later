@@ -25,8 +25,8 @@
 
 ## 4. 文档与发布
 
-- [ ] 更新 AGENTS.md / README（CI/CD 流程已变更）
-- [ ] 制定版本策略与 CHANGELOG
+- [x] 更新 AGENTS.md / README（CI/CD 流程已变更）
+- [x] 制定版本策略与 CHANGELOG
 - [ ] 扩展商店发布准备
 
 ## 5. 体验优化

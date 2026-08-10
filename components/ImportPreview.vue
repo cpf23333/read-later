@@ -294,24 +294,24 @@ function formatDate(ts: number | undefined): string {
 
 .preview-header {
   padding: 20px 24px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--rl-border);
   position: relative;
 }
 
 .preview-header h2 {
   margin: 0;
   font-size: 18px;
-  color: #111827;
+  color: var(--rl-text);
 }
 
 .preview-subtitle {
   margin: 6px 0 0;
   font-size: 13px;
-  color: #6b7280;
+  color: var(--rl-text-muted);
 }
 
 .duplicate-warning {
-  color: #f59e0b;
+  color: var(--rl-warning);
   font-weight: 500;
 }
 
@@ -322,11 +322,11 @@ function formatDate(ts: number | undefined): string {
   width: 32px;
   height: 32px;
   border: none;
-  background: #f3f4f6;
+  background: var(--rl-bg-hover);
   border-radius: 8px;
   font-size: 20px;
   line-height: 1;
-  color: #6b7280;
+  color: var(--rl-text-muted);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -334,13 +334,13 @@ function formatDate(ts: number | undefined): string {
 }
 
 .close-btn:hover {
-  background: #e5e7eb;
-  color: #111827;
+  background: var(--rl-border);
+  color: var(--rl-text);
 }
 
 .preview-toolbar {
   padding: 12px 24px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--rl-border);
   display: flex;
   gap: 16px;
   align-items: center;
@@ -355,14 +355,14 @@ function formatDate(ts: number | undefined): string {
   width: 100%;
   max-width: 320px;
   padding: 8px 14px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--rl-border-strong);
   border-radius: 8px;
   font-size: 14px;
 }
 
 .preview-search input:focus {
   outline: none;
-  border-color: #667eea;
+  border-color: var(--rl-primary);
 }
 
 .preview-list {
@@ -383,15 +383,15 @@ function formatDate(ts: number | undefined): string {
 }
 
 .preview-item:hover {
-  background: #f9fafb;
+  background: var(--rl-bg-subtle);
 }
 
 .preview-item.selected {
-  background: #eef2ff;
+  background: var(--rl-primary-light);
 }
 
 .preview-item.duplicate {
-  border-left: 3px solid #f59e0b;
+  border-left: 3px solid var(--rl-warning);
 }
 
 .item-checkbox {
@@ -408,7 +408,7 @@ function formatDate(ts: number | undefined): string {
   width: 80px;
   height: 60px;
   border-radius: 8px;
-  background: #f3f4f6;
+  background: var(--rl-bg-hover);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -423,7 +423,7 @@ function formatDate(ts: number | undefined): string {
 }
 
 .item-image.empty {
-  color: #9ca3af;
+  color: var(--rl-text-placeholder);
   font-size: 12px;
 }
 
@@ -435,14 +435,14 @@ function formatDate(ts: number | undefined): string {
 .item-title {
   font-size: 14px;
   font-weight: 500;
-  color: #111827;
+  color: var(--rl-text);
   margin-bottom: 4px;
   word-break: break-all;
 }
 
 .item-url {
   font-size: 12px;
-  color: #6b7280;
+  color: var(--rl-text-muted);
   word-break: break-all;
   margin-bottom: 6px;
 }
@@ -456,21 +456,21 @@ function formatDate(ts: number | undefined): string {
 
 .item-meta .domain {
   font-size: 12px;
-  color: #667eea;
-  background: #eef2ff;
+  color: var(--rl-primary);
+  background: var(--rl-primary-light);
   padding: 2px 8px;
   border-radius: 4px;
 }
 
 .item-meta .date {
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--rl-text-placeholder);
 }
 
 .duplicate-tag {
   font-size: 11px;
-  color: #b45309;
-  background: #fef3c7;
+  color: var(--rl-warning);
+  background: var(--rl-warning-light);
   padding: 2px 8px;
   border-radius: 4px;
   font-weight: 500;
@@ -479,13 +479,13 @@ function formatDate(ts: number | undefined): string {
 .preview-empty {
   text-align: center;
   padding: 40px;
-  color: #9ca3af;
+  color: var(--rl-text-placeholder);
   font-size: 14px;
 }
 
 .preview-footer {
   padding: 16px 24px;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--rl-border);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -495,15 +495,15 @@ function formatDate(ts: number | undefined): string {
 
 .footer-info {
   font-size: 14px;
-  color: #6b7280;
+  color: var(--rl-text-muted);
 }
 
 .footer-info .hint {
-  color: #9ca3af;
+  color: var(--rl-text-placeholder);
 }
 
 .duplicate-hint {
-  color: #f59e0b;
+  color: var(--rl-warning);
 }
 
 .footer-actions {
@@ -522,21 +522,21 @@ function formatDate(ts: number | undefined): string {
 }
 
 .btn-primary {
-  background: #667eea;
+  background: var(--rl-primary);
   color: white;
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: #5568d3;
+  background: var(--rl-primary-hover);
 }
 
 .btn-default {
-  background: #e5e7eb;
-  color: #374151;
+  background: var(--rl-border);
+  color: var(--rl-text-secondary);
 }
 
 .btn-default:hover {
-  background: #d1d5db;
+  background: var(--rl-border-strong);
 }
 
 .btn:disabled {
@@ -550,7 +550,7 @@ function formatDate(ts: number | undefined): string {
   gap: 8px;
   cursor: pointer;
   font-size: 14px;
-  color: #374151;
+  color: var(--rl-text-secondary);
   white-space: nowrap;
 }
 

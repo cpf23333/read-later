@@ -22,6 +22,7 @@ import { showSuccess, showError, showWarning } from '@/utils/toast';
 import { parseImportFile, type ParsedLink } from '@/utils/importParser';
 import { getThumbUrl, handleThumbError } from '@/utils/imageUrl';
 import ImportPreview from '@/components/ImportPreview.vue';
+import ThemeToggle from '@/components/ThemeToggle.vue';
 
 type SortBy = 'createdAt' | 'title' | 'domain';
 type SortOrder = 'asc' | 'desc';
@@ -531,6 +532,7 @@ onMounted(() => {
           >
             删除选中 ({{ selectedIds.size }})
           </button>
+          <ThemeToggle />
         </div>
       </div>
     </header>
@@ -864,7 +866,7 @@ onMounted(() => {
 }
 
 .header {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--rl-primary) 0%, var(--rl-secondary) 100%);
   color: white;
   padding: 20px 0;
   position: sticky;
@@ -928,14 +930,14 @@ onMounted(() => {
 .search-box input {
   flex: 1;
   padding: 10px 16px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--rl-border-strong);
   border-radius: 8px;
   font-size: 14px;
 }
 
 .search-box input:focus {
   outline: none;
-  border-color: #667eea;
+  border-color: var(--rl-primary);
 }
 
 .toolbar-right {
@@ -960,35 +962,35 @@ onMounted(() => {
 }
 
 .btn-primary {
-  background: #667eea;
+  background: var(--rl-primary);
   color: white;
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: #5568d3;
+  background: var(--rl-primary-hover);
 }
 
 .btn-default {
-  background: #e5e7eb;
-  color: #374151;
+  background: var(--rl-border);
+  color: var(--rl-text-secondary);
 }
 
 .btn-default:hover:not(:disabled) {
-  background: #d1d5db;
+  background: var(--rl-border-strong);
 }
 
 .btn-default.active {
-  background: #667eea;
+  background: var(--rl-primary);
   color: white;
 }
 
 .btn-danger {
-  background: #ef4444;
+  background: var(--rl-danger);
   color: white;
 }
 
 .btn-danger:hover:not(:disabled) {
-  background: #dc2626;
+  background: var(--rl-danger-hover);
 }
 
 .btn:disabled {
@@ -1021,7 +1023,7 @@ onMounted(() => {
 .filter-section h4 {
   font-size: 14px;
   font-weight: 600;
-  color: #374151;
+  color: var(--rl-text-secondary);
   margin-bottom: 12px;
 }
 
@@ -1042,28 +1044,28 @@ onMounted(() => {
 .tag {
   padding: 6px 12px;
   border-radius: 20px;
-  border: 1px solid #e5e7eb;
-  background: #f9fafb;
-  color: #374151;
+  border: 1px solid var(--rl-border);
+  background: var(--rl-bg-subtle);
+  color: var(--rl-text-secondary);
   font-size: 13px;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .tag:hover {
-  background: #e5e7eb;
+  background: var(--rl-border);
 }
 
 .tag.active {
-  background: #667eea;
+  background: var(--rl-primary);
   color: white;
-  border-color: #667eea;
+  border-color: var(--rl-primary);
 }
 
 .domain-select {
   margin-top: 12px;
   padding: 8px 12px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--rl-border-strong);
   border-radius: 8px;
   font-size: 14px;
   width: 100%;
@@ -1078,13 +1080,13 @@ onMounted(() => {
 
 .date-range input {
   padding: 8px 12px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--rl-border-strong);
   border-radius: 8px;
   font-size: 14px;
 }
 
 .date-range span {
-  color: #6b7280;
+  color: var(--rl-text-muted);
 }
 
 .filter-actions {
@@ -1092,7 +1094,7 @@ onMounted(() => {
   justify-content: flex-end;
   gap: 12px;
   padding-top: 16px;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--rl-border);
   margin-top: 16px;
 }
 
@@ -1100,14 +1102,14 @@ onMounted(() => {
 .results-info {
   margin-bottom: 12px;
   font-size: 14px;
-  color: #6b7280;
+  color: var(--rl-text-muted);
   display: flex;
   gap: 12px;
   align-items: center;
 }
 
 .filter-desc {
-  color: #667eea;
+  color: var(--rl-primary);
 }
 
 /* 全选 */
@@ -1144,14 +1146,14 @@ onMounted(() => {
 .loading {
   text-align: center;
   padding: 60px;
-  color: #6b7280;
+  color: var(--rl-text-muted);
 }
 
 .spinner {
   width: 40px;
   height: 40px;
-  border: 3px solid #e5e7eb;
-  border-top-color: #667eea;
+  border: 3px solid var(--rl-border);
+  border-top-color: var(--rl-primary);
   border-radius: 50%;
   animation: spin 1s linear infinite;
   margin: 0 auto 16px;
@@ -1166,7 +1168,7 @@ onMounted(() => {
 .empty-state {
   text-align: center;
   padding: 80px 20px;
-  color: #6b7280;
+  color: var(--rl-text-muted);
 }
 
 .empty-state .hint {
@@ -1175,7 +1177,7 @@ onMounted(() => {
 }
 
 .empty-state a {
-  color: #667eea;
+  color: var(--rl-primary);
 }
 
 /* 链接列表 */
@@ -1227,7 +1229,7 @@ onMounted(() => {
 }
 
 .link-card.selected {
-  border: 2px solid #667eea;
+  border: 2px solid var(--rl-primary);
 }
 
 .card-checkbox {
@@ -1245,7 +1247,7 @@ onMounted(() => {
 
 .card-image {
   height: 180px;
-  background: #f3f4f6;
+  background: var(--rl-bg-hover);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1259,7 +1261,7 @@ onMounted(() => {
 }
 
 .card-image.empty {
-  color: #9ca3af;
+  color: var(--rl-text-placeholder);
   font-size: 14px;
 }
 
@@ -1270,7 +1272,7 @@ onMounted(() => {
 .card-title {
   font-size: 15px;
   font-weight: 600;
-  color: #111827;
+  color: var(--rl-text);
   margin-bottom: 8px;
   line-height: 1.4;
   display: -webkit-box;
@@ -1281,7 +1283,7 @@ onMounted(() => {
 
 .card-url {
   font-size: 13px;
-  color: #6b7280;
+  color: var(--rl-text-muted);
   margin-bottom: 12px;
   word-break: break-all;
   display: -webkit-box;
@@ -1294,20 +1296,20 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--rl-text-placeholder);
   margin-top: auto;
 }
 
 .card-meta .domain {
-  color: #667eea;
-  background: #eef2ff;
+  color: var(--rl-primary);
+  background: var(--rl-primary-light);
   padding: 2px 8px;
   border-radius: 4px;
 }
 
 .card-actions {
   padding: 12px 16px;
-  border-top: 1px solid #f3f4f6;
+  border-top: 1px solid var(--rl-bg-hover);
   display: flex;
   gap: 8px;
 }
@@ -1324,7 +1326,7 @@ onMounted(() => {
 
 .page-info {
   font-size: 14px;
-  color: #6b7280;
+  color: var(--rl-text-muted);
 }
 
 /* 回收站 */
@@ -1332,14 +1334,14 @@ onMounted(() => {
   display: flex;
   gap: 12px;
   margin-bottom: 20px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--rl-border);
   padding-bottom: 12px;
 }
 
 .tab-btn {
   padding: 10px 20px;
   border: none;
-  background: #f3f4f6;
+  background: var(--rl-bg-hover);
   border-radius: 8px;
   cursor: pointer;
   font-size: 14px;
@@ -1347,11 +1349,11 @@ onMounted(() => {
 }
 
 .tab-btn:hover {
-  background: #e5e7eb;
+  background: var(--rl-border);
 }
 
 .tab-btn.active {
-  background: #667eea;
+  background: var(--rl-primary);
   color: white;
 }
 
@@ -1369,7 +1371,7 @@ onMounted(() => {
 }
 
 .trash-desc {
-  color: #6b7280;
+  color: var(--rl-text-muted);
   margin-bottom: 16px;
 }
 
@@ -1403,7 +1405,7 @@ onMounted(() => {
 .trash-image {
   width: 80px;
   height: 60px;
-  background: #f3f4f6;
+  background: var(--rl-bg-hover);
   border-radius: 8px;
   display: flex;
   align-items: center;
@@ -1419,7 +1421,7 @@ onMounted(() => {
 }
 
 .trash-image.empty {
-  color: #9ca3af;
+  color: var(--rl-text-placeholder);
   font-size: 12px;
 }
 
@@ -1439,7 +1441,7 @@ onMounted(() => {
 
 .trash-url {
   font-size: 13px;
-  color: #6b7280;
+  color: var(--rl-text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1450,12 +1452,12 @@ onMounted(() => {
   display: flex;
   gap: 16px;
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--rl-text-placeholder);
   flex-wrap: wrap;
 }
 
 .trash-meta .has-image {
-  color: #667eea;
+  color: var(--rl-primary);
 }
 
 .trash-actions-row {

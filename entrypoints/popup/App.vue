@@ -2,6 +2,7 @@
 import { ref, onMounted } from 'vue';
 import { getLinkCount, isLinkExists, addLink } from '@/utils/hybridStorage';
 import { showSuccess, showError, showWarning } from '@/utils/toast';
+import ThemeToggle from '@/components/ThemeToggle.vue';
 
 const linkCount = ref(0);
 const saving = ref(false);
@@ -104,8 +105,11 @@ async function saveCurrentPage() {
 <template>
   <div class="popup-container">
     <header class="header">
-      <h1>稍后再看</h1>
-      <span class="badge">{{ linkCount }} 个链接</span>
+      <div class="header-left">
+        <h1>稍后再看</h1>
+        <span class="badge">{{ linkCount }} 个链接</span>
+      </div>
+      <ThemeToggle />
     </header>
 
     <main class="main">
@@ -141,16 +145,22 @@ async function saveCurrentPage() {
 <style scoped>
 .popup-container {
   width: 320px;
-  background: #fff;
+  background: var(--rl-bg-elevated);
 }
 
 .header {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--rl-primary) 0%, var(--rl-secondary) 100%);
   color: white;
   padding: 20px;
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .header h1 {
@@ -171,7 +181,7 @@ async function saveCurrentPage() {
 
 .description {
   font-size: 13px;
-  color: #6b7280;
+  color: var(--rl-text-muted);
   margin-bottom: 16px;
   line-height: 1.5;
 }
@@ -194,31 +204,31 @@ async function saveCurrentPage() {
 }
 
 .btn-primary {
-  background: #667eea;
+  background: var(--rl-primary);
   color: white;
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: #5568d3;
+  background: var(--rl-primary-hover);
 }
 
 .btn-secondary {
-  background: #f3f4f6;
-  color: #374151;
+  background: var(--rl-bg-hover);
+  color: var(--rl-text-secondary);
 }
 
 .btn-secondary:hover {
-  background: #e5e7eb;
+  background: var(--rl-border);
 }
 
 .btn-default {
   background: transparent;
-  color: #6b7280;
-  border: 1px solid #e5e7eb;
+  color: var(--rl-text-muted);
+  border: 1px solid var(--rl-border);
 }
 
 .btn-default:hover {
-  background: #f9fafb;
+  background: var(--rl-bg-subtle);
 }
 
 .btn:disabled {
@@ -227,7 +237,7 @@ async function saveCurrentPage() {
 }
 
 .tips {
-  background: #f9fafb;
+  background: var(--rl-bg-subtle);
   padding: 16px;
   border-radius: 8px;
 }
@@ -235,14 +245,14 @@ async function saveCurrentPage() {
 .tips h3 {
   font-size: 13px;
   font-weight: 600;
-  color: #374151;
+  color: var(--rl-text-secondary);
   margin-bottom: 10px;
 }
 
 .tips ul {
   list-style: none;
   font-size: 12px;
-  color: #6b7280;
+  color: var(--rl-text-muted);
 }
 
 .tips li {
@@ -255,18 +265,18 @@ async function saveCurrentPage() {
   content: '•';
   position: absolute;
   left: 4px;
-  color: #667eea;
+  color: var(--rl-primary);
 }
 
 .footer {
   padding: 12px 20px;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--rl-border);
   text-align: center;
 }
 
 .footer a {
   font-size: 13px;
-  color: #667eea;
+  color: var(--rl-primary);
   text-decoration: none;
 }
 

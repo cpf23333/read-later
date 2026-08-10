@@ -3,6 +3,7 @@ import { ref, onMounted, onUnmounted, computed } from 'vue';
 import { createExport, getExports, downloadExport, deleteExport } from '@/utils/hybridStorage';
 import type { ExportTask } from '@/utils/storage';
 import { showSuccess, showError } from '@/utils/toast';
+import ThemeToggle from '@/components/ThemeToggle.vue';
 
 const tasks = ref<ExportTask[]>([]);
 const loading = ref(false);
@@ -151,9 +152,12 @@ function goBack() {
           <button class="back-btn" @click="goBack">← 返回</button>
           <h1>📦 导出管理</h1>
         </div>
-        <button class="btn btn-primary" @click="handleCreateExport" :disabled="creating">
-          {{ creating ? '创建中...' : '➕ 新建导出' }}
-        </button>
+        <div class="header-actions">
+          <ThemeToggle />
+          <button class="btn btn-primary" @click="handleCreateExport" :disabled="creating">
+            {{ creating ? '创建中...' : '➕ 新建导出' }}
+          </button>
+        </div>
       </div>
     </header>
 
@@ -243,13 +247,19 @@ function goBack() {
 <style scoped>
 .export-manager {
   min-height: 100vh;
-  background: #f9fafb;
+  background: var(--rl-bg);
 }
 
 .header {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--rl-primary) 0%, var(--rl-secondary) 100%);
   color: white;
   padding: 20px 0;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .header-content {
@@ -304,30 +314,30 @@ function goBack() {
 }
 
 .btn-primary {
-  background: #667eea;
+  background: var(--rl-primary);
   color: white;
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: #5568d3;
+  background: var(--rl-primary-hover);
 }
 
 .btn-danger {
-  background: #ef4444;
+  background: var(--rl-danger);
   color: white;
 }
 
 .btn-danger:hover:not(:disabled) {
-  background: #dc2626;
+  background: var(--rl-danger-hover);
 }
 
 .btn-default {
-  background: #e5e7eb;
-  color: #374151;
+  background: var(--rl-border);
+  color: var(--rl-text-secondary);
 }
 
 .btn-default:hover {
-  background: #d1d5db;
+  background: var(--rl-border-strong);
 }
 
 .btn:disabled {
@@ -343,14 +353,14 @@ function goBack() {
 .loading {
   text-align: center;
   padding: 80px 20px;
-  color: #6b7280;
+  color: var(--rl-text-muted);
 }
 
 .spinner {
   width: 40px;
   height: 40px;
-  border: 3px solid #e5e7eb;
-  border-top-color: #667eea;
+  border: 3px solid var(--rl-border);
+  border-top-color: var(--rl-primary);
   border-radius: 50%;
   animation: spin 1s linear infinite;
   margin: 0 auto 16px;
@@ -365,7 +375,7 @@ function goBack() {
 .empty-state {
   text-align: center;
   padding: 80px 20px;
-  color: #6b7280;
+  color: var(--rl-text-muted);
   background: white;
   border-radius: 12px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
@@ -387,12 +397,12 @@ function goBack() {
   justify-content: space-between;
   align-items: center;
   font-size: 14px;
-  color: #6b7280;
+  color: var(--rl-text-muted);
   margin-bottom: 8px;
 }
 
 .refreshing {
-  color: #667eea;
+  color: var(--rl-primary);
   font-size: 13px;
 }
 
@@ -410,7 +420,7 @@ function goBack() {
 }
 
 .task-running {
-  border-left: 4px solid #667eea;
+  border-left: 4px solid var(--rl-primary);
 }
 
 .task-info {
@@ -421,7 +431,7 @@ function goBack() {
 .task-id {
   font-size: 13px;
   font-family: monospace;
-  color: #374151;
+  color: var(--rl-text-secondary);
   margin-bottom: 6px;
   word-break: break-all;
 }
@@ -434,7 +444,7 @@ function goBack() {
 
 .task-date {
   font-size: 13px;
-  color: #9ca3af;
+  color: var(--rl-text-placeholder);
 }
 
 .task-status {
@@ -451,23 +461,23 @@ function goBack() {
 }
 
 .status-running {
-  background: #eef2ff;
-  color: #667eea;
+  background: var(--rl-primary-light);
+  color: var(--rl-primary);
 }
 
 .status-completed {
-  background: #d1fae5;
-  color: #065f46;
+  background: var(--rl-success-light);
+  color: var(--rl-success);
 }
 
 .status-failed {
-  background: #fee2e2;
-  color: #991b1b;
+  background: var(--rl-danger-light);
+  color: var(--rl-danger-hover);
 }
 
 .file-size {
   font-size: 13px;
-  color: #6b7280;
+  color: var(--rl-text-muted);
   font-family: monospace;
 }
 
@@ -480,8 +490,8 @@ function goBack() {
 .task-error {
   width: 100%;
   font-size: 12px;
-  color: #991b1b;
-  background: #fef2f2;
+  color: var(--rl-danger-hover);
+  background: var(--rl-danger-light);
   padding: 8px 12px;
   border-radius: 6px;
   margin-top: 4px;
@@ -511,17 +521,17 @@ function goBack() {
 .dialog h3 {
   margin: 0 0 12px;
   font-size: 18px;
-  color: #111827;
+  color: var(--rl-text);
 }
 
 .dialog p {
-  color: #4b5563;
+  color: var(--rl-text-secondary);
   margin: 0 0 8px;
 }
 
 .dialog-hint {
   font-size: 13px;
-  color: #9ca3af;
+  color: var(--rl-text-placeholder);
 }
 
 .dialog-actions {
