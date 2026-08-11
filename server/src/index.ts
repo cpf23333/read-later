@@ -18,9 +18,11 @@ dotenv.config();
 // 导入模块
 import { initDatabase, closeDatabase } from './utils/database.ts';
 import { setImagesDir } from './utils/image.ts';
-import { setApiKey } from './middleware/auth.ts';
+import { setApiKey, getApiKeyCount } from './middleware/auth.ts';
 import { authMiddleware } from './middleware/auth.ts';
 import { startBackupSchedule, stopBackupSchedule } from './utils/backup.ts';
+import { logger } from './utils/logger.ts';
+import { errorHandler } from './middleware/errorHandler.ts';
 import { generalRateLimit } from './middleware/ratelimit.ts';
 import { isAllowedExtension } from './utils/security.ts';
 
@@ -43,19 +45,10 @@ const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
 
 // 检查 API_KEY 是否配置
 if (!API_KEY) {
-  console.error(`
-╔════════════════════════════════════════════════╗
-║                                                ║
-║   ❌ 启动失败：缺少 API_KEY 环境变量          ║
-║                                                ║
-║   请设置 API_KEY 环境变量，例如：             ║
-║   API_KEY=your-secret-api-key                 ║
-║                                                ║
-║   生成随机密钥：                              ║
-║   openssl rand -base64 32                     ║
-║                                                ║
-╚════════════════════════════════════════════════╝
-  `);
+  logger.error('启动失败：缺少 API_KEY 环境变量', {
+    hint: '请设置 API_KEY 环境变量，例如：API_KEY=your-secret-api-key',
+    generate: 'openssl rand -base64 32',
+  });
   process.exit(1);
 }
 
@@ -99,6 +92,9 @@ startBackupSchedule({
 
 // 创建 Hono 应用
 const app = new Hono();
+
+// 全局错误处理
+app.use(errorHandler);
 
 // 全局限流
 app.use(generalRateLimit);
@@ -175,30 +171,25 @@ serve(
     hostname: '0.0.0.0',
   },
   (info) => {
-    console.log(`
-╔════════════════════════════════════════════════╗
-║                                                ║
-║   稍后再看 (ReadLater) 服务器已启动           ║
-║                                                ║
-║   地址: http://0.0.0.0:${info.port}                    ║
-║   数据目录: ${DATA_DIR}          ║
-║   鉴权: 已启用                                 ║
-║                                                ║
-╚════════════════════════════════════════════════╝
-  `);
+    logger.info('ReadLater 服务器已启动', {
+      address: `http://0.0.0.0:${info.port}`,
+      dataDir: DATA_DIR,
+      authEnabled: true,
+      apiKeyCount: getApiKeyCount(),
+    });
   }
 );
 
 // 优雅关闭
 process.on('SIGINT', () => {
-  console.log('\n正在关闭服务器...');
+  logger.info('正在关闭服务器...');
   stopBackupSchedule();
   closeDatabase();
   process.exit(0);
 });
 
 process.on('SIGTERM', () => {
-  console.log('\n正在关闭服务器...');
+  logger.info('正在关闭服务器...');
   stopBackupSchedule();
   closeDatabase();
   process.exit(0);
