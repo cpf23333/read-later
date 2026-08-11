@@ -144,14 +144,16 @@ async function saveCurrentPage() {
 
 <style scoped>
 .popup-container {
-  width: 320px;
+  width: 340px;
   background: var(--rl-bg-elevated);
+  border-radius: 0 0 16px 16px;
+  overflow: hidden;
 }
 
 .header {
   background: linear-gradient(135deg, var(--rl-primary) 0%, var(--rl-secondary) 100%);
   color: white;
-  padding: 20px;
+  padding: 24px 20px;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -164,15 +166,18 @@ async function saveCurrentPage() {
 }
 
 .header h1 {
-  font-size: 20px;
-  font-weight: 600;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
 }
 
 .badge {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.25);
   padding: 4px 10px;
   border-radius: 20px;
   font-size: 12px;
+  font-weight: 500;
+  backdrop-filter: blur(4px);
 }
 
 .main {
@@ -182,8 +187,8 @@ async function saveCurrentPage() {
 .description {
   font-size: 13px;
   color: var(--rl-text-muted);
-  margin-bottom: 16px;
-  line-height: 1.5;
+  margin-bottom: 18px;
+  line-height: 1.6;
 }
 
 .actions {
@@ -196,20 +201,26 @@ async function saveCurrentPage() {
 .btn {
   padding: 12px 16px;
   border: none;
-  border-radius: 8px;
+  border-radius: 10px;
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
 }
 
 .btn-primary {
-  background: var(--rl-primary);
+  background: linear-gradient(135deg, var(--rl-primary) 0%, var(--rl-secondary) 100%);
   color: white;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.35);
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: var(--rl-primary-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(102, 126, 234, 0.45);
 }
 
 .btn-secondary {
@@ -229,24 +240,31 @@ async function saveCurrentPage() {
 
 .btn-default:hover {
   background: var(--rl-bg-subtle);
+  border-color: var(--rl-border-strong);
 }
 
 .btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 
 .tips {
   background: var(--rl-bg-subtle);
+  border: 1px solid var(--rl-border);
   padding: 16px;
-  border-radius: 8px;
+  border-radius: 12px;
 }
 
 .tips h3 {
   font-size: 13px;
   font-weight: 600;
   color: var(--rl-text-secondary);
-  margin-bottom: 10px;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .tips ul {
@@ -256,28 +274,31 @@ async function saveCurrentPage() {
 }
 
 .tips li {
-  padding: 4px 0;
-  padding-left: 16px;
+  padding: 5px 0;
+  padding-left: 18px;
   position: relative;
 }
 
 .tips li::before {
-  content: '•';
+  content: '✓';
   position: absolute;
-  left: 4px;
-  color: var(--rl-primary);
+  left: 0;
+  color: var(--rl-success);
+  font-weight: 600;
 }
 
 .footer {
-  padding: 12px 20px;
+  padding: 14px 20px;
   border-top: 1px solid var(--rl-border);
   text-align: center;
+  background: var(--rl-bg-subtle);
 }
 
 .footer a {
   font-size: 13px;
   color: var(--rl-primary);
   text-decoration: none;
+  font-weight: 500;
 }
 
 .footer a:hover {

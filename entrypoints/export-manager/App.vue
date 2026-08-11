@@ -376,9 +376,10 @@ function goBack() {
   text-align: center;
   padding: 80px 20px;
   color: var(--rl-text-muted);
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  background: var(--rl-bg-elevated);
+  border-radius: 16px;
+  box-shadow: var(--rl-shadow-sm);
+  border: 1px solid var(--rl-border);
 }
 
 .empty-state .hint {
@@ -407,16 +408,21 @@ function goBack() {
 }
 
 .task-card {
-  background: white;
-  border-radius: 12px;
+  background: var(--rl-bg-elevated);
+  border-radius: 16px;
   padding: 20px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--rl-shadow-sm);
+  border: 1px solid var(--rl-border);
   display: flex;
   flex-wrap: wrap;
   gap: 16px;
   align-items: center;
   justify-content: space-between;
-  transition: all 0.2s;
+  transition: all 0.2s ease;
+}
+
+.task-card:hover {
+  box-shadow: var(--rl-shadow-md);
 }
 
 .task-running {
@@ -510,12 +516,13 @@ function goBack() {
 }
 
 .dialog {
-  background: white;
-  border-radius: 12px;
+  background: var(--rl-bg-elevated);
+  border-radius: 16px;
   padding: 24px;
   width: 100%;
   max-width: 400px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--rl-border);
+  box-shadow: var(--rl-shadow-xl);
 }
 
 .dialog h3 {

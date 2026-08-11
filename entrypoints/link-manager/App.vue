@@ -931,13 +931,16 @@ onMounted(() => {
   flex: 1;
   padding: 10px 16px;
   border: 1px solid var(--rl-border-strong);
-  border-radius: 8px;
+  border-radius: 10px;
   font-size: 14px;
+  background: var(--rl-bg-elevated);
+  color: var(--rl-text);
 }
 
 .search-box input:focus {
   outline: none;
   border-color: var(--rl-primary);
+  box-shadow: 0 0 0 3px var(--rl-primary-light);
 }
 
 .toolbar-right {
@@ -1005,11 +1008,12 @@ onMounted(() => {
 
 /* 筛选面板 */
 .filter-panel {
-  background: white;
-  border-radius: 12px;
+  background: var(--rl-bg-elevated);
+  border-radius: 16px;
   padding: 20px;
   margin-bottom: 20px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--rl-shadow-sm);
+  border: 1px solid var(--rl-border);
 }
 
 .filter-section {
@@ -1116,9 +1120,10 @@ onMounted(() => {
 .select-all-bar {
   margin-bottom: 16px;
   padding: 12px 16px;
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  background: var(--rl-bg-elevated);
+  border-radius: 10px;
+  box-shadow: var(--rl-shadow-sm);
+  border: 1px solid var(--rl-border);
 }
 
 .checkbox {
@@ -1212,19 +1217,20 @@ onMounted(() => {
 }
 
 .link-card {
-  background: white;
-  border-radius: 12px;
+  background: var(--rl-bg-elevated);
+  border-radius: 16px;
   overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-  transition: all 0.2s;
+  box-shadow: var(--rl-shadow-sm);
+  transition: all 0.2s ease;
   cursor: pointer;
   position: relative;
   display: flex;
   flex-direction: column;
+  border: 1px solid var(--rl-border);
 }
 
 .link-card:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  box-shadow: var(--rl-shadow-lg);
   transform: translateY(-2px);
 }
 
@@ -1358,11 +1364,12 @@ onMounted(() => {
 }
 
 .trash-header {
-  background: white;
-  border-radius: 12px;
+  background: var(--rl-bg-elevated);
+  border-radius: 16px;
   padding: 24px;
   margin-bottom: 20px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--rl-shadow-sm);
+  border: 1px solid var(--rl-border);
 }
 
 .trash-header h2 {
@@ -1388,13 +1395,19 @@ onMounted(() => {
 }
 
 .trash-item {
-  background: white;
-  border-radius: 12px;
+  background: var(--rl-bg-elevated);
+  border-radius: 16px;
   padding: 16px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--rl-shadow-sm);
+  border: 1px solid var(--rl-border);
   display: flex;
   align-items: center;
   gap: 16px;
+  transition: all 0.2s ease;
+}
+
+.trash-item:hover {
+  box-shadow: var(--rl-shadow-md);
 }
 
 .trash-checkbox input {

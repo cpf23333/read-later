@@ -504,11 +504,12 @@ async function saveServer() {
 .tab-nav {
   display: flex;
   gap: 8px;
-  margin-bottom: 20px;
-  background: white;
+  margin-bottom: 24px;
+  background: var(--rl-bg-elevated);
   padding: 8px;
-  border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  border-radius: 14px;
+  box-shadow: var(--rl-shadow-sm);
+  border: 1px solid var(--rl-border);
 }
 
 .tab-btn {
@@ -520,17 +521,19 @@ async function saveServer() {
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  border-radius: 8px;
+  border-radius: 10px;
   transition: all 0.2s;
 }
 
 .tab-btn:hover {
   background: var(--rl-bg-hover);
+  color: var(--rl-text-secondary);
 }
 
 .tab-btn.active {
   background: var(--rl-primary);
   color: white;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
 }
 
 .main {
@@ -540,10 +543,11 @@ async function saveServer() {
 }
 
 .section {
-  background: white;
-  border-radius: 12px;
+  background: var(--rl-bg-elevated);
+  border-radius: 16px;
   padding: 24px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--rl-shadow-sm);
+  border: 1px solid var(--rl-border);
 }
 
 .section h2 {
@@ -636,9 +640,14 @@ async function saveServer() {
   align-items: center;
   padding: 16px;
   background: var(--rl-bg-subtle);
-  border-radius: 8px;
-  border: 2px solid transparent;
+  border-radius: 12px;
+  border: 1px solid var(--rl-border);
   transition: all 0.2s;
+}
+
+.config-item:hover {
+  border-color: var(--rl-border-strong);
+  box-shadow: var(--rl-shadow-sm);
 }
 
 .config-item.active {
@@ -689,12 +698,20 @@ async function saveServer() {
 .card {
   background: var(--rl-bg-subtle);
   padding: 24px;
-  border-radius: 12px;
+  border-radius: 14px;
+  border: 1px solid var(--rl-border);
+  transition: all 0.2s ease;
+}
+
+.card:hover {
+  box-shadow: var(--rl-shadow-md);
+  transform: translateY(-1px);
 }
 
 .card h3 {
   font-size: 18px;
   margin-bottom: 12px;
+  color: var(--rl-text);
 }
 
 .card p {
@@ -738,6 +755,14 @@ async function saveServer() {
 .form-group textarea:focus {
   outline: none;
   border-color: var(--rl-primary);
+  box-shadow: 0 0 0 3px var(--rl-primary-light);
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+  background: var(--rl-bg-elevated);
+  color: var(--rl-text);
 }
 
 .form-group .hint {
@@ -925,13 +950,15 @@ async function saveServer() {
 }
 
 .modal {
-  background: white;
-  border-radius: 12px;
+  background: var(--rl-bg-elevated);
+  border-radius: 16px;
   padding: 24px;
   width: 100%;
   max-width: 700px;
   max-height: 90vh;
   overflow-y: auto;
+  border: 1px solid var(--rl-border);
+  box-shadow: var(--rl-shadow-xl);
 }
 
 .modal h3 {
