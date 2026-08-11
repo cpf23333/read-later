@@ -402,6 +402,26 @@ COPY --from=builder /app/node_modules ./node_modules
 - 发布服务器镜像：给当前 commit 打标签 `server-v<服务器版本号>`（如 `server-v2.0.0`），然后手动触发 `build-server-image.yml`。
 - 详细的变更记录见 [CHANGELOG.md](./CHANGELOG.md)。
 
+## 扩展商店发布准备
+
+### 已准备的物料
+
+- **图标**：`public/icon/` 下已包含 16/32/48/96/128 PNG；商店上传通常使用 128px；
+- **隐私政策**：`public/privacy.html`，发布前需部署到可访问的 URL 并替换 `homepage_url`；
+- **商店文案**：`stores/chrome.md`、`stores/firefox.md`，分别对应 Chrome Web Store 和 Firefox Add-ons；
+- **Manifest 元信息**：`wxt.config.ts` 中已配置 `author`、`homepage_url`、`default_locale`。
+
+### 发布前检查清单
+
+1. 版本号：确认根目录 `package.json` 的 `version` 与 `wxt.config.ts` 的 `manifest.version` 一致；
+2. 构建产物：执行 `pnpm build` 与 `pnpm zip`，检查 `.output/` 产物；
+3. 隐私政策链接：将 `public/privacy.html` 部署到公网，并在 `stores/*.md` 和 manifest 中更新真实地址；
+4. 截图：准备 1280×800 或 1400×560 的商店展示截图（Popup、链接管理器、设置页、深色模式）；
+5. Chrome Web Store：使用 [Chrome 开发者后台](https://chrome.google.com/webstore/devconsole/) 上传 zip；
+6. Firefox Add-ons：使用 [AMO 开发者中心](https://addons.mozilla.org/developers/) 上传，注意 Firefox 对 `<all_urls>` 的审核要求更严格；
+7. 更新日志：在 `CHANGELOG.md` 中补充扩展版本变更；
+8. 触发 CI：给 commit 打标签 `v<版本号>` 后手动触发 `.forgejo/workflows/release.yml`。
+
 ## 相关文件
 
 - [FEATURES.md](./FEATURES.md) - 功能清单
