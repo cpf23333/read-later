@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
 import { getLinkCount, isLinkExists, addLink } from '@/utils/hybridStorage';
 import { showSuccess, showError, showWarning } from '@/utils/toast';
 import ThemeToggle from '@/components/ThemeToggle.vue';
@@ -9,7 +9,36 @@ const saving = ref(false);
 
 onMounted(async () => {
   await loadLinkCount();
+  document.addEventListener('keydown', handleKeydown);
 });
+
+onUnmounted(() => {
+  document.removeEventListener('keydown', handleKeydown);
+});
+
+function handleKeydown(e: KeyboardEvent) {
+  if (saving.value) return;
+
+  switch (e.key) {
+    case 'Enter':
+      e.preventDefault();
+      saveCurrentPage();
+      break;
+    case 'l':
+    case 'L':
+      e.preventDefault();
+      openLinkManager();
+      break;
+    case 's':
+    case 'S':
+      e.preventDefault();
+      openSettings();
+      break;
+    case 'Escape':
+      window.close();
+      break;
+  }
+}
 
 async function loadLinkCount() {
   linkCount.value = await getLinkCount();
@@ -133,6 +162,12 @@ async function saveCurrentPage() {
           <li>自动保存页面截图</li>
           <li>多设备同步随时看</li>
         </ul>
+        <div class="shortcut-hints">
+          <span><kbd>Enter</kbd> 收好</span>
+          <span><kbd>L</kbd> 列表</span>
+          <span><kbd>S</kbd> 设置</span>
+          <span><kbd>Esc</kbd> 关闭</span>
+        </div>
       </div>
     </main>
 
@@ -285,6 +320,35 @@ async function saveCurrentPage() {
   left: 0;
   color: var(--rl-success);
   font-weight: 600;
+}
+
+.shortcut-hints {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--rl-border);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 11px;
+  color: var(--rl-text-muted);
+}
+
+.shortcut-hints span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.shortcut-hints kbd {
+  display: inline-block;
+  padding: 2px 5px;
+  background: var(--rl-bg-elevated);
+  border: 1px solid var(--rl-border-strong);
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 10px;
+  color: var(--rl-text-secondary);
+  box-shadow: 0 1px 0 var(--rl-border);
 }
 
 .footer {

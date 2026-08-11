@@ -53,6 +53,7 @@ const dateTo = ref<string>('');
 // 统计信息
 const totalCount = ref(0);
 const importInput = ref<HTMLInputElement | null>(null);
+const searchInput = ref<HTMLInputElement | null>(null);
 const importing = ref(false);
 
 // 导入预览
@@ -495,11 +496,101 @@ function openLink(url: string) {
   window.open(url, '_blank');
 }
 
+function isTypingInInput(event: KeyboardEvent): boolean {
+  const target = event.target as HTMLElement | null;
+  if (!target) return false;
+  const tag = target.tagName.toLowerCase();
+  return tag === 'input' || tag === 'textarea' || target.isContentEditable;
+}
+
 // 键盘快捷键
 onMounted(() => {
   document.addEventListener('keydown', (e) => {
+    // 导入预览弹窗打开时，只响应 Esc 关闭
+    if (showImportPreview.value) {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        cancelImport();
+      }
+      return;
+    }
+
+    // 全局快捷键（不区分 tab）
+    if (e.key === '/') {
+      e.preventDefault();
+      searchInput.value?.focus();
+      return;
+    }
+
+    if (e.key.toLowerCase() === 'l') {
+      e.preventDefault();
+      switchTab('links');
+      return;
+    }
+
+    if (e.key.toLowerCase() === 't') {
+      e.preventDefault();
+      switchTab('trash');
+      return;
+    }
+
+    // 在输入框内不再响应后续快捷键
+    if (isTypingInInput(e)) {
+      if (e.key === 'Escape') {
+        (e.target as HTMLElement).blur();
+      }
+      return;
+    }
+
+    // 通用导航
     if (e.key === 'Escape') {
-      selectedIds.value.clear();
+      if (showFilters.value) {
+        showFilters.value = false;
+      } else if (selectedIds.value.size > 0 || selectedTrashIds.value.size > 0) {
+        selectedIds.value.clear();
+        selectedTrashIds.value.clear();
+      }
+      return;
+    }
+
+    // 链接列表页快捷键
+    if (currentTab.value === 'links') {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
+        e.preventDefault();
+        selectAll();
+        return;
+      }
+
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (selectedIds.value.size > 0) {
+          e.preventDefault();
+          handleBatchDelete();
+        }
+        return;
+      }
+
+      return;
+    }
+
+    // 回收站页快捷键
+    if (currentTab.value === 'trash') {
+      if (e.key.toLowerCase() === 'r') {
+        if (selectedTrashIds.value.size > 0) {
+          e.preventDefault();
+          restoreSelected();
+        }
+        return;
+      }
+
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (selectedTrashIds.value.size > 0) {
+          e.preventDefault();
+          deleteSelected();
+        }
+        return;
+      }
+
+      return;
     }
   });
 });
@@ -570,6 +661,7 @@ onMounted(() => {
         <div class="toolbar">
           <div class="search-box">
             <input
+              ref="searchInput"
               v-model="searchQuery"
               type="text"
               placeholder="搜索链接或标题..."
@@ -603,6 +695,16 @@ onMounted(() => {
               </button>
             </div>
           </div>
+        </div>
+
+        <!-- 快捷键提示 -->
+        <div class="keyboard-hints">
+          <span><kbd>/</kbd> 搜索</span>
+          <span><kbd>Ctrl</kbd>+<kbd>A</kbd> 全选</span>
+          <span><kbd>Del</kbd> 删除</span>
+          <span><kbd>L</kbd> 链接页</span>
+          <span><kbd>T</kbd> 回收站</span>
+          <span><kbd>Esc</kbd> 取消</span>
         </div>
 
         <!-- 筛选面板 -->
@@ -952,6 +1054,37 @@ onMounted(() => {
 .view-toggle {
   display: flex;
   gap: 4px;
+}
+
+.keyboard-hints {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  background: var(--rl-bg-subtle);
+  border-radius: 10px;
+  border: 1px solid var(--rl-border);
+  font-size: 12px;
+  color: var(--rl-text-muted);
+}
+
+.keyboard-hints span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.keyboard-hints kbd {
+  display: inline-block;
+  padding: 2px 6px;
+  background: var(--rl-bg-elevated);
+  border: 1px solid var(--rl-border-strong);
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 11px;
+  color: var(--rl-text-secondary);
+  box-shadow: 0 1px 0 var(--rl-border);
 }
 
 .btn {
