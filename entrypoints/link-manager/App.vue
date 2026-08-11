@@ -15,7 +15,7 @@ import {
   searchLinks,
   getAllDomains,
   getDomainStats,
-  batchAddLinks,
+  batchAddLinksWithProgress,
   getExistingUrls,
 } from '@/utils/hybridStorage';
 import { showSuccess, showError, showWarning } from '@/utils/toast';
@@ -60,6 +60,10 @@ const importing = ref(false);
 const showImportPreview = ref(false);
 const parsedLinks = ref<ParsedLink[]>([]);
 const previewExistingUrls = ref<Set<string>>(new Set());
+
+// 导入进度
+const importProgress = ref({ current: 0, total: 0, percentage: 0 });
+const showImportProgress = ref(false);
 
 // 回收站
 const currentTab = ref<TabView>('links');
@@ -414,6 +418,9 @@ async function handleImport(event: Event) {
 
 async function confirmImport(selected: ParsedLink[]) {
   importing.value = true;
+  showImportPreview.value = false;
+  showImportProgress.value = true;
+
   try {
     // 自动去重：过滤掉数据库中已存在的链接
     const newLinks = selected.filter(
@@ -422,19 +429,28 @@ async function confirmImport(selected: ParsedLink[]) {
     const skipped = selected.length - newLinks.length;
 
     if (newLinks.length === 0) {
-      showImportPreview.value = false;
       parsedLinks.value = [];
       previewExistingUrls.value = new Set();
+      showImportProgress.value = false;
       showSuccess(
         skipped > 0 ? `已跳过 ${skipped} 个重复链接，没有新链接需要导入` : '没有新链接需要导入'
       );
       return;
     }
 
-    const result = await batchAddLinks(newLinks);
-    showImportPreview.value = false;
+    importProgress.value = { current: 0, total: newLinks.length, percentage: 0 };
+
+    const result = await batchAddLinksWithProgress(newLinks, (current, total) => {
+      importProgress.value = {
+        current,
+        total,
+        percentage: Math.round((current / total) * 100),
+      };
+    });
+
     parsedLinks.value = [];
     previewExistingUrls.value = new Set();
+    showImportProgress.value = false;
     await loadInitialData();
 
     const parts: string[] = [];
@@ -443,6 +459,7 @@ async function confirmImport(selected: ParsedLink[]) {
     if (result.failed > 0) parts.push(`${result.failed} 个失败`);
     showSuccess(parts.join('，'));
   } catch (error) {
+    showImportProgress.value = false;
     showError(`导入失败: ${error instanceof Error ? error.message : '未知错误'}`);
   } finally {
     importing.value = false;
@@ -635,6 +652,22 @@ onMounted(() => {
       @confirm="confirmImport"
       @cancel="cancelImport"
     />
+
+    <!-- 导入进度弹窗 -->
+    <Teleport to="body">
+      <Transition name="progress-fade">
+        <div v-if="showImportProgress" class="progress-overlay">
+          <div class="progress-dialog">
+            <h3>📥 正在导入</h3>
+            <p class="progress-desc">已处理 {{ importProgress.current }} / {{ importProgress.total }} 个链接</p>
+            <div class="progress-bar">
+              <div class="progress-fill" :style="{ width: `${importProgress.percentage}%` }"></div>
+            </div>
+            <p class="progress-percentage">{{ importProgress.percentage }}%</p>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
 
     <main class="main">
       <!-- Tab 导航 -->
@@ -1610,6 +1643,73 @@ onMounted(() => {
   display: flex;
   gap: 8px;
   flex-shrink: 0;
+}
+
+/* 导入进度弹窗 */
+.progress-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1001;
+  padding: 20px;
+}
+
+.progress-dialog {
+  background: var(--rl-bg-elevated);
+  border-radius: 16px;
+  padding: 28px;
+  width: 100%;
+  max-width: 420px;
+  border: 1px solid var(--rl-border);
+  box-shadow: var(--rl-shadow-xl);
+  text-align: center;
+}
+
+.progress-dialog h3 {
+  margin: 0 0 8px;
+  font-size: 18px;
+  color: var(--rl-text);
+}
+
+.progress-desc {
+  color: var(--rl-text-muted);
+  font-size: 14px;
+  margin-bottom: 20px;
+}
+
+.progress-bar {
+  height: 10px;
+  background: var(--rl-bg-hover);
+  border-radius: 5px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--rl-primary) 0%, var(--rl-secondary) 100%);
+  border-radius: 5px;
+  transition: width 0.3s ease;
+}
+
+.progress-percentage {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--rl-primary);
+  margin: 0;
+}
+
+.progress-fade-enter-active,
+.progress-fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.progress-fade-enter-from,
+.progress-fade-leave-to {
+  opacity: 0;
 }
 
 /* 响应式 */

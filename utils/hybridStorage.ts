@@ -258,6 +258,38 @@ export async function batchAddLinks(
   return { count: result.count, failed: result.failed };
 }
 
+// 批量添加链接（带进度回调）
+export async function batchAddLinksWithProgress(
+  links: Partial<LinkItem>[],
+  onProgress: (current: number, total: number) => void,
+  batchSize: number = 10
+): Promise<{ count: number; failed: number }> {
+  const now = Date.now();
+  const items: LinkItem[] = links.map((link, index) => ({
+    url: link.url || '',
+    title: link.title || '',
+    nearbyImage: link.nearbyImage || null,
+    screenshot: link.screenshot || null,
+    sourcePage: link.sourcePage || '',
+    createdAt: link.createdAt || now + index,
+    id: link.id || `${now}_${Math.random().toString(36).substr(2, 9)}_${index}`,
+  }));
+
+  let count = 0;
+  let failed = 0;
+  const total = items.length;
+
+  for (let i = 0; i < total; i += batchSize) {
+    const batch = items.slice(i, i + batchSize);
+    const result = await apiBatchAddLinks(batch);
+    count += result.count;
+    failed += result.failed;
+    onProgress(Math.min(i + batch.length, total), total);
+  }
+
+  return { count, failed };
+}
+
 // 导入链接
 export async function importLinks(
   jsonString: string,
