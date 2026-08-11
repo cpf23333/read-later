@@ -20,6 +20,7 @@ import { initDatabase, closeDatabase } from './utils/database.ts';
 import { setImagesDir } from './utils/image.ts';
 import { setApiKey } from './middleware/auth.ts';
 import { authMiddleware } from './middleware/auth.ts';
+import { startBackupSchedule, stopBackupSchedule } from './utils/backup.ts';
 import { generalRateLimit } from './middleware/ratelimit.ts';
 import { isAllowedExtension } from './utils/security.ts';
 
@@ -86,6 +87,15 @@ setImagesDir(IMAGES_DIR);
 
 // 初始化数据库
 initDatabase(DATA_DIR);
+
+// 启动数据库自动备份
+const backupIntervalHours = parseInt(process.env.BACKUP_INTERVAL_HOURS || '24', 10);
+const backupKeepCount = parseInt(process.env.BACKUP_KEEP_COUNT || '7', 10);
+startBackupSchedule({
+  dataDir: DATA_DIR,
+  intervalHours: Number.isNaN(backupIntervalHours) ? 24 : backupIntervalHours,
+  keepCount: Number.isNaN(backupKeepCount) ? 7 : backupKeepCount,
+});
 
 // 创建 Hono 应用
 const app = new Hono();
@@ -182,12 +192,14 @@ serve(
 // 优雅关闭
 process.on('SIGINT', () => {
   console.log('\n正在关闭服务器...');
+  stopBackupSchedule();
   closeDatabase();
   process.exit(0);
 });
 
 process.on('SIGTERM', () => {
   console.log('\n正在关闭服务器...');
+  stopBackupSchedule();
   closeDatabase();
   process.exit(0);
 });
