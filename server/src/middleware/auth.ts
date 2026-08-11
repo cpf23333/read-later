@@ -4,22 +4,58 @@
 
 import { createMiddleware } from 'hono/factory';
 
-// API Key 存储
-let API_KEY = '';
+// API Key 存储（支持多个 Key，便于轮换）
+const API_KEYS = new Set<string>();
 
+/**
+ * 设置单个 API Key（兼容旧接口）
+ * 支持逗号分隔的多个 Key
+ */
 export function setApiKey(key: string): void {
-  API_KEY = key;
+  setApiKeys(key.split(',').map((k) => k.trim()).filter(Boolean));
 }
 
-export function getApiKey(): string {
-  return API_KEY;
+/**
+ * 设置多个 API Key
+ */
+export function setApiKeys(keys: string[]): void {
+  API_KEYS.clear();
+  for (const key of keys) {
+    if (key.trim()) {
+      API_KEYS.add(key.trim());
+    }
+  }
+}
+
+/**
+ * 获取已配置的 API Key 数量
+ */
+export function getApiKeyCount(): number {
+  return API_KEYS.size;
 }
 
 /**
  * 检查 API Key 是否配置
  */
 export function checkApiKeyConfigured(): boolean {
-  return !!API_KEY;
+  return API_KEYS.size > 0;
+}
+
+/**
+ * 验证 API Key 是否有效
+ */
+export function validateApiKey(token: string): boolean {
+  return API_KEYS.has(token);
+}
+
+/**
+ * 获取所有 API Key 的掩码列表（用于管理接口）
+ */
+export function getMaskedApiKeys(): string[] {
+  return Array.from(API_KEYS).map((key) => {
+    if (key.length <= 8) return '*'.repeat(key.length);
+    return key.slice(0, 4) + '...' + key.slice(-4);
+  });
 }
 
 /**
@@ -44,7 +80,7 @@ export const authMiddleware = createMiddleware(async (c, next) => {
   }
 
   const token = parts[1];
-  if (token !== API_KEY) {
+  if (!validateApiKey(token)) {
     return c.json({ success: false, error: 'Invalid API Key' }, 401);
   }
 
