@@ -14,7 +14,7 @@ import {
   deleteExportTask,
 } from '../utils/database.ts';
 import { createBackupArchive } from '../utils/archive.ts';
-import { apiRateLimit } from '../middleware/ratelimit.ts';
+import { apiRateLimit, exportRateLimit } from '../middleware/ratelimit.ts';
 import type { ApiResponse, ExportTask } from '../types/index.ts';
 
 const app = new Hono();
@@ -31,7 +31,7 @@ if (!fs.existsSync(EXPORTS_DIR)) {
  * 创建导出任务
  * POST /api/exports
  */
-app.post('/', apiRateLimit, async (c) => {
+app.post('/', exportRateLimit, async (c) => {
   const taskId = `export_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
   const filename = `backup_${taskId}.zip`;
   const filePath = path.join(EXPORTS_DIR, filename);

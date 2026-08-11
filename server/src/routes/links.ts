@@ -17,7 +17,7 @@ import {
 } from '../utils/database.ts';
 import { processImage, moveImageToTrash } from '../utils/image.ts';
 import { sanitizeId, sanitizeSearchQuery } from '../utils/security.ts';
-import { apiRateLimit } from '../middleware/ratelimit.ts';
+import { apiRateLimit, importRateLimit } from '../middleware/ratelimit.ts';
 import type {
   Link,
   CreateLinkBody,
@@ -302,7 +302,7 @@ app.get('/export', async (c) => {
  * 导入链接
  * POST /api/import
  */
-app.post('/import', apiRateLimit, async (c) => {
+app.post('/import', importRateLimit, async (c) => {
   const body = await c.req.json<ImportBody>();
   const { links, mode = 'merge' } = body;
 
