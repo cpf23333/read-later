@@ -69,7 +69,9 @@ export const authMiddleware = createMiddleware(async (c, next) => {
   }
 
   const parts = authHeader.split(' ');
-  if (parts.length !== 2 || parts[0] !== 'Bearer') {
+  const scheme = parts[0];
+  const token = parts[1];
+  if (parts.length !== 2 || scheme !== 'Bearer' || !token) {
     return c.json(
       {
         success: false,
@@ -79,7 +81,6 @@ export const authMiddleware = createMiddleware(async (c, next) => {
     );
   }
 
-  const token = parts[1];
   if (!validateApiKey(token)) {
     return c.json({ success: false, error: 'Invalid API Key' }, 401);
   }
