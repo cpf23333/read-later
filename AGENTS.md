@@ -139,14 +139,14 @@ openssl rand -base64 32
 
 ## 移动端（Flutter）
 
-`mobile/` 是 Android 平板 app：内置浏览器（多标签、视频全屏、长按收藏置顶）+ 收藏库 + 站点页，数据走同一服务器。
+`mobile/` 是 Android app（个人自用；作者主要用平板）：内置浏览器（多标签、视频全屏、长按收藏置顶）+ 收藏库 + 站点页，数据走同一服务器。
 
 - 设计：`docs/superpowers/specs/2026-11-09-readlater-mobile-flutter-design.md`
 - 计划：`docs/superpowers/plans/2026-11-09-mobile-app-v1.md`
 - 工具链：Flutter 3.38.10、JDK 21、AGP 8.11.1；Flutter 优先使用 Android Studio 自带 JDK，需用 `flutter config --jdk-dir="<JDK21路径>"` 指定（不要把本机路径写进 `gradle.properties`）
 - 开发/测试：`cd mobile && flutter run`、`flutter test`
 - 集成测试（需设备/模拟器）：`flutter test integration_test/long_press_test.dart -d <device-id>`
-- 构建：`flutter build apk --release --split-per-abi`（个人侧载，release 用 debug 签名）
+- 构建：`flutter build apk --release --target-platform android-arm64 --split-per-abi`（只出 arm64；其他 ABI 需要者自行编译；个人侧载，release 用 debug 签名）
 - 包名 `com.cpf23333.readlater`，`minSdk 26`
 
 ## 关键代码位置

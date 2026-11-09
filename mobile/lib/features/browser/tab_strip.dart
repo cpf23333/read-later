@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'browser_state.dart';
 
-/// 平板横向标签条。
+/// 宽屏横向标签条。
 class TabStrip extends StatelessWidget {
   const TabStrip({
     super.key,

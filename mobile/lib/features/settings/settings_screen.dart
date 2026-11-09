@@ -122,11 +122,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('从平板浏览器导入标签页'),
+        title: const Text('从本机浏览器导入标签页'),
         content: const SingleChildScrollView(
           child: SelectableText(
             '这是电脑上执行的一次性流程（需要 adb，app 内无法完成）：\n\n'
-            '1. 平板开启开发者选项与 USB 调试，保持 Chrome/Brave 运行。\n'
+            '1. 手机/平板开启开发者选项与 USB 调试，保持 Chrome/Brave 运行。\n'
             '2. 电脑执行：\n'
             '   adb forward tcp:9222 localabstract:chrome_devtools_remote\n'
             '3. 电脑执行导入脚本：\n'
@@ -220,7 +220,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ListTile(
             contentPadding: EdgeInsets.zero,
             leading: const Icon(Icons.download_outlined),
-            title: const Text('从平板浏览器导入标签页'),
+            title: const Text('从本机浏览器导入标签页'),
             subtitle: const Text('需要电脑 + adb，查看步骤'),
             onTap: _showImportHelp,
           ),

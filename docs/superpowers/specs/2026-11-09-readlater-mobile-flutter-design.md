@@ -3,13 +3,13 @@
 - 日期：2026-11-09
 - 状态：已评审通过（v1）；追加：站点收藏（含回收站）、标签页导入；数据库保持 SQLite
 - 决策人：项目作者（个人自用）
-- 平台：Android 平板优先，代码结构保留 iOS 可移植性
+- 平台：Android（个人自用；作者主要使用平板，但应用同时适配手机/横屏），代码结构保留 iOS 可移植性
 
 ## 1. 背景与目标
 
 现有 ReadLater 是一个 WXT 浏览器扩展（Vue 3 + TypeScript），核心能力是"长按/右键链接 → 收藏 → 自动截图、提取附近图片 → 同步到自建 SQLite 服务器"。
 
-目标是把核心体验搬到一个自带浏览器的 Android 平板 app：用户在 app 内置浏览器里浏览网页，长按链接时弹出**完全自己绘制的菜单**，把"收藏到稍后再看"固定为第一项（浏览器扩展里无法控制 Chrome 菜单顺序，这是本次改动最直接的动机）。
+目标是把核心体验搬到一个自带浏览器的 Android app：用户在 app 内置浏览器里浏览网页，长按链接时弹出**完全自己绘制的菜单**，把"收藏到稍后再看"固定为第一项（浏览器扩展里无法控制 Chrome 菜单顺序，这是本次改动最直接的动机）。
 
 数据仍然只存在自建服务器上，扩展端与移动端共用同一套 API 和数据库。
 
@@ -17,7 +17,7 @@
 
 ### 2.1 v1 目标（MVP）
 
-1. 内置浏览器：地址栏、前进/后退/刷新、多标签、标签切换、关闭标签、平板横向标签条。
+1. 内置浏览器：地址栏、前进/后退/刷新、多标签、标签切换、关闭标签、宽屏横向标签条。
 2. 网页视频全屏：站点 `<video>` 全屏可横屏播放、返回后恢复。
 3. 长按链接：自绘菜单，"收藏到稍后再看"置顶、"收藏主站"第二；其余项：打开、新标签打开、复制链接、分享、用系统浏览器打开。
 4. 收藏链路：标题（目标页 title/og:title，回退链接文字）、可见区域截图、链接附近图片（含 blob URL）、重复检测、保存到服务器。
@@ -36,7 +36,7 @@
 - 离线缓存、增量同步、本地数据库（服务器仍是唯一数据源）。
 - 系统分享入口（其他 app 分享链接到本 app），列为 v1.1。
 - 站点排序/分组/编辑、站点关联链接（v1 站点删除进回收站，见 5.4）。
-- app 内直接读取平板 Chrome/Brave 的标签页（平台不提供该能力，见 16）。
+- app 内直接读取本机 Chrome/Brave 的标签页（平台不提供该能力，见 16）。
 - 标签页导入脚本（设计见 16，排期见 `todo.md`；v1 不做）。
 
 ## 3. 关键决策
@@ -44,14 +44,14 @@
 | 决策 | 结论 | 理由 |
 | --- | --- | --- |
 | 框架 | Flutter 3.x（Dart 3） | 个人自用、Android 优先但保留 iPad 可能；UI 与逻辑一套代码；`flutter_inappwebview` 覆盖多标签、注入、截图、全屏视频 |
-| 浏览器内核 | 系统 WebView（`flutter_inappwebview` 6.x） | 不引入 GeckoView/Cronet，平板场景够用；iOS 侧未来自动落到 WKWebView |
+| 浏览器内核 | 系统 WebView（`flutter_inappwebview` 6.x） | 不引入 GeckoView/Cronet，移动场景够用；iOS 侧未来自动落到 WKWebView |
 | 长按菜单触发 | 注入 JS 检测长按 + Flutter 自绘 bottom sheet | 菜单顺序 100% 可控；避开 iOS 系统 callout 顺序不可控的问题；与扩展 `content.ts` 逻辑同源 |
 | 管理页实现 | Flutter 原生重写 | 若嵌 Vue 页面会引入双 UI 体系与 bridge，破坏 iOS 移植性；列表页功能虽多但不复杂 |
 | 状态管理 | Riverpod（`flutter_riverpod`） | 依赖注入显式，API client / 配置 / tab 状态可测试；避免全局单例 |
 | 导航 | `go_router` | 声明式路由，便于以后接 deep link |
 | 数据源 | 现有 Hono 服务器；仅新增 `/api/sites`（见 5.4），现有接口与数据表不动 | 契约稳定，扩展与 app 共用；去重、图片处理都在服务端 |
 | 站点数据模型 | 服务端新建独立 `sites` 表（4 个端点） | 站点字段（origin/图标）与链接差异大，独立表避免污染 links/trash；列表可按站点批量返回 |
-| 标签页导入 | 外部 adb 工具（Node 脚本），不做进 app | 平板不向第三方 app 暴露标签页；adb+CDP 是唯一可行路径，app 内无法完成 |
+| 标签页导入 | 外部 adb 工具（Node 脚本），不做进 app | Android 不向第三方 app 暴露标签页；adb+CDP 是唯一可行路径，app 内无法完成 |
 | 数据库 | 保持 SQLite（v1 不换 PostgreSQL） | 单用户、数据量小、图片在文件系统；换 PG 的收益不足以抵消部署与代码改动，触发条件与优化项记入 todo.md |
 | 配置存储 | `flutter_secure_storage`（API Key、服务器地址、自定义配置） | Keystore 加密；个人自用不做多账号 |
 | 主题 | Material 3，跟随系统，支持深色 | 与扩展视觉习惯一致即可，不做像素级复刻 |
@@ -438,9 +438,9 @@ window.__rlExtract = async (url) => JSON.stringify({
 - 主题：跟随系统 / 浅色 / 深色。
 - 浏览器：搜索源、清除缓存与 Cookie（`WebView` 的 `CookieManager` / `clearCache`）。
 - 关于：版本号、API 契约说明、隐私说明（无统计上报）。
-- "从平板浏览器导入标签页"入口：只展示 16 节的 adb 步骤说明与命令，不在 app 内执行。
+- "从本机浏览器导入标签页"入口：只展示 16 节的 adb 步骤说明与命令，不在 app 内执行。
 
-### 8.3 平板布局
+### 8.3 宽屏与自适应布局
 
 - 宽度 ≥ 600dp：`NavigationRail` + 内容区；地址栏与标签条同一行，标签条可横向滚动。
 - 宽度 < 600dp（手机或分屏）：底部 `NavigationBar`，标签条折叠为标签数按钮。
@@ -486,7 +486,7 @@ window.__rlExtract = async (url) => JSON.stringify({
 | Widget 测试 | 链接库空/加载/错误态、长按 Sheet 各状态、标签条交互、站点网格与空态、回收站双 tab |
 | 集成测试（`integration_test` + Android 模拟器） | 本地 fixture 页面（`assets/test/` 经本地 HTTP 或 `initialFile` 加载）验证：长按回调、提取 JSON、截图、`addLink` 到本地服务器；收藏主站 → 站点页出现卡片 |
 | 服务端（手动 curl） | `/api/sites`：正常增删查、401、重复收藏（活跃/回收站两种）、软删除、还原、永久删除、非法 url |
-| 手工验收（平板真机） | B 站/YouTube 全屏与旋转、长按菜单置顶、多标签切换与返回键、截图质量、深色模式、横竖屏布局、站点卡片图标 |
+| 手工验收（作者真机：平板/手机） | B 站/YouTube 全屏与旋转、长按菜单置顶、多标签切换与返回键、截图质量、深色模式、横竖屏布局、站点卡片图标 |
 
 - `inject.js` 的 DOM 逻辑用本地 fixture 页 + 集成测试覆盖；不额外引入 Node 测试栈。
 - 每次发版前跑 `flutter analyze` + `flutter test`。
@@ -497,7 +497,7 @@ window.__rlExtract = async (url) => JSON.stringify({
 - 应用名：稍后再看。
 - `minSdk 26`、`targetSdk` 跟随当前稳定版；`supports-screens` 允许 large/xlarge；`resizeableActivity=true`。
 - 权限：`INTERNET`、`ACCESS_NETWORK_STATE`；不做后台服务。
-- 签名：自建 keystore，`flutter build apk --release --split-per-abi`，侧载安装；个人自用不上架。
+- 签名：自建 keystore，`flutter build apk --release --target-platform android-arm64 --split-per-abi`（只出 arm64；其他 ABI 自行编译），侧载安装；个人自用不上架。
 - 版本号跟 `mobile/pubspec.yaml` 的 `version`，与扩展/服务器版本独立（沿用 SemVer）。
 
 ## 13. 里程碑
@@ -505,10 +505,10 @@ window.__rlExtract = async (url) => JSON.stringify({
 | 阶段 | 内容 | 验收 |
 | --- | --- | --- |
 | M0 技术验证（2–3 天） | 空壳 + WebView + 2 标签切换 + 长按 JS 回调 + 截图 + `addLink` 打到真实服务器 + B 站全屏 | 13.1 各项全部跑通；确认 `IndexedStack + Offstage`、全屏、长按在真机可用 |
-| M1 浏览器核心（约 1 周） | 地址栏、前进后退、标签条、标签会话、返回键、外链、全屏适配 | 平板日常浏览可用 |
+| M1 浏览器核心（约 1 周） | 地址栏、前进后退、标签条、标签会话、返回键、外链、全屏适配 | 日常浏览可用 |
 | M2 收藏 + 链接库（约 1 周） | 长按 Sheet、提取、截图、标题、去重、保存；列表/搜索/排序/删除/回收站 | 长按收藏端到端可用 |
 | M3 站点收藏（约 4 天） | 后端 `sites` 表与七个端点（含回收站）、站点页（网格/图标/删除进回收站）、回收站"站点"tab、"收藏主站"入口、标题与图标采集 | 收藏/打开/删除/还原/永久删除站点可用，后端 curl 用例通过 |
-| M4 设置与打磨（约 3 天） | 服务器配置与测试、主题、清除数据、平板布局、错误态 | 可日常使用 |
+| M4 设置与打磨（约 3 天） | 服务器配置与测试、主题、清除数据、宽屏布局、错误态 | 可日常使用 |
 
 > 标签页导入脚本、导入/导出、下载、系统分享入口等不在 v1 工期，统一记入 `todo.md`；其中标签页导入的设计保留在 16 节，随时可实施。
 
@@ -532,10 +532,10 @@ window.__rlExtract = async (url) => JSON.stringify({
 | 注入 JS 与页面自身长按逻辑冲突 | 菜单不弹/误触发 | 捕获阶段监听、位移阈值、触发后吞 click；M0 用多个站点抽测 |
 | iOS 未来适配：WKWebView 无请求拦截、callout 限制 | 移植工作量 | 架构上把平台差异收敛到 `platform/`；v1 不承诺 iOS 行为完全一致 |
 | 明文 HTTP 与自签证书 | 连接失败 | 设置页明确提示；文档给出 network security config 配置方法 |
-| WebView 内核版本碎片化 | 个别站点渲染/播放异常 | 以平板真机为准；必要时提供 UA 切换兜底（v1.1） |
+| WebView 内核版本碎片化 | 个别站点渲染/播放异常 | 以作者真机为准；必要时提供 UA 切换兜底（v1.1） |
 | 跨域 iframe 内的链接无法被注入脚本捕获 | 部分站点长按无菜单 | v1 明确只支持主框架；v1.1 用 Android 原生 hit-test 作为补充通道 |
 | 站点收藏需要服务端改动 | 可能影响现有部署/数据 | 新增独立 `sites` 表与路由，不改现有接口与表；上线前备份 SQLite；服务端版本号 bump |
-| 平板浏览器标签页只能靠 adb | 导入是手动流程，不是 app 功能 | 定位为一次性迁移工具；文档写清步骤；只支持 Chromium 系；不承诺自动化 |
+| Android 浏览器标签页只能靠 adb | 导入是手动流程，不是 app 功能 | 定位为一次性迁移工具；文档写清步骤；只支持 Chromium 系；不承诺自动化 |
 | 无线调试端口变化 / adb forward 失效 | 导入脚本连不上 | 脚本先校验 `adb devices`，失败提示重新 forward；文档给无线调试完整步骤 |
 
 ## 15. 评审结论
@@ -550,19 +550,19 @@ window.__rlExtract = async (url) => JSON.stringify({
 6. 站点删除进回收站：`sites.deleted_at` 软删除，回收站页"站点"tab 还原/永久删除；重新收藏回收站中的站点会自动恢复。
 7. 数据库保持 SQLite，不换 PostgreSQL；换库触发条件与优化项记入 `todo.md`。
 
-追加需求（站点收藏、平板浏览器标签页导入）已并入 2.1、5.4、8.4、16；如与预期不符请指出。
+追加需求（站点收藏、本机浏览器标签页导入）已并入 2.1、5.4、8.4、16；如与预期不符请指出。
 
 ## 16. 浏览器标签页导入（外部 adb 工具）
 
 ### 16.1 背景与结论
 
-- 平板上的 Chrome/Brave 不向第三方 app 暴露"已打开标签页"，Android 沙箱下 app 内无法读取，没有合规 API。
+- Android 设备上的 Chrome/Brave 不向第三方 app 暴露"已打开标签页"，Android 沙箱下 app 内无法读取，没有合规 API。
 - Chromium 系浏览器通过 abstract Unix socket `chrome_devtools_remote` 暴露 DevTools HTTP 端点，`adb forward` 后可取 `/json/list`（含每个标签页的 `url`、`title`）。
 - 因此导入做成 PC 上运行的一次性脚本，不进 app UI；网络 adb 可行，但同样需要一台 PC/主机执行。
 
 ### 16.2 前置条件
 
-- 平板：开发者选项 + USB 调试开启；Chrome/Brave 正在运行。
+- 手机/平板：开发者选项 + USB 调试开启；Chrome/Brave 正在运行。
 - 电脑：`platform-tools`（adb）、Node.js ≥ 20。
 - 服务器：地址与 API Key（与 app 相同）。
 
@@ -590,7 +590,7 @@ node tools/import-tabs/import.mjs \
 
 - Android 11+：开启"无线调试"，`adb pair <ip>:<pair-port>` 配对后 `adb connect <ip>:<port>`。
 - 或先 USB 连一次：`adb tcpip 5555`，拔线后 `adb connect <ip>:5555`。
-- 连接成功后 `adb forward` 用法不变；要求平板与电脑同一网络、平板休眠不断网。
+- 连接成功后 `adb forward` 用法不变；要求设备与电脑同一网络、设备休眠不断网。
 - 注意：无线调试的端口在重启/重新配对后会变；`adb forward` 在 adb 重连后需要重新执行。
 
 ### 16.5 限制

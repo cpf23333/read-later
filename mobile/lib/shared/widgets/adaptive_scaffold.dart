@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-/// 平板用 NavigationRail，手机/分屏用 NavigationBar 的自适应外壳。
+/// 宽屏（≥600dp）用 NavigationRail，窄屏用 NavigationBar 的自适应外壳。
 class AdaptiveScaffold extends StatelessWidget {
   const AdaptiveScaffold({super.key, required this.navigationShell});
 
