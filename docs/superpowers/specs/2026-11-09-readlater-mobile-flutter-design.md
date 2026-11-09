@@ -1,7 +1,7 @@
 # ReadLater 移动端（Flutter）设计
 
 - 日期：2026-11-09
-- 状态：待评审
+- 状态：已评审通过（v1）；2026-11-09 追加：站点收藏、平板浏览器标签页导入
 - 决策人：项目作者（个人自用）
 - 平台：Android 平板优先，代码结构保留 iOS 可移植性
 
@@ -19,12 +19,14 @@
 
 1. 内置浏览器：地址栏、前进/后退/刷新、多标签、标签切换、关闭标签、平板横向标签条。
 2. 网页视频全屏：站点 `<video>` 全屏可横屏播放、返回后恢复。
-3. 长按链接：自绘菜单，"收藏到稍后再看"置顶；其余项：打开、新标签打开、复制链接、分享、用系统浏览器打开。
+3. 长按链接：自绘菜单，"收藏到稍后再看"置顶、"收藏主站"第二；其余项：打开、新标签打开、复制链接、分享、用系统浏览器打开。
 4. 收藏链路：标题（目标页 title/og:title，回退链接文字）、可见区域截图、链接附近图片（含 blob URL）、重复检测、保存到服务器。
 5. 收藏当前页：工具栏按钮直接收藏当前页面（对应扩展 popup 的"收好当前页面"）。
 6. 链接库：网格/列表、搜索、排序、分页、打开链接、删除（进回收站）、回收站还原/永久删除。
 7. 设置：服务器地址、API Key、连接测试、主题跟随系统。
 8. 长按菜单在 Android 与未来 iOS 上行为一致（不依赖系统 context menu）。
+9. 站点收藏：独立"站点"页，一个站点一张卡片（图标 + 名称）；可从浏览器"收藏主站"、打开、删除。服务端新增 `/api/sites`（见 5.4）。
+10. 标签页导入：提供外部脚本，通过 adb + Chromium DevTools 协议把平板 Chrome/Brave 已打开的标签页批量导入（见 16）。
 
 ### 2.2 非目标（v1 不做）
 
@@ -34,6 +36,8 @@
 - 导入/导出、自定义 JS 提取器编辑、统计图表、标签系统。
 - 离线缓存、增量同步、本地数据库（服务器仍是唯一数据源）。
 - 系统分享入口（其他 app 分享链接到本 app），列为 v1.1。
+- 站点排序/分组/编辑、站点关联链接、站点进入回收站（v1 站点为硬删除）。
+- app 内直接读取平板 Chrome/Brave 的标签页（平台不提供该能力，见 16）。
 
 ## 3. 关键决策
 
@@ -45,7 +49,9 @@
 | 管理页实现 | Flutter 原生重写 | 若嵌 Vue 页面会引入双 UI 体系与 bridge，破坏 iOS 移植性；列表页功能虽多但不复杂 |
 | 状态管理 | Riverpod（`flutter_riverpod`） | 依赖注入显式，API client / 配置 / tab 状态可测试；避免全局单例 |
 | 导航 | `go_router` | 声明式路由，便于以后接 deep link |
-| 数据源 | 现有 Hono 服务器，不改服务端 | 契约已稳定，扩展与 app 共用；去重、图片处理都在服务端 |
+| 数据源 | 现有 Hono 服务器；仅新增 `/api/sites`（见 5.4），现有接口与数据表不动 | 契约稳定，扩展与 app 共用；去重、图片处理都在服务端 |
+| 站点数据模型 | 服务端新建独立 `sites` 表（4 个端点） | 站点字段（origin/图标）与链接差异大，独立表避免污染 links/trash；列表可按站点批量返回 |
+| 标签页导入 | 外部 adb 工具（Node 脚本），不做进 app | 平板不向第三方 app 暴露标签页；adb+CDP 是唯一可行路径，app 内无法完成 |
 | 配置存储 | `flutter_secure_storage`（API Key、服务器地址、自定义配置） | Keystore 加密；个人自用不做多账号 |
 | 主题 | Material 3，跟随系统，支持深色 | 与扩展视觉习惯一致即可，不做像素级复刻 |
 
@@ -55,8 +61,9 @@
 ┌────────────────────────────────────────────────────────┐
 │ Flutter (Dart)                                          │
 │                                                        │
-│  UI 层        BrowserScreen / LibraryScreen / Settings  │
-│               TabStrip / BrowserToolbar / LongPressSheet│
+│  UI 层        BrowserScreen / LibraryScreen / SitesScreen     │
+│               Settings / TabStrip / BrowserToolbar            │
+│               LongPressSheet                                  │
 │  ────────────────────────────────────────────────────  │
 │  应用层       BrowserNotifier(TabManager)               │
 │               CaptureService / LibraryNotifier          │
@@ -72,7 +79,7 @@
 └───────────────┬────────────────────────────────────────┘
                 │ HTTPS + Bearer Token
 ┌───────────────▼────────────────────────────────────────┐
-│ 现有 Hono + SQLite 服务器（server/，不改）                │
+│ 现有 Hono + SQLite 服务器（server/；新增 /api/sites）      │
 └────────────────────────────────────────────────────────┘
 ```
 
@@ -110,6 +117,9 @@ mobile/
 │   │   │   ├── library_notifier.dart
 │   │   │   ├── link_card.dart
 │   │   │   └── trash_screen.dart
+│   │   ├── sites/
+│   │   │   ├── sites_screen.dart
+│   │   │   └── site_card.dart
 │   │   └── settings/settings_screen.dart
 │   ├── platform/
 │   │   ├── webview_settings.dart  # Android/iOS 设置差异集中在这里
@@ -132,7 +142,7 @@ mobile/
 
 ## 5. 数据与接口
 
-### 5.1 复用现有 API（服务端不改）
+### 5.1 现有 API（不改动，扩展与 app 共用）
 
 | 用途 | 方法/路径 |
 | --- | --- |
@@ -145,6 +155,7 @@ mobile/
 | 还原 | `POST /api/trash/:id/restore` |
 | 永久删除 | `DELETE /api/trash/:id` |
 | 统计 | `GET /api/stats` |
+| 站点 | `GET/POST/DELETE /api/sites*`（新增，见 5.4） |
 
 - `page` 从 1 开始；`pageSize` 默认 50；`sortBy` 取 `created_at` | `title`；`sortOrder` 取 `asc` | `desc`。
 - 响应统一为 `{ success, data?, total?, error? }`。
@@ -179,6 +190,10 @@ abstract class ApiClient {
   Future<String> restoreTrash(String id);           // 返回新 id
   Future<void> purgeTrash(String id);
   Future<Stats> stats();
+  Future<List<Site>> listSites();
+  Future<Site> addSite(SiteInput input);        // 已存在时返回已有记录
+  Future<void> deleteSite(String id);
+  Future<bool> siteExists(String origin);
 }
 ```
 
@@ -199,6 +214,39 @@ class ServerConfig {
 
 - 保存前先 normalize（去掉末尾 `/`）。
 - 未配置时：浏览器可用，收藏与列表提示"先去设置服务器"。
+
+### 5.4 站点收藏 API（后端新增）
+
+站点 = 一个 URL 的 origin（`scheme://host[:port]`），与链接是两类数据，独立建表。
+
+```sql
+CREATE TABLE IF NOT EXISTS sites (
+  id          TEXT PRIMARY KEY,
+  url         TEXT NOT NULL,            -- 归一化后的 origin，如 https://example.com
+  title       TEXT,
+  icon_url    TEXT,                     -- 采集到的 favicon 地址，可为空
+  created_at  INTEGER NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_sites_url ON sites(url);
+```
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| GET | `/api/sites` | 全部站点，按 `created_at` 倒序 |
+| POST | `/api/sites` | 新增 `{url, title, icon_url?}`；服务端把 url 归一化为 origin；已存在时幂等返回已有记录 |
+| DELETE | `/api/sites/:id` | 硬删除（v1 不进回收站） |
+| GET | `/api/sites/exists?url=` | `{exists}`，按 origin 比较 |
+
+- 鉴权、限流、错误格式与现有 `/api/*` 一致。
+- 不改动 `links` / `trash` 表与现有接口；不引入站点与链接的关联。
+- 服务端改动清单：`utils/database.ts`（建表与 CRUD）、`routes/sites.ts`、`index.ts` 挂载、`types/index.ts` 增加 `Site` 类型；`AGENTS.md` API 表补一行。
+- 验证方式（服务端暂无测试框架）：`curl` 覆盖四个端点的正常/401/重复/非法 url 场景 + 移动端联调。
+
+### 5.5 站点与链接的展示关系
+
+- 收藏库（links）与站点页（sites）完全独立，互不出现。
+- 收藏主站时不写入 links；收藏链接时不写入 sites。
+- 两者共用同一服务器、同一 API Key。
 
 ## 6. 浏览器模块
 
@@ -321,6 +369,7 @@ window.__rlExtract = async (url) => JSON.stringify({
 │   example.com/a  ·  已收藏/未收藏  │
 │ ─────────────────────────────── │
 │ ★ 收藏到稍后再看        [主按钮]   │  ← 第一项
+│ ☆ 收藏主站 example.com            │  ← 第二项
 │ ↗ 在新标签打开                    │
 │ ⧉ 复制链接                       │
 │ ⤴ 分享                           │
@@ -378,12 +427,29 @@ window.__rlExtract = async (url) => JSON.stringify({
 - 主题：跟随系统 / 浅色 / 深色。
 - 浏览器：搜索源、清除缓存与 Cookie（`WebView` 的 `CookieManager` / `clearCache`）。
 - 关于：版本号、API 契约说明、隐私说明（无统计上报）。
+- "从平板浏览器导入标签页"入口：只展示 16 节的 adb 步骤说明与命令，不在 app 内执行。
 
 ### 8.3 平板布局
 
 - 宽度 ≥ 600dp：`NavigationRail` + 内容区；地址栏与标签条同一行，标签条可横向滚动。
 - 宽度 < 600dp（手机或分屏）：底部 `NavigationBar`，标签条折叠为标签数按钮。
 - 横屏视频全屏时隐藏所有应用 UI。
+
+### 8.4 站点页
+
+- 与收藏库并列的独立 tab（导航条目：收藏 / 站点 / 浏览器 / 设置）。
+- 网格卡片：图标 56dp（`icon_url` → `origin/favicon.ico` → 首字母占位）、名称（`title` → host）、host 小字。
+- 点击：在新标签打开 origin；长按：删除（二次确认，硬删除）。
+- 空态引导："在网页里长按链接，选择'收藏主站'"。
+- 数据来自 `GET /api/sites`，进入页面时刷新；删除乐观更新 + 失败回滚。
+
+**收藏主站流程**：
+
+1. 入口：长按 Sheet 第二项、浏览器工具栏菜单"收藏主站"。
+2. `origin = scheme://host[:port]`（来自当前页或长按链接）；先 `GET /api/sites/exists?url=`。
+3. TitleResolver 拉 origin 首页 HTML：取 `<title>` / `og:site_name` 作为名称；取 `<link rel="icon|shortcut icon">` 作为 `icon_url`（相对路径拼成绝对 URL），没有则回退 `origin/favicon.ico`。
+4. `POST /api/sites`；已存在则提示"已收藏该站点"。
+5. 当前页不是 http(s)（如 `about:blank`）时不显示"收藏主站"入口。
 
 ## 9. 安全与隐私
 
@@ -404,10 +470,11 @@ window.__rlExtract = async (url) => JSON.stringify({
 
 | 层级 | 内容 |
 | --- | --- |
-| 单元测试（`flutter test`） | ApiClient（mock Dio）、错误映射、URL 规范化、标题解析、分页去重合并 |
-| Widget 测试 | 链接库空/加载/错误态、长按 Sheet 各状态、标签条交互 |
-| 集成测试（`integration_test` + Android 模拟器） | 本地 fixture 页面（`assets/test/` 经本地 HTTP 或 `initialFile` 加载）验证：长按回调、提取 JSON、截图、`addLink` 到本地服务器 |
-| 手工验收（平板真机） | B 站/YouTube 全屏与旋转、长按菜单置顶、多标签切换与返回键、截图质量、深色模式、横竖屏布局 |
+| 单元测试（`flutter test`） | ApiClient（含 sites，mock Dio）、错误映射、URL/origin 规范化、标题解析、分页去重合并 |
+| Widget 测试 | 链接库空/加载/错误态、长按 Sheet 各状态、标签条交互、站点网格与空态 |
+| 集成测试（`integration_test` + Android 模拟器） | 本地 fixture 页面（`assets/test/` 经本地 HTTP 或 `initialFile` 加载）验证：长按回调、提取 JSON、截图、`addLink` 到本地服务器；收藏主站 → 站点页出现卡片 |
+| 服务端（手动 curl） | `/api/sites` 四个端点：正常、401、重复提交、非法 url、删除不存在 id |
+| 手工验收（平板真机） | B 站/YouTube 全屏与旋转、长按菜单置顶、多标签切换与返回键、截图质量、深色模式、横竖屏布局、站点卡片图标 |
 
 - `inject.js` 的 DOM 逻辑用本地 fixture 页 + 集成测试覆盖；不额外引入 Node 测试栈。
 - 每次发版前跑 `flutter analyze` + `flutter test`。
@@ -428,8 +495,9 @@ window.__rlExtract = async (url) => JSON.stringify({
 | M0 技术验证（2–3 天） | 空壳 + WebView + 2 标签切换 + 长按 JS 回调 + 截图 + `addLink` 打到真实服务器 + B 站全屏 | 13.1 各项全部跑通；确认 `IndexedStack + Offstage`、全屏、长按在真机可用 |
 | M1 浏览器核心（约 1 周） | 地址栏、前进后退、标签条、标签会话、返回键、外链、全屏适配 | 平板日常浏览可用 |
 | M2 收藏 + 链接库（约 1 周） | 长按 Sheet、提取、截图、标题、去重、保存；列表/搜索/排序/删除/回收站 | 长按收藏端到端可用 |
-| M3 设置与打磨（约 1 周） | 服务器配置与测试、主题、清除数据、平板布局、错误态 | 可日常使用 |
-| M4（可选） | 导入/导出、标签恢复细节、下载、系统分享入口 | 按需 |
+| M3 站点收藏（约 3–4 天） | 后端 `sites` 表与四个端点、站点页（网格/图标/删除）、"收藏主站"入口、标题与图标采集 | 收藏/打开/删除站点可用，后端 curl 用例通过 |
+| M4 设置与打磨（约 3 天） | 服务器配置与测试、主题、清除数据、平板布局、错误态 | 可日常使用 |
+| M5（可选） | 标签页导入脚本与文档、导入/导出、标签恢复细节、下载、系统分享入口 | 按需 |
 
 ### 13.1 M0 必验清单
 
@@ -453,18 +521,80 @@ window.__rlExtract = async (url) => JSON.stringify({
 | 明文 HTTP 与自签证书 | 连接失败 | 设置页明确提示；文档给出 network security config 配置方法 |
 | WebView 内核版本碎片化 | 个别站点渲染/播放异常 | 以平板真机为准；必要时提供 UA 切换兜底（v1.1） |
 | 跨域 iframe 内的链接无法被注入脚本捕获 | 部分站点长按无菜单 | v1 明确只支持主框架；v1.1 用 Android 原生 hit-test 作为补充通道 |
+| 站点收藏需要服务端改动 | 可能影响现有部署/数据 | 新增独立 `sites` 表与路由，不改现有接口与表；上线前备份 SQLite；服务端版本号 bump |
+| 平板浏览器标签页只能靠 adb | 导入是手动流程，不是 app 功能 | 定位为一次性迁移工具；文档写清步骤；只支持 Chromium 系；不承诺自动化 |
+| 无线调试端口变化 / adb forward 失效 | 导入脚本连不上 | 脚本先校验 `adb devices`，失败提示重新 forward；文档给无线调试完整步骤 |
 
-## 15. 待确认事项
+## 15. 评审结论
 
-1. **包名**：`com.cpf23333.readlater` 是否可以（发布后再改会丢升级路径）。
-2. **链接库 v1 范围**：批量删除/批量还原按"进 v1"设计，导入/导出后置，是否同意？
-3. **已收藏时的交互**：默认"禁用收藏按钮 + 查看入口"，还是允许再次保存？
-4. **服务器访问方式**：平板访问的是内网 `http://` 还是公网 `https://`（决定明文配置与证书说明）。
-5. **应用内搜索源**：默认 Bing 是否可接受（国内网络可换）。
+2026-11-09 评审通过，以下按默认值执行：
 
-## 16. 与现有项目的关系
+1. 包名 `com.cpf23333.readlater`。
+2. 批量删除/批量还原进 v1；导入/导出后置。
+3. 已收藏时禁用收藏按钮 + 提供"查看"入口。
+4. 服务器地址同时支持 `http://` 与 `https://`；内网 http 走明文配置并在设置页提示。
+5. 地址栏搜索默认 Bing（设置页可改）。
 
-- `server/` 不改；`entrypoints/`、`utils/`、`wxt.config.ts` 不动。
+追加需求（站点收藏、平板浏览器标签页导入）已并入 2.1、5.4、8.4、16；如与预期不符请指出。
+
+## 16. 浏览器标签页导入（外部 adb 工具）
+
+### 16.1 背景与结论
+
+- 平板上的 Chrome/Brave 不向第三方 app 暴露"已打开标签页"，Android 沙箱下 app 内无法读取，没有合规 API。
+- Chromium 系浏览器通过 abstract Unix socket `chrome_devtools_remote` 暴露 DevTools HTTP 端点，`adb forward` 后可取 `/json/list`（含每个标签页的 `url`、`title`）。
+- 因此导入做成 PC 上运行的一次性脚本，不进 app UI；网络 adb 可行，但同样需要一台 PC/主机执行。
+
+### 16.2 前置条件
+
+- 平板：开发者选项 + USB 调试开启；Chrome/Brave 正在运行。
+- 电脑：`platform-tools`（adb）、Node.js ≥ 20。
+- 服务器：地址与 API Key（与 app 相同）。
+
+### 16.3 步骤（USB）
+
+```bash
+adb devices
+adb forward tcp:9222 localabstract:chrome_devtools_remote
+# Brave 若上面连不上，先查实际 socket：
+# adb shell cat /proc/net/unix | grep -i devtools
+node tools/import-tabs/import.mjs \
+  --server https://your-server \
+  --api-key "$API_KEY" \
+  [--socket chrome_devtools_remote] [--port 9222]
+```
+
+脚本行为：
+
+1. `GET http://127.0.0.1:9222/json/list`，过滤 `type === "page"` 且 URL 为 http(s) 的条目。
+2. 逐个 `GET /api/links/exists?url=` 去重（服务端批量插入不去重，必须在脚本侧过滤）。
+3. `POST /api/links/batch`，每条带 `url`、`title`、`custom_data.importedFrom = "chromium-tabs"`；不传截图/图片。
+4. 输出导入 / 跳过（已存在）/ 失败 统计；`--dry-run` 只打印不写库。
+
+### 16.4 网络 adb
+
+- Android 11+：开启"无线调试"，`adb pair <ip>:<pair-port>` 配对后 `adb connect <ip>:<port>`。
+- 或先 USB 连一次：`adb tcpip 5555`，拔线后 `adb connect <ip>:5555`。
+- 连接成功后 `adb forward` 用法不变；要求平板与电脑同一网络、平板休眠不断网。
+- 注意：无线调试的端口在重启/重新配对后会变；`adb forward` 在 adb 重连后需要重新执行。
+
+### 16.5 限制
+
+- 只能导入当前打开的标签页（URL + 标题），没有截图和附近图片。
+- Chrome/Brave 进程被杀后 socket 消失；需要保持浏览器在前台或后台运行。
+- Firefox 不适用（调试协议不同）；仅 Chromium 系（Chrome、Brave、Edge 等，socket 名以实测为准）。
+- 不含历史记录、书签、已关闭标签页。
+- 这是开发/迁移工具，不随 app 分发。
+
+### 16.6 备选方案（记录，不实现）
+
+Chrome 开启"标签页同步"后，桌面扩展可用 `chrome.sessions.getDevices()` 读取其他设备打开的标签页并入库；仅 Chrome、需同一账号同步，Brave 不支持该能力。v1 不实现。
+
+## 17. 与现有项目的关系
+
+- `server/`：仅新增 `sites` 表与 `/api/sites`（4 个端点），现有接口、数据表、部署方式不变；服务端版本号 bump。
+- `entrypoints/`、`utils/`、`wxt.config.ts` 不动；v1 不要求扩展参与站点收藏或标签页导入，后续可选。
 - 新增 `mobile/` 目录独立构建；根 `package.json` 不加脚本，避免污染扩展构建。
-- 文档：完成后在 `AGENTS.md` 增加 mobile 章节、更新 `CHANGELOG.md`（实施阶段做）。
+- 新增 `tools/import-tabs/`（独立 Node 脚本，不进任何构建产物）。
+- 文档：完成后在 `AGENTS.md` 增加 mobile 章节与 `/api/sites` 说明、更新 `CHANGELOG.md`（实施阶段做）。
 - 数据互通：两端共用同一服务器与 API，扩展端已有数据无需迁移。
