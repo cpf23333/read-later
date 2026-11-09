@@ -5,8 +5,11 @@ set -e
 
 echo "=== 构建 read-later-server 镜像 ==="
 
+# Dockerfile 需要项目根目录作为 build context
+cd "$(dirname "$0")/.."
+
 # 构建
-docker build -t read-later-server:latest .
+docker build -f server/Dockerfile -t read-later-server:latest .
 
 # 导出（可选，用于离线部署）
 if [ "$1" = "--export" ]; then

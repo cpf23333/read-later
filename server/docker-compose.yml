@@ -1,26 +1,47 @@
-# 在线模式 - 在有网环境使用
-# 用法: docker-compose up -d
-# 会自动从 Dockerfile 构建镜像
+# ReadLater 服务器 - 在线部署配置
+# 用法：
+#   1. 复制本文件到部署目录
+#   2. 修改 API_KEY（必须）
+#   3. docker compose up -d
 
 services:
   readlater:
-    build: .
+    # 默认本地构建镜像，无需依赖外部镜像仓库
+    # Dockerfile 位于 server/Dockerfile，但需要项目根目录作为 build context
+    build:
+      context: ..
+      dockerfile: server/Dockerfile
+      args:
+        - BASE_IMAGE=${BASE_IMAGE:-node:24-alpine}
     image: read-later-server:latest
     container_name: readlater
     ports:
-      - '3000:3000'
+      - '${PORT:-3000}:3000'
     volumes:
       # 修改为你实际的数据目录
-      - ./data:/app/data
+      - ${DATA_PATH:-./data}:/app/data
     environment:
       - NODE_ENV=production
       - PORT=3000
       - DATA_DIR=/app/data
-      # CORS 配置 - 生产环境请修改
-      - ALLOWED_ORIGINS=*
+      # CORS 配置 - 生产环境建议填写扩展来源，如 http://localhost、chrome-extension://*
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-*}
       # 图片大小限制（MB）
-      - MAX_IMAGE_SIZE_MB=10
+      - MAX_IMAGE_SIZE_MB=${MAX_IMAGE_SIZE_MB:-10}
+      # 数据库自动备份间隔（小时），设为 0 关闭
+      - BACKUP_INTERVAL_HOURS=${BACKUP_INTERVAL_HOURS:-24}
+      # 保留备份数量
+      - BACKUP_KEEP_COUNT=${BACKUP_KEEP_COUNT:-7}
       # API Key 鉴权（必须修改！）
-      # 生成: openssl rand -base64 32
-      - API_KEY=your-secret-api-key-change-this
+      # 生成命令：openssl rand -base64 32
+      - API_KEY=${API_KEY:?错误：必须设置 API_KEY 环境变量}
     restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:3000/api/health']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+# 如果你有预构建镜像（如 Docker Hub 或私有镜像仓库），可取消下面注释并注释掉上面的 build/image
+#    image: ${DOCKER_REGISTRY}/read-later-server:latest

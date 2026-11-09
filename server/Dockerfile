@@ -3,21 +3,33 @@
 # 用法（在项目根目录执行）:
 #   docker build -f server/Dockerfile -t read-later-server:latest .
 #
+# 基础镜像源示例（通过 --build-arg BASE_IMAGE=... 传入）：
+#   - Docker Hub 官方：node:24-alpine
+#   - 国内加速/私有仓库：your-registry/library/node:24-alpine
+#
 # 如果本地能访问私有仓库，也可以把 builder 阶段改为:
-#   FROM 192.168.1.100:8083/readlater-ci:latest AS builder
+#   FROM your-registry/readlater-ci:latest AS builder
 #   （可省去安装 pnpm / buildah / skopeo 的步骤）
 
+ARG BASE_IMAGE=node:24-alpine
+
 # ===== 构建阶段 =====
-FROM node:24-alpine AS builder
+FROM ${BASE_IMAGE} AS builder
 
 WORKDIR /app
 
+# 如需更换 Alpine apk 源，可在此添加：
+#   RUN sed -i 's|https://dl-cdn.alpinelinux.org/alpine|http://mirrors.aliyun.com/alpine|g' /etc/apk/repositories
+#
 # 安装编译工具（better-sqlite3 / sharp 需要）+ pnpm
 RUN apk add --no-cache python3 make g++ vips-dev && \
-    npm install -g pnpm
+    npm install -g pnpm@10.15.1
 
 # 复制 workspace 配置（完整项目，entrypoints 存在，wxt prepare 可正常执行）
-COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
+# 使用 .npmrc* 通配符：存在 .npmrc 时复制，不存在也不报错
+COPY .npmrc* pnpm-workspace.yaml package.json pnpm-lock.yaml ./
+COPY wxt.config.ts ./
+COPY entrypoints ./entrypoints
 COPY server/package.json ./server/
 
 # 安装依赖（完整项目上下文，生命周期脚本正常执行）
@@ -33,7 +45,7 @@ WORKDIR /app
 RUN pnpm deploy --filter=read-later-server --prod /app/deploy
 
 # ===== 运行阶段 =====
-FROM node:24-alpine
+FROM ${BASE_IMAGE}
 
 WORKDIR /app
 

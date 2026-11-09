@@ -12,13 +12,13 @@ if [ ! -f "$TAR_FILE" ]; then
 fi
 
 echo "=== 停止现有服务 ==="
-docker-compose -f docker-compose.offline.yml down 2>/dev/null || docker stop readlater 2>/dev/null || true
+docker-compose -f docker-compose.yml down 2>/dev/null || docker stop readlater 2>/dev/null || true
 
 echo "=== 加载新镜像 ==="
 docker load -i "$TAR_FILE"
 
 echo "=== 启动服务 ==="
-docker-compose -f docker-compose.offline.yml up -d
+docker-compose -f docker-compose.yml --env-file .env up -d --no-build
 
 echo "=== 完成 ==="
 docker ps | grep readlater

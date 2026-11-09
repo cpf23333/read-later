@@ -25,13 +25,14 @@ web-ext.config.ts
 *.sln
 *.sw?
 server-deploy.zip
-server/readlater-offline.zip
 server/readlater-deploy.zip
+read-later-server.tar
 server/read-later-server.tar
 
 .temp
 
 # Environment variables
+.env
 .env.local
 .env.*.local
 .vfox/

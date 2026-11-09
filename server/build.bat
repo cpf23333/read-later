@@ -3,8 +3,11 @@ REM 镜像构建脚本 - 在有网环境运行
 
 echo === 构建 read-later-server 镜像 ===
 
+REM Dockerfile 需要项目根目录作为 build context
+cd /d "%~dp0\.."
+
 REM 构建
-docker build -t read-later-server:latest .
+docker build -f server/Dockerfile -t read-later-server:latest .
 if %ERRORLEVEL% neq 0 (
     echo 构建失败！
     exit /b 1
