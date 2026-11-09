@@ -20,7 +20,7 @@ export default defineConfig({
   manifest: {
     name: '稍后再看',
     description: '右键或长按保存链接，自动记录页面标题、截图和附近图片，支持多设备同步',
-    version: '1.0.0',
+    version: '0.9.0',
     author: { email: 'cpf23333@example.com' },
     homepage_url: 'https://github.com/cpf23333/read-later',
     default_locale: 'zh_CN',

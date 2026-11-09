@@ -1,6 +1,6 @@
 {
   "name": "read-later-server",
-  "version": "2.0.0",
+  "version": "0.9.0",
   "description": "稍后再看后端服务 - Hono + TypeScript + SQLite",
   "type": "module",
   "main": "dist/index.js",
