@@ -7,26 +7,29 @@ jobs:
   build-and-push:
     runs-on: docker
     container:
-      image: 192.168.1.100:8083/readlater-ci:latest
+      image: ${{ vars.CI_REGISTRY }}/readlater-ci:latest
       options: --privileged
     env:
       DOCKER_HOST: tcp://localhost:2375
     steps:
       - uses: actions/checkout@v7
 
-      - name: Build CI image
+      - name: Build and push CI image
+        env:
+          CI_REGISTRY: ${{ vars.CI_REGISTRY }}
+          BASE_IMAGE: ${{ vars.CI_BASE_IMAGE }}
+          APT_REPO_DEBIAN: ${{ vars.APT_REPO_DEBIAN }}
+          APT_REPO_SECURITY: ${{ vars.APT_REPO_SECURITY }}
+          NPM_REGISTRY: ${{ vars.NPM_CONFIG_REGISTRY }}
+          INSECURE_REGISTRIES: ${{ vars.PRIVATE_REGISTRIES }}
+          DOCKER_REGISTRY_USER: ${{ secrets.DOCKER_REGISTRY_USER }}
+          DOCKER_REGISTRY_PASSWORD: ${{ secrets.DOCKER_REGISTRY_PASSWORD }}
         run: |
-          docker build -t 192.168.1.100:8083/readlater-ci:latest -f server/ci/Dockerfile server/ci
-
-      - name: Login to registry
-        run: |
-          echo "${{ secrets.DOCKER_REGISTRY_PASSWORD }}" | \
-            docker login 192.168.1.100:8083 -u "${{ secrets.DOCKER_REGISTRY_USER }}" --password-stdin
-
-      - name: Push CI image
-        run: |
-          docker push 192.168.1.100:8083/readlater-ci:latest
+          cd server/ci
+          ./build-and-push.sh "${CI_REGISTRY}" readlater-ci latest
 
       - name: Remove old CI image from DinD cache
+        env:
+          CI_REGISTRY: ${{ vars.CI_REGISTRY }}
         run: |
-          docker rmi 192.168.1.100:8083/readlater-ci:latest || true
+          docker rmi "${CI_REGISTRY}/readlater-ci:latest" || true

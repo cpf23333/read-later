@@ -372,7 +372,7 @@ async function saveServer() {
             <input
               v-model="serverConfig.url"
               type="url"
-              placeholder="http://192.168.1.100:3000"
+              placeholder="http://your-server:3000"
               :disabled="!serverConfig.enabled"
             />
             <span class="hint">例如：http://localhost:3000 或 http://NAS_IP:3000</span>
@@ -412,13 +412,28 @@ async function saveServer() {
 
           <div class="help-content" style="margin-top: 24px">
             <h3>部署指南</h3>
+            <p>
+              没有服务器？可以部署在自己的 NAS、VPS 或家用电脑上。需要安装 Docker。
+            </p>
             <ol>
               <li>在 NAS/服务器上安装 Docker</li>
               <li>下载 server 文件夹到服务器</li>
-              <li>运行：<code>docker-compose up -d</code></li>
+              <li>
+                运行一键部署脚本：
+                <ul>
+                  <li>Linux/Mac：<code>./deploy.sh</code></li>
+                  <li>Windows：<code>deploy.bat</code></li>
+                </ul>
+              </li>
+              <li>按提示设置 API_KEY 后再次运行脚本</li>
               <li>数据将保存在 <code>./data</code> 目录</li>
             </ol>
-            <p class="hint">相比 WebDAV，服务器模式支持真正的回收站和更快的查询</p>
+            <p class="hint">
+              详细部署说明见
+              <a href="https://github.com/cpf23333/read-later/tree/main/server/README-DEPLOY.md" target="_blank">
+                服务器部署文档
+              </a>
+            </p>
           </div>
         </div>
       </section>

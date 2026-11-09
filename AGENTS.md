@@ -38,16 +38,13 @@
 │   │   └── types/         # 类型定义
 │   ├── dist/              # 编译后的 JavaScript
 │   ├── Dockerfile         # Docker 多阶段构建
-│   ├── docker-compose.yml # Docker Compose 配置
-│   ├── docker-compose.offline.yml  # 离线部署配置
-│   ├── build-offline.sh   # 完全离线包构建脚本（Linux/Mac）
-│   ├── build-offline.bat  # 完全离线包构建脚本（Windows）
-│   ├── start-offline.sh   # 离线启动脚本（Linux/Mac）
-│   ├── start-offline.bat  # 离线启动脚本（Windows）
-│   ├── update-offline.sh  # 离线更新脚本（Linux/Mac）
-│   └── update-offline.bat # 离线更新脚本（Windows）
-├── components/            # 共享组件
-└── assets/                # 静态资源
+│   ├── docker-compose.yml # Docker Compose 配置（在线/离线通用）
+│   ├── deploy.sh          # 一键部署脚本（Linux/Mac）
+│   ├── deploy.bat         # 一键部署脚本（Windows）
+│   ├── build.sh           # 镜像构建/导出脚本（Linux/Mac）
+│   ├── build.bat          # 镜像构建/导出脚本（Windows）
+│   ├── reload.sh          # 离线镜像加载/更新脚本（Linux/Mac）
+│   └── reload.bat         # 离线镜像加载/更新脚本（Windows）
 ```
 
 ## 核心功能模块
@@ -265,54 +262,54 @@ docker-compose up -d
 
 适用于无外网环境（如内网 NAS）：
 
-**步骤 1：在有网络的机器上构建离线包**
+**步骤 1：在有网络的机器上导出镜像**
 
 ```bash
 cd server
-./build-offline.sh
+./build.sh --export
 ```
 
-脚本默认使用阿里云镜像源，无需额外配置。如需使用其他镜像源：
+输出：`read-later-server.tar`
+
+**步骤 2：复制到目标服务器并部署**
 
 ```bash
-DOCKER_REGISTRY=your.mirror.com ./build-offline.sh
+cd server
+
+# 创建 .env（如果还没有）
+cat > .env <<EOF
+API_KEY=$(openssl rand -base64 32)
+PORT=3000
+DATA_PATH=./data
+EOF
+
+# 加载镜像并启动
+./reload.sh
 ```
 
-**步骤 2：复制到目标服务器**
+Windows:
 
-```bash
-# 解压
-unzip readlater-offline.zip
-
-# 修改数据目录（重要！）
-vim docker-compose.offline.yml
-# volumes:
-#   - /your/data/path:/app/data
-
-# 启动（Linux/Mac）
-./start-offline.sh
-
-# 或启动（Windows）
-start-offline.bat
+```cmd
+cd server
+reload.bat
 ```
 
 **步骤 3：更新（有新版时）**
 
 ```bash
-# 1. 在新机器上重新执行 prepare-offline.sh 生成新包
-# 2. 复制 readlater-images.tar 到服务器
+# 1. 在有网络的机器上重新执行 ./build.sh --export
+# 2. 复制 read-later-server.tar 到服务器 server/ 目录
 # 3. 执行更新
-./update-offline.sh  # Linux/Mac
+./reload.sh  # Linux/Mac
 # 或
-update-offline.bat   # Windows
+reload.bat   # Windows
 ```
 
-离线包包含：
+离线部署使用：
 
-- `readlater-images.tar` - Docker 镜像（node:24-alpine + read-later-server）
-- `docker-compose.offline.yml` - 部署配置
-- `start-offline.sh/.bat` - 启动脚本
-- `update-offline.sh/.bat` - 更新脚本
+- `read-later-server.tar` - Docker 镜像
+- `docker-compose.yml` - 部署配置（在线/离线通用，离线时带 `--no-build`）
+- `reload.sh/.bat` - 镜像加载/更新脚本
 
 ### 环境变量（必需）
 
@@ -339,7 +336,7 @@ update-offline.bat   # Windows
 
 ### CI 镜像 (`readlater-ci`)
 
-工作流共用统一的 CI 镜像 `192.168.1.100:8083/readlater-ci:latest`，基于 `node:24`（Debian），预装：
+工作流共用统一的 CI 镜像 `${CI_REGISTRY}/readlater-ci:latest`（通过 Forgejo 项目变量 `CI_REGISTRY` 配置），基于 `node:24`（Debian），预装：
 
 - `pnpm`（全局）
 - `buildah` + `skopeo`（容器镜像构建）
@@ -350,14 +347,17 @@ update-offline.bat   # Windows
 
 ```bash
 cd server/ci
-./build-and-push.sh [registry] [name] [tag] [alpine-proxy]
+# 1. 复制 .env.example 为 .env 并编辑镜像源
+# 2. 构建并推送
+./build-and-push.sh <registry> [name] [tag]
 # 示例：
-./build-and-push.sh 192.168.1.100:8083 readlater-ci latest
+./build-and-push.sh your-registry readlater-ci latest
 ```
 
 **镜像 Dockerfile**: `server/ci/Dockerfile`
 
-- 支持通过 `ARG ALPINE_REPO_URL` 指定 apk 源（默认阿里云）
+- 支持通过 `server/ci/.env` 配置基础镜像、apt 源、npm registry、insecure registries
+- 也可通过 build args 直接传入（详见 Dockerfile 顶部注释）
 - `Batch 脚本 (.bat)` 构建后需确认 **CRLF 换行符**（`unix2dos` 修复）
 
 ### 工作流关键配置
@@ -365,8 +365,13 @@ cd server/ci
 - `actions/checkout@v7`
 - `actions/cache@v6`（缓存 `pnpm store` 与 `node-gyp` 缓存）
 - `forgejo/upload-artifact@v5`
-- npm 源指向内网 Nexus：`http://192.168.1.100:8081/repository/npm-proxy/`
-- Docker 基础镜像优先走内网镜像代理：`192.168.1.100:5443`
+- npm 源通过 Forgejo 项目变量 `NPM_CONFIG_REGISTRY` 配置
+- Docker 基础镜像/CI 镜像通过 Forgejo 项目变量 `CI_REGISTRY` 配置
+- CI 镜像基础镜像通过 Forgejo 项目变量 `CI_BASE_IMAGE` 配置（可选，默认 `node:24`）
+- CI 镜像 apt 源通过 Forgejo 项目变量 `APT_REPO_DEBIAN` / `APT_REPO_SECURITY` 配置（可选）
+- Docker 镜像加速通过 Forgejo 项目变量 `DOCKER_MIRROR` 配置（如 `your-registry`）
+- Buildah 私有 HTTP 仓库通过 Forgejo 项目变量 `PRIVATE_REGISTRIES` 配置（逗号分隔）
+- `update-ci-image.yml` 调用 `server/ci/build-and-push.sh` 构建并推送 CI 镜像
 - `build-server-image.yml` 使用 Buildah + Skopeo 构建并导出离线部署包
 
 ## 开发注意事项

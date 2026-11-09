@@ -7,10 +7,10 @@ jobs:
   build-and-push:
     runs-on: docker
     container:
-      image: 192.168.1.100:8083/readlater-ci:latest
+      image: ${{ vars.CI_REGISTRY }}/readlater-ci:latest
       options: --privileged
     env:
-      NPM_CONFIG_REGISTRY: http://192.168.1.100:8081/repository/npm-proxy/
+      NPM_CONFIG_REGISTRY: ${{ vars.NPM_CONFIG_REGISTRY }}
       npm_config_disturl: https://npmmirror.com/mirrors/node
       npm_config_prebuild_install_mirror: https://registry.npmmirror.com/-/binary/prebuild-install
     steps:
@@ -46,28 +46,33 @@ jobs:
       - name: Build image with Buildah
         env:
           STORAGE_DRIVER: vfs
+          DOCKER_MIRROR: ${{ vars.DOCKER_MIRROR }}
+          PRIVATE_REGISTRIES: ${{ vars.PRIVATE_REGISTRIES }}
         run: |
           echo "=== 配置 Buildah registry mirror ==="
           mkdir -p /etc/containers
-          printf '%s\n' \
-            '[[registry]]' \
-            'prefix = "docker.io"' \
-            'location = "docker.io"' \
-            '' \
-            '[[registry.mirror]]' \
-            'location = "192.168.1.100:5443"' \
-            'insecure = true' \
-            '' \
-            '[[registry]]' \
-            'prefix = "192.168.1.100:8083"' \
-            'location = "192.168.1.100:8083"' \
-            'insecure = true' \
-            '' \
-            '[[registry]]' \
-            'prefix = "192.168.1.100:5443"' \
-            'location = "192.168.1.100:5443"' \
-            'insecure = true' \
-            > /etc/containers/registries.conf
+          {
+            echo '[[registry]]'
+            echo 'prefix = "docker.io"'
+            echo 'location = "docker.io"'
+            echo ''
+            if [ -n "${DOCKER_MIRROR}" ]; then
+              echo '[[registry.mirror]]'
+              echo "location = \"${DOCKER_MIRROR}\""
+              echo 'insecure = true'
+              echo ''
+            fi
+            if [ -n "${PRIVATE_REGISTRIES}" ]; then
+              IFS=','
+              for reg in ${PRIVATE_REGISTRIES}; do
+                echo '[[registry]]'
+                echo "prefix = \"${reg}\""
+                echo "location = \"${reg}\""
+                echo 'insecure = true'
+                echo ''
+              done
+            fi
+          } > /etc/containers/registries.conf
           cat /etc/containers/registries.conf
           echo "=== 复制 Dockerfile 到部署目录 ==="
           cp server/deploy.Dockerfile server-deploy/Dockerfile
@@ -91,7 +96,7 @@ jobs:
           echo "=== 创建交付目录 ==="
           mkdir -p offline-deploy
           cp read-later-server.tar offline-deploy/
-          cp docker-compose.offline.yml offline-deploy/
+          cp docker-compose.yml offline-deploy/
           cp reload.sh offline-deploy/
           cp reload.bat offline-deploy/
           ls -la offline-deploy/

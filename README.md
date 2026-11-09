@@ -15,6 +15,53 @@
 - ✔️ **链接去重** - 基于标准化 URL 自动检测重复链接
 - ⚡ **批量操作** - 批量删除、批量还原、批量永久删除
 
+## 后端部署
+
+本扩展需要配合自建后端服务器使用，数据存储在你自己的服务器上。
+
+### 推荐方式：Docker 一键部署
+
+```bash
+# 下载 server 目录后执行
+cd server
+
+# Linux/Mac
+./deploy.sh
+
+# Windows
+.\deploy.bat
+```
+
+首次运行会创建 `.env` 文件并提示设置 `API_KEY`，保存后再次运行即可启动。
+
+### 手动部署
+
+```bash
+cd server
+
+# 创建 .env 并设置 API_KEY
+cat > .env <<EOF
+API_KEY=$(openssl rand -base64 32)
+PORT=3000
+DATA_PATH=./data
+EOF
+
+# 启动（首次会本地构建镜像）
+docker compose --env-file .env up -d --build
+```
+
+### 离线部署
+
+适用于无公网环境（如内网 NAS）：
+
+```bash
+cd server
+./build.sh --export
+# 将 read-later-server.tar 复制到目标服务器 server/ 目录，执行 reload.sh
+```
+
+详细说明见 [server/README-DEPLOY.md](./server/README-DEPLOY.md)。
+
 ## 支持的浏览器
 
 - Chrome / Edge / 其他 Chromium 内核浏览器
