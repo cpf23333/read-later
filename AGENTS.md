@@ -17,19 +17,25 @@
 
 ```
 .
-├── entrypoints/           # 扩展入口点
-│   ├── background.ts      # 后台脚本（右键菜单、消息处理）
-│   ├── content.ts         # 内容脚本（页面交互）
-│   ├── popup/App.vue      # 弹出窗口
-│   ├── options/App.vue    # 设置页面
-│   └── link-manager/App.vue # 链接管理页面
-├── utils/                 # 工具模块
-│   ├── storage.ts         # 类型定义
-│   ├── apiStorage.ts      # 服务器 API 调用
-│   ├── hybridStorage.ts   # 统一存储接口
-│   ├── imageExtractor.ts  # 图片提取逻辑
-│   └── imageUrl.ts        # 图片 URL 处理（缩略图）
-├── server/                # 后端服务器
+├── extension/             # 浏览器扩展（WXT + Vue 3，独立 workspace 包）
+│   ├── entrypoints/       # 扩展入口点
+│   │   ├── background.ts  # 后台脚本（右键菜单、消息处理）
+│   │   ├── content.ts     # 内容脚本（页面交互）
+│   │   ├── popup/         # 弹出窗口
+│   │   ├── options/       # 设置页面
+│   │   └── link-manager/  # 链接管理页面
+│   ├── utils/             # 工具模块
+│   │   ├── storage.ts     # 类型定义
+│   │   ├── apiStorage.ts  # 服务器 API 调用
+│   │   ├── hybridStorage.ts # 统一存储接口
+│   │   ├── imageExtractor.ts # 图片提取逻辑
+│   │   └── imageUrl.ts    # 图片 URL 处理（缩略图）
+│   ├── components/        # 共享 Vue 组件
+│   ├── public/            # 扩展静态资源（图标/隐私页）
+│   ├── assets/            # 样式与图片
+│   ├── wxt.config.ts      # WXT 配置
+│   └── package.json       # read-later-extension
+├── server/                # 后端服务器（独立 workspace 包）
 │   ├── src/               # TypeScript 源代码
 │   │   ├── index.ts       # 主入口
 │   │   ├── routes/        # 路由定义
@@ -45,6 +51,13 @@
 │   ├── build.bat          # 镜像构建/导出脚本（Windows）
 │   ├── reload.sh          # 离线镜像加载/更新脚本（Linux/Mac）
 │   └── reload.bat         # 离线镜像加载/更新脚本（Windows）
+├── mobile/                # Flutter Android app（独立工程）
+├── tools/                 # 独立脚本（标签页导入等）
+├── docs/                  # 设计 spec、实施计划、验证记录
+├── stores/                # 扩展商店文案（Chrome/Firefox）
+├── package.json           # workspace 根：脚本转发到 extension/server
+├── pnpm-workspace.yaml    # workspace: extension, server
+└── pnpm-lock.yaml
 ```
 
 ## 核心功能模块
@@ -152,14 +165,14 @@ openssl rand -base64 32
 
 ## 关键代码位置
 
-### 图片提取 (utils/imageExtractor.ts)
+### 图片提取 (extension/utils/imageExtractor.ts)
 
 - `extractNearbyImage()` - 主提取函数
 - `imageToBase64()` - 转换 blob/URL 为 base64
 - `defaultImageExtractor()` - 默认提取策略
 - `executeCustomExtractor()` - 执行自定义 JS
 
-### 图片 URL 处理 (utils/imageUrl.ts)
+### 图片 URL 处理 (extension/utils/imageUrl.ts)
 
 - `getThumbUrl()` - 根据原图 URL 生成缩略图 URL
 - `handleThumbError()` - 缩略图加载失败回退到原图
@@ -168,7 +181,7 @@ openssl rand -base64 32
 
 - `normalizeUrl()` - 与前端统一的标准化逻辑，用于链接去重
 
-### 后台脚本 (entrypoints/background.ts)
+### 后台脚本 (extension/entrypoints/background.ts)
 
 - `handleMessage()` - 消息处理（CAPTURE_TAB, FETCH_TITLE 等）
 - `captureTab()` - 获取页面截图
@@ -210,7 +223,7 @@ docker-compose up --build -d
 - `DELETE /api/links/:id` - 删除时移动图片到 deleted
 - `POST /api/trash/:id/restore` - 还原时移回图片
 
-### Popup (entrypoints/popup/App.vue)
+### Popup (extension/entrypoints/popup/App.vue)
 
 - `saveCurrentPage()` - 保存当前页面
 - 发送 `CAPTURE_TAB` 消息获取截图
@@ -421,7 +434,7 @@ COPY --from=builder /app/node_modules ./node_modules
 
 项目采用 **SemVer** 语义化版本：
 
-- 扩展版本号维护在根目录 `package.json` 的 `version` 字段。
+- 扩展版本号维护在 `extension/package.json` 的 `version` 字段；根 `package.json` 只负责 workspace 脚本。
 - 服务器版本号维护在 `server/package.json` 的 `version` 字段。
 - 发布扩展：给当前 commit 打标签 `v<扩展版本号>`（如 `v1.0.0`），然后手动触发 `release.yml`。
 - 发布服务器镜像：给当前 commit 打标签 `server-v<服务器版本号>`（如 `server-v2.0.0`），然后手动触发 `build-server-image.yml`。
@@ -431,16 +444,16 @@ COPY --from=builder /app/node_modules ./node_modules
 
 ### 已准备的物料
 
-- **图标**：`public/icon/` 下已包含 16/32/48/96/128 PNG；商店上传通常使用 128px；
-- **隐私政策**：`public/privacy.html`，发布前需部署到可访问的 URL 并替换 `homepage_url`；
+- **图标**：`extension/public/icon/` 下已包含 16/32/48/96/128 PNG；商店上传通常使用 128px；
+- **隐私政策**：`extension/public/privacy.html`，发布前需部署到可访问的 URL 并替换 `homepage_url`；
 - **商店文案**：`stores/chrome.md`、`stores/firefox.md`，分别对应 Chrome Web Store 和 Firefox Add-ons；
-- **Manifest 元信息**：`wxt.config.ts` 中已配置 `author`、`homepage_url`、`default_locale`。
+- **Manifest 元信息**：`extension/wxt.config.ts` 中已配置 `author`、`homepage_url`、`default_locale`。
 
 ### 发布前检查清单
 
-1. 版本号：确认根目录 `package.json` 的 `version` 与 `wxt.config.ts` 的 `manifest.version` 一致；
-2. 构建产物：执行 `pnpm build` 与 `pnpm zip`，检查 `.output/` 产物；
-3. 隐私政策链接：将 `public/privacy.html` 部署到公网，并在 `stores/*.md` 和 manifest 中更新真实地址；
+1. 版本号：确认 `extension/package.json` 的 `version` 与 `extension/wxt.config.ts` 的 `manifest.version` 一致；
+2. 构建产物：执行 `pnpm build` 与 `pnpm zip`，检查 `extension/.output/` 产物；
+3. 隐私政策链接：将 `extension/public/privacy.html` 部署到公网，并在 `stores/*.md` 和 manifest 中更新真实地址；
 4. 截图：准备 1280×800 或 1400×560 的商店展示截图（Popup、链接管理器、设置页、深色模式）；
 5. Chrome Web Store：使用 [Chrome 开发者后台](https://chrome.google.com/webstore/devconsole/) 上传 zip；
 6. Firefox Add-ons：使用 [AMO 开发者中心](https://addons.mozilla.org/developers/) 上传，注意 Firefox 对 `<all_urls>` 的审核要求更严格；

@@ -32,7 +32,7 @@ jobs:
           path: |
             /root/.pnpm-store
             /root/.cache/node-gyp
-          key: ${{ runner.os }}-pnpm-ext-${{ hashFiles('package.json', 'pnpm-lock.yaml') }}
+          key: ${{ runner.os }}-pnpm-ext-${{ hashFiles('package.json', 'pnpm-lock.yaml', 'extension/package.json') }}
           restore-keys: |
             ${{ runner.os }}-pnpm-ext-
 
@@ -44,25 +44,25 @@ jobs:
           EXTENSION_KEY: ${{ vars.EXTENSION_KEY }}
         run: |
           pnpm zip
-          mkdir -p .output/unzipped-chrome-mv3
-          unzip .output/*chrome*.zip -d .output/unzipped-chrome-mv3/
+          mkdir -p extension/.output/unzipped-chrome-mv3
+          unzip extension/.output/*chrome*.zip -d extension/.output/unzipped-chrome-mv3/
 
       - name: Upload Chrome Artifact
         uses: forgejo/upload-artifact@v5
         with:
           name: ${{ steps.vars.outputs.timestamp }}-read-later-chrome-extension-${{ steps.vars.outputs.branch }}-构建号${{ github.run_number }}
-          path: .output/unzipped-chrome-mv3/
+          path: extension/.output/unzipped-chrome-mv3/
 
       - name: Build Firefox Extension
         env:
           EXTENSION_KEY: ${{ vars.EXTENSION_KEY }}
         run: |
           pnpm zip:firefox
-          mkdir -p .output/unzipped-firefox
-          unzip .output/*firefox*.zip -d .output/unzipped-firefox/
+          mkdir -p extension/.output/unzipped-firefox
+          unzip extension/.output/*firefox*.zip -d extension/.output/unzipped-firefox/
 
       - name: Upload Firefox Artifact
         uses: forgejo/upload-artifact@v5
         with:
           name: ${{ steps.vars.outputs.timestamp }}-read-later-firefox-extension-${{ steps.vars.outputs.branch }}-构建号${{ github.run_number }}
-          path: .output/unzipped-firefox/
+          path: extension/.output/unzipped-firefox/

@@ -30,7 +30,7 @@ jobs:
           path: |
             /root/.pnpm-store
             /root/.cache/node-gyp
-          key: ${{ runner.os }}-pnpm-server-${{ hashFiles('package.json', 'pnpm-lock.yaml', 'server/package.json') }}
+          key: ${{ runner.os }}-pnpm-server-${{ hashFiles('package.json', 'pnpm-lock.yaml', 'extension/package.json', 'server/package.json') }}
           restore-keys: |
             ${{ runner.os }}-pnpm-server-
 

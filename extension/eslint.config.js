@@ -13,8 +13,6 @@ export default defineConfigWithVueTs(
   globalIgnores([
     '.output/**',
     'node_modules/**',
-    'server/node_modules/**',
-    'server/dist/**',
     '.wxt/**',
   ]),
 
@@ -23,7 +21,7 @@ export default defineConfigWithVueTs(
 
   {
     ...pluginVitest.configs.recommended,
-    files: ['src/**/__tests__/*', 'utils/**/__tests__/*', 'server/src/**/__tests__/*'],
+    files: ['components/**/__tests__/*', 'utils/**/__tests__/*'],
   },
 
   {

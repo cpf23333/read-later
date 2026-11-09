@@ -26,7 +26,7 @@ jobs:
           path: |
             /root/.pnpm-store
             /root/.cache/node-gyp
-          key: ${{ runner.os }}-pnpm-release-${{ hashFiles('package.json', 'pnpm-lock.yaml') }}
+          key: ${{ runner.os }}-pnpm-release-${{ hashFiles('package.json', 'pnpm-lock.yaml', 'extension/package.json') }}
           restore-keys: |
             ${{ runner.os }}-pnpm-release-
 
@@ -118,7 +118,7 @@ jobs:
           TOKEN="${{ secrets.FORGEJO_TOKEN || secrets.GITEA_TOKEN }}"
           API_URL="${{ github.server_url }}/api/v1/repos/${{ github.repository }}/releases/${{ steps.create_release.outputs.release_id }}/assets"
 
-          for file in .output/*.zip; do
+          for file in extension/.output/*.zip; do
             if [ -f "$file" ]; then
               echo "Uploading $(basename "$file") ..."
               HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
