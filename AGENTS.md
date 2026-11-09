@@ -367,6 +367,22 @@ reload.bat   # Windows
 
 > 所有工作流均为**手动触发**，不再关联 push/pull_request 事件。
 
+### CI 项目变量（Forgejo 仓库 Settings → Actions → Variables）
+
+工作流依赖以下仓库变量，换仓库/迁移 Forgejo 实例后需要重新配置：
+
+| 变量 | 必需 | 说明 | 示例 |
+| --- | --- | --- | --- |
+| `CI_REGISTRY` | 是 | CI 镜像所在仓库，末尾不要带 `/` | `192.168.1.100:8083` |
+| `CI_BASE_IMAGE` | 否 | CI 镜像基础镜像 | `node:24` |
+| `NPM_CONFIG_REGISTRY` | 否 | npm 源 | `https://registry.npmmirror.com` |
+| `EXTENSION_KEY` | 否 | 扩展固定 ID 的签名 key | - |
+| `DOCKER_MIRROR` / `PRIVATE_REGISTRIES` | 否 | 服务器镜像构建的拉取/推送配置 | - |
+| `APT_REPO_DEBIAN` / `APT_REPO_SECURITY` | 否 | CI 镜像 Debian 源 | - |
+
+Secrets（`Settings → Actions → Secrets`）：`DOCKER_REGISTRY_USER`、`DOCKER_REGISTRY_PASSWORD` 用于推送 CI 镜像。
+
+> 日志出现 `docker pull image=/readlater-ci:latest`、`invalid reference format`，说明 `CI_REGISTRY` 为空——填写仓库地址后重新触发工作流即可。
 ### CI 镜像 (`readlater-ci`)
 
 工作流共用统一的 CI 镜像 `${CI_REGISTRY}/readlater-ci:latest`（通过 Forgejo 项目变量 `CI_REGISTRY` 配置），基于 `node:24`（Debian），预装：

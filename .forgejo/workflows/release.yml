@@ -7,6 +7,7 @@ jobs:
   release:
     runs-on: docker
     container:
+      # 依赖仓库变量 CI_REGISTRY（如 192.168.1.100:8083，末尾不要斜杠；为空会导致 invalid reference format）
       image: ${{ vars.CI_REGISTRY }}/readlater-ci:latest
     env:
       NPM_CONFIG_REGISTRY: ${{ vars.NPM_CONFIG_REGISTRY }}
