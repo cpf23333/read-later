@@ -363,7 +363,7 @@ reload.bat   # Windows
 | `release.yml`            | 构建扩展并创建 Release       | `workflow_dispatch`（手动） |
 | `build-extension.yml`    | 构建 Chrome/Firefox 扩展产物 | `workflow_dispatch`（手动） |
 | `build-server-image.yml` | 构建服务器 Docker 镜像       | `workflow_dispatch`（手动） |
-| `update-ci-image.yml`    | 构建并推送 `readlater-ci`    | `workflow_dispatch`（手动） |
+| `update-ci-image.yml`    | 构建并推送 `readlater-ci`    | `workflow_dispatch`（手动） |`n| `build-mobile-apk.yml`   | 构建 Android arm64 APK      | `workflow_dispatch`（手动） |
 
 > 所有工作流均为**手动触发**，不再关联 push/pull_request 事件。
 
@@ -373,7 +373,7 @@ reload.bat   # Windows
 
 | 变量 | 必需 | 说明 | 示例 |
 | --- | --- | --- | --- |
-| `CI_REGISTRY` | 是 | CI 镜像所在仓库，末尾不要带 `/` | `192.168.1.100:8083` |
+| `CI_REGISTRY` | 是 | CI 镜像所在仓库，末尾不要带 `/` | `192.168.1.100:8083` |`n| `MOBILE_CI_IMAGE` | 构建 APK 时必填 | Flutter 3.38 + JDK 21 + Android SDK 镜像 | `192.168.1.100:8083/readlater-flutter:3.38.10` |
 | `CI_BASE_IMAGE` | 否 | CI 镜像基础镜像 | `node:24` |
 | `NPM_CONFIG_REGISTRY` | 否 | npm 源 | `https://registry.npmmirror.com` |
 | `EXTENSION_KEY` | 否 | 扩展固定 ID 的签名 key | - |

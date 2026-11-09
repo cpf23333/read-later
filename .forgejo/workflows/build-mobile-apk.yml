@@ -1,0 +1,51 @@
+name: Build Mobile APK
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-apk:
+    runs-on: docker
+    container:
+      # 需要包含 Flutter 3.38.x + JDK 21 + Android SDK（可自建并推到 Nexus）
+      # 例如：MOBILE_CI_IMAGE=192.168.1.100:8083/readlater-flutter:3.38.10
+      image: ${{ vars.MOBILE_CI_IMAGE }}
+    env:
+      JAVA_HOME: /opt/java/openjdk
+      ANDROID_HOME: /opt/android-sdk
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Prepare naming variables
+        id: vars
+        run: |
+          TIMESTAMP=$(date +%Y-%m-%d-%H-%M)
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          echo "artifact_name=${TIMESTAMP}-readlater-android-arm64-${SHORT_SHA}" >> $GITHUB_OUTPUT
+
+      - name: Show toolchain
+        run: |
+          flutter --version
+          java -version
+          echo "ANDROID_HOME=${ANDROID_HOME}"
+
+      - name: Analyze & test
+        working-directory: mobile
+        run: |
+          flutter pub get
+          flutter analyze
+          flutter test
+
+      - name: Build arm64 release APK
+        working-directory: mobile
+        run: |
+          flutter build apk --release \
+            --target-platform android-arm64 \
+            --split-per-abi
+
+      - name: Upload APK
+        uses: forgejo/upload-artifact@v5
+        with:
+          name: ${{ steps.vars.outputs.artifact_name }}
+          path: mobile/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+          if-no-files-found: error
