@@ -75,6 +75,9 @@ jobs:
             fi
           } > /etc/containers/registries.conf
           cat /etc/containers/registries.conf
+          if [ -z "${DOCKER_MIRROR}" ]; then
+            echo "::warning::DOCKER_MIRROR 未配置，Buildah 将直连 Docker Hub；若超时请配置镜像源"
+          fi
           echo "=== 复制 Dockerfile 到部署目录 ==="
           cp server/deploy.Dockerfile server-deploy/Dockerfile
           echo "=== 使用 Buildah 构建镜像 ==="
