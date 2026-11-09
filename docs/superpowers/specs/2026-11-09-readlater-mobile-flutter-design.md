@@ -203,7 +203,7 @@ abstract class ApiClient {
 
 - 超时：普通请求 10s，`addLink` 30s（图片 base64 较大）。
 - 错误分类：`NotConfigured`、`NetworkError`、`AuthError(401)`、`Validation(400)`、`ServerError(5xx)`，统一映射为可展示文案。
-- 不自动重试 `addLink`；服务端 `POST /api/links` **不做去重**，客户端保存前必须调用 `GET /api/links/exists` 判断（与扩展 popup 行为一致）。
+- 不自动重试 `addLink`；服务端 `POST /api/links` **不做去重**，客户端保存前必须调用 `GET /api/links/exists` 判断（与扩展 popup 行为一致）。已收藏时通过 `PATCH /api/links/:id`（标题/图片/截图）刷新元信息，不新增记录。
 - 401 统一行为：提示"API Key 无效"，并提供跳转设置页入口。
 
 ### 5.3 配置模型
@@ -431,8 +431,8 @@ window.__rlExtract = async (url) => JSON.stringify({
 ### 8.1 链接库
 
 - 启动进入"收藏库"（不是空白浏览器）；点卡片或地址栏进入浏览器标签。
-- 顶部：搜索框（300ms 防抖）、排序菜单（时间/标题）、视图切换（网格/列表）、回收站入口。
-- 列表：分页加载（每页 50），滚动到底自动加载；图片用 `cached_network_image`，失败回退截图/占位。
+- 顶部：搜索框（300ms 防抖）、域名筛选（`/api/domains`，含数量，选中后显示可清除的筛选 chip）、排序菜单（时间/标题）、视图切换（网格/列表）、回收站入口。
+- 列表：分页加载（每页 50），滚动到底自动加载；图片用 `cached_network_image`，失败回退截图/占位；无标题条目直接显示完整 URL（最多 2 行），有标题时副标题显示域名。
 - 点击：在新标签打开（若当前只有空白标签则复用）。
 - 长按卡片：进入多选模式；v1 支持批量删除、批量还原（回收站内）。
 - 删除：确认后 `DELETE /api/links/:id`，乐观更新 + 失败回滚。

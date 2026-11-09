@@ -117,6 +117,7 @@ openssl rand -base64 32
 | GET    | /api/links                 | 获取链接列表                           |
 | POST   | /api/links                 | 添加链接（支持 base64/URL/路径）       |
 | DELETE | /api/links/:id             | 删除链接（移入回收站）                 |
+| PATCH  | /api/links/:id             | 更新标题/图片（重新收藏时刷新）        |
 | POST   | /api/links/batch           | 批量添加                               |
 | POST   | /api/links/batch-delete    | 批量删除（移入回收站）                 |
 | GET    | /api/links/exists          | 检查链接是否已存在（标准化 URL）       |

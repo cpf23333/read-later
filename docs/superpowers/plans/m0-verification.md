@@ -32,3 +32,10 @@
 - 真实站点（B 站等）附近图片提取与 blob 图片转换；
 - 跨域 iframe 内链接（v1 已知不支持）；
 - 返回键、旋转、深色模式下的实际观感。
+
+## 2026-11-09 补充：Pixel Tablet 模拟器 + host GPU
+
+- 新建 AVD Pixel_Tablet（system-images;android-36;google_apis_playstore;x86_64，Pixel Tablet 设备定义），启动参数 -gpu host；已确认进程命令行包含 -gpu host（此前 Pixel_8 用 swiftshader_indirect 软件渲染，是视频卡顿的主因）。
+- 平板横向 2560×1600：收藏库/站点页使用左侧 NavigationRail，浏览器宽屏地址栏与标签条正常；Media3 全屏播放本地 MP4 正常。
+- 平板纵向 1600×2560：布局仍为宽屏断点（NavigationRail），无溢出。
+- 说明：模拟器视频解码仍是软件路径，高分辨率/高码率视频仍可能卡；直链视频在真机上的表现需以作者平板为准。
