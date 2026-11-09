@@ -62,6 +62,45 @@ void main() {
     expect(request.customData?['kind'], 'link');
   });
 
+  test('save 在已收藏时返回 false 且不写库', () async {
+    final api = FakeApiClient();
+    final service = CaptureService(api, FakePageMetaResolver());
+
+    final saved = await service.save(
+      const LinkPreview(
+        url: 'https://a.com',
+        title: 'A',
+        sourcePage: 'https://b.com',
+        exists: true,
+      ),
+    );
+
+    expect(saved, isFalse);
+    expect(api.addedLinks, isEmpty);
+  });
+
+  test('applyMediaCaps 超 8MB 时先丢截图', () {
+    final caps = applyMediaCaps(
+      nearbyImage: 'a' * (5 * 1024 * 1024),
+      screenshot: 'b' * (4 * 1024 * 1024),
+    );
+
+    expect(caps.screenshot, isNull);
+    expect(caps.droppedScreenshot, isTrue);
+    expect(caps.nearbyImage, isNotNull);
+    expect(caps.droppedImage, isFalse);
+  });
+
+  test('applyMediaCaps 图片本身超限时丢弃', () {
+    final caps = applyMediaCaps(
+      nearbyImage: 'a' * (9 * 1024 * 1024),
+      screenshot: null,
+    );
+
+    expect(caps.nearbyImage, isNull);
+    expect(caps.droppedImage, isTrue);
+  });
+
   test('prepare 回传已收藏状态与已有标题', () async {
     final api = FakeApiClient(
       linkExistsResult: const ExistsResult(

@@ -80,6 +80,32 @@ class TrashNotifier extends Notifier<TrashState> {
     }
   }
 
+  Future<void> batchRestoreLinks(List<String> ids) async {
+    final idSet = ids.toSet();
+    if (idSet.isEmpty) return;
+    try {
+      await ref.read(apiClientProvider).batchRestoreTrash(ids);
+      state = state.copyWith(
+        links: state.links.where((item) => !idSet.contains(item.id)).toList(),
+      );
+    } catch (error) {
+      state = state.copyWith(error: '$error');
+    }
+  }
+
+  Future<void> batchPurgeLinks(List<String> ids) async {
+    final idSet = ids.toSet();
+    if (idSet.isEmpty) return;
+    try {
+      await ref.read(apiClientProvider).batchPurgeTrash(ids);
+      state = state.copyWith(
+        links: state.links.where((item) => !idSet.contains(item.id)).toList(),
+      );
+    } catch (error) {
+      state = state.copyWith(error: '$error');
+    }
+  }
+
   Future<void> restoreSite(String id) async {
     try {
       await ref.read(apiClientProvider).restoreSite(id);

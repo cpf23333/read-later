@@ -68,4 +68,34 @@ void main() {
 
     expect(container.read(trashProvider).links, isEmpty);
   });
+  test('batchRestoreLinks 调用批量接口并移除', () async {
+    final api = FakeApiClient(
+      trash: [
+        const TrashItem(
+          id: 't1',
+          linkId: 'l1',
+          url: 'https://a.com',
+          title: 'A',
+          createdAt: 1,
+          deletedAt: 2,
+        ),
+        const TrashItem(
+          id: 't2',
+          linkId: 'l2',
+          url: 'https://b.com',
+          title: 'B',
+          createdAt: 1,
+          deletedAt: 2,
+        ),
+      ],
+    );
+    final container = ProviderContainer(overrides: [apiClientProvider.overrideWithValue(api)]);
+    addTearDown(container.dispose);
+    await container.read(trashProvider.notifier).load();
+
+    await container.read(trashProvider.notifier).batchRestoreLinks(['t1']);
+
+    expect(container.read(trashProvider).links.map((t) => t.id), ['t2']);
+    expect(api.batchRestoredTrashIds.single, ['t1']);
+  });
 }

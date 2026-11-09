@@ -203,7 +203,7 @@ abstract class ApiClient {
 
 - 超时：普通请求 10s，`addLink` 30s（图片 base64 较大）。
 - 错误分类：`NotConfigured`、`NetworkError`、`AuthError(401)`、`Validation(400)`、`ServerError(5xx)`，统一映射为可展示文案。
-- 不自动重试 `addLink`；服务端本身按标准化 URL 去重，重复提交安全。
+- 不自动重试 `addLink`；服务端 `POST /api/links` **不做去重**，客户端保存前必须调用 `GET /api/links/exists` 判断（与扩展 popup 行为一致）。
 - 401 统一行为：提示"API Key 无效"，并提供跳转设置页入口。
 
 ### 5.3 配置模型

@@ -10,7 +10,10 @@ import 'api_client.dart';
 
 /// Dio 实现的服务器 API 客户端。
 class DioApiClient implements ApiClient {
-  DioApiClient(this._dio, this._configStore);
+  DioApiClient(this._dio, this._configStore) {
+    // 连接超时只能通过 BaseOptions 设置；避免服务器不可达时长时间挂起。
+    _dio.options.connectTimeout ??= const Duration(seconds: 10);
+  }
 
   final Dio _dio;
   final ConfigStore _configStore;
@@ -204,6 +207,11 @@ class DioApiClient implements ApiClient {
   }
 
   @override
+  Future<void> batchDeleteLinks(List<String> ids) async {
+    _unwrap(await _request('POST', '/api/links/batch-delete', data: {'ids': ids}));
+  }
+
+  @override
   Future<List<TrashItem>> listTrash() async {
     final body = _unwrap(await _request('GET', '/api/trash'));
     final data = body['data'];
@@ -222,6 +230,16 @@ class DioApiClient implements ApiClient {
   @override
   Future<void> purgeTrash(String id) async {
     _unwrap(await _request('DELETE', '/api/trash/$id'));
+  }
+
+  @override
+  Future<void> batchRestoreTrash(List<String> ids) async {
+    _unwrap(await _request('POST', '/api/trash/batch-restore', data: {'ids': ids}));
+  }
+
+  @override
+  Future<void> batchPurgeTrash(List<String> ids) async {
+    _unwrap(await _request('POST', '/api/trash/batch-delete', data: {'ids': ids}));
   }
 
   @override

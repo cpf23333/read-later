@@ -17,10 +17,13 @@ abstract class ApiClient {
     String sortOrder = 'desc',
   });
   Future<void> deleteLink(String id);
+  Future<void> batchDeleteLinks(List<String> ids);
 
   Future<List<TrashItem>> listTrash();
   Future<void> restoreTrash(String id);
   Future<void> purgeTrash(String id);
+  Future<void> batchRestoreTrash(List<String> ids);
+  Future<void> batchPurgeTrash(List<String> ids);
 
   Future<List<Site>> listSites();
   Future<Site> addSite(SiteInput input);

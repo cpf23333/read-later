@@ -8,6 +8,15 @@ class BrowserTab {
   final bool canGoBack;
   final bool canGoForward;
 
+  /// 是否已经创建 WebView（懒加载：未激活的恢复标签先不加载）。
+  final bool loaded;
+
+  /// 最近使用序号（用于标签上限时的 LRU 淘汰）。
+  final int lastUsedAt;
+
+  /// 由 window.open / target=_blank 创建的窗口 id。
+  final int? windowId;
+
   const BrowserTab({
     required this.id,
     required this.url,
@@ -16,6 +25,9 @@ class BrowserTab {
     this.loading = false,
     this.canGoBack = false,
     this.canGoForward = false,
+    this.loaded = false,
+    this.lastUsedAt = 0,
+    this.windowId,
   });
 
   BrowserTab copyWith({
@@ -25,6 +37,8 @@ class BrowserTab {
     bool? loading,
     bool? canGoBack,
     bool? canGoForward,
+    bool? loaded,
+    int? lastUsedAt,
   }) {
     return BrowserTab(
       id: id,
@@ -34,6 +48,9 @@ class BrowserTab {
       loading: loading ?? this.loading,
       canGoBack: canGoBack ?? this.canGoBack,
       canGoForward: canGoForward ?? this.canGoForward,
+      loaded: loaded ?? this.loaded,
+      lastUsedAt: lastUsedAt ?? this.lastUsedAt,
+      windowId: windowId,
     );
   }
 }

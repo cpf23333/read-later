@@ -10,10 +10,8 @@ Future<void> enterFullscreen() async {
   ]);
 }
 
-/// 退出全屏：恢复系统栏与竖屏。
+/// 退出全屏：恢复系统栏，并把方向策略交还系统（空列表 = 允许自动旋转）。
 Future<void> exitFullscreen() async {
   await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-  await SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-  ]);
+  await SystemChrome.setPreferredOrientations([]);
 }

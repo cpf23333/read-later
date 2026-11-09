@@ -85,6 +85,9 @@ class FakeApiClient implements ApiClient {
   final List<String> deletedSiteIds = [];
   final List<AddLinkRequest> addedLinks = [];
   final List<SiteInput> addedSites = [];
+  final List<List<String>> batchDeletedLinkIds = [];
+  final List<List<String>> batchRestoredTrashIds = [];
+  final List<List<String>> batchPurgedTrashIds = [];
   int listLinksCalls = 0;
   final List<int> listLinksPages = [];
 
@@ -128,6 +131,12 @@ class FakeApiClient implements ApiClient {
   }
 
   @override
+  Future<void> batchDeleteLinks(List<String> ids) async {
+    _throwIfError();
+    batchDeletedLinkIds.add(List<String>.from(ids));
+  }
+
+  @override
   Future<List<TrashItem>> listTrash() async {
     _throwIfError();
     return trash;
@@ -141,6 +150,18 @@ class FakeApiClient implements ApiClient {
   @override
   Future<void> purgeTrash(String id) async {
     _throwIfError();
+  }
+
+  @override
+  Future<void> batchRestoreTrash(List<String> ids) async {
+    _throwIfError();
+    batchRestoredTrashIds.add(List<String>.from(ids));
+  }
+
+  @override
+  Future<void> batchPurgeTrash(List<String> ids) async {
+    _throwIfError();
+    batchPurgedTrashIds.add(List<String>.from(ids));
   }
 
   @override

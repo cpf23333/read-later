@@ -20,6 +20,68 @@ class LinkPreview {
     required this.exists,
     this.existingTitle,
   });
+
+  LinkPreview copyWith({String? nearbyImage}) {
+    return LinkPreview(
+      url: url,
+      title: title,
+      nearbyImage: nearbyImage ?? this.nearbyImage,
+      sourcePage: sourcePage,
+      exists: exists,
+      existingTitle: existingTitle,
+    );
+  }
+}
+
+/// 图片/截图 8MB 上限处理结果。
+class MediaCaps {
+  final String? nearbyImage;
+  final String? screenshot;
+  final bool droppedImage;
+  final bool droppedScreenshot;
+
+  const MediaCaps({
+    this.nearbyImage,
+    this.screenshot,
+    this.droppedImage = false,
+    this.droppedScreenshot = false,
+  });
+
+  bool get droppedAny => droppedImage || droppedScreenshot;
+}
+
+/// 超过上限时先丢截图，再丢附近图片。
+MediaCaps applyMediaCaps({
+  String? nearbyImage,
+  String? screenshot,
+  int maxBytes = 8 * 1024 * 1024,
+}) {
+  final imageLength = nearbyImage?.length ?? 0;
+  final screenshotLength = screenshot?.length ?? 0;
+  if (imageLength + screenshotLength <= maxBytes) {
+    return MediaCaps(nearbyImage: nearbyImage, screenshot: screenshot);
+  }
+
+  var cappedImage = nearbyImage;
+  var cappedScreenshot = screenshot;
+  var droppedImage = false;
+  var droppedScreenshot = false;
+
+  if (cappedScreenshot != null) {
+    cappedScreenshot = null;
+    droppedScreenshot = true;
+  }
+  if ((cappedImage?.length ?? 0) > maxBytes) {
+    cappedImage = null;
+    droppedImage = true;
+  }
+
+  return MediaCaps(
+    nearbyImage: cappedImage,
+    screenshot: cappedScreenshot,
+    droppedImage: droppedImage,
+    droppedScreenshot: droppedScreenshot,
+  );
 }
 
 /// 收藏链接链路：标题解析、去重检查、保存。
@@ -59,7 +121,10 @@ class CaptureService {
     );
   }
 
-  Future<void> save(LinkPreview preview, {String? screenshotBase64}) async {
+  /// 返回是否真的写入了服务器（已收藏时不写入）。
+  Future<bool> save(LinkPreview preview, {String? screenshotBase64}) async {
+    if (preview.exists) return false;
+
     AppLogger.d(
       'save link: nearbyImage=${preview.nearbyImage?.length} screenshot=${screenshotBase64?.length}',
     );
@@ -71,6 +136,7 @@ class CaptureService {
       sourcePage: preview.sourcePage,
       customData: const {'kind': 'link', 'platform': 'android'},
     ));
+    return true;
   }
 
   String? _firstNonEmpty(List<String?> values) {

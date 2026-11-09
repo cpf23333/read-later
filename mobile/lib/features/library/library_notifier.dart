@@ -147,4 +147,24 @@ class LibraryNotifier extends Notifier<LibraryState> {
       state = state.copyWith(links: restored, total: state.total + 1, error: '$error');
     }
   }
+
+  Future<void> batchDelete(List<String> ids) async {
+    final idSet = ids.toSet();
+    if (idSet.isEmpty) return;
+
+    final removed = state.links.where((l) => idSet.contains(l.id)).toList();
+    final remaining = state.links.where((l) => !idSet.contains(l.id)).toList();
+    state = state.copyWith(
+      links: remaining,
+      total: state.total - removed.length,
+      clearError: true,
+    );
+
+    try {
+      await ref.read(apiClientProvider).batchDeleteLinks(ids);
+    } catch (error) {
+      await refresh();
+      state = state.copyWith(error: '$error');
+    }
+  }
 }

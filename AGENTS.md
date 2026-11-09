@@ -143,7 +143,7 @@ openssl rand -base64 32
 
 - 设计：`docs/superpowers/specs/2026-11-09-readlater-mobile-flutter-design.md`
 - 计划：`docs/superpowers/plans/2026-11-09-mobile-app-v1.md`
-- 工具链：Flutter 3.38.10、JDK 21、AGP 8.11.1（`mobile/android/gradle.properties` 通过 `org.gradle.java.home` 指定 JDK）
+- 工具链：Flutter 3.38.10、JDK 21、AGP 8.11.1；Flutter 优先使用 Android Studio 自带 JDK，需用 `flutter config --jdk-dir="<JDK21路径>"` 指定（不要把本机路径写进 `gradle.properties`）
 - 开发/测试：`cd mobile && flutter run`、`flutter test`
 - 集成测试（需设备/模拟器）：`flutter test integration_test/long_press_test.dart -d <device-id>`
 - 构建：`flutter build apk --release --split-per-abi`（个人侧载，release 用 debug 签名）

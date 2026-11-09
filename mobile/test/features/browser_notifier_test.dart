@@ -26,17 +26,23 @@ void main() {
     expect(notifier.state.activeTab?.url, 'https://b.com');
   });
 
-  test('超过 10 个标签时关闭最久未使用的非活动标签', () {
+  test('超过 10 个标签时按 LRU 关闭最久未使用的非活动标签', () {
     final store = InMemorySessionStore();
     final container = makeContainer(store);
     addTearDown(container.dispose);
 
     final notifier = container.read(browserProvider.notifier);
-    for (var i = 0; i < 12; i++) {
+    for (var i = 0; i < 10; i++) {
       notifier.openTab('https://example.com/$i');
     }
+    // 重新激活一个较旧的标签，随后再开新标签：被激活的标签不能被 LRU 淘汰。
+    final protectedId = notifier.state.tabs[1].id;
+    notifier.activate(protectedId);
+    notifier.openTab('https://example.com/new');
 
     expect(notifier.state.tabs.length, BrowserNotifier.maxTabs);
+    expect(notifier.state.tabs.any((t) => t.id == protectedId), isTrue,
+        reason: '被重新激活的标签不应被 LRU 淘汰');
   });
 
   test('关闭最后一个标签后保留 about:blank', () {
@@ -51,7 +57,7 @@ void main() {
     expect(notifier.state.tabs.single.url, BrowserNotifier.blankUrl);
   });
 
-  test('initialize 恢复 URL 并选中 activeUrl', () {
+  test('initialize 恢复 URL，只加载活动标签', () {
     final store = InMemorySessionStore();
     final container = makeContainer(store);
     addTearDown(container.dispose);
@@ -61,6 +67,32 @@ void main() {
 
     expect(notifier.state.tabs.map((t) => t.url), ['https://a.com', 'https://b.com']);
     expect(notifier.state.activeTab?.url, 'https://b.com');
+    expect(notifier.state.tabs[0].loaded, isFalse, reason: '非活动标签懒加载');
+    expect(notifier.state.tabs[1].loaded, isTrue);
+  });
+
+  test('initialize 不覆盖用户刚打开的新标签', () {
+    final store = InMemorySessionStore();
+    final container = makeContainer(store);
+    addTearDown(container.dispose);
+
+    final notifier = container.read(browserProvider.notifier);
+    notifier.openTab('https://opened-by-user.com');
+    notifier.initialize(['https://last-session.com'], 'https://last-session.com');
+
+    expect(notifier.state.tabs.length, 2);
+    expect(notifier.state.tabs.last.url, 'https://opened-by-user.com');
+  });
+
+  test('window.open 创建的标签保留 windowId', () {
+    final store = InMemorySessionStore();
+    final container = makeContainer(store);
+    addTearDown(container.dispose);
+
+    final notifier = container.read(browserProvider.notifier);
+    notifier.openTab(BrowserNotifier.blankUrl, windowId: 42);
+
+    expect(notifier.state.activeTab?.windowId, 42);
   });
 
   test('标签变化 300ms 后写入会话', () {

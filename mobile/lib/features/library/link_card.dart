@@ -14,11 +14,13 @@ class LinkCard extends StatelessWidget {
     required this.link,
     required this.onTap,
     this.onLongPress,
+    this.selected = false,
   });
 
   final LinkItem link;
   final VoidCallback onTap;
   final VoidCallback? onLongPress;
+  final bool selected;
 
   @override
   Widget build(BuildContext context) {
@@ -26,6 +28,7 @@ class LinkCard extends StatelessWidget {
 
     return Card(
       clipBehavior: Clip.antiAlias,
+      color: selected ? Theme.of(context).colorScheme.secondaryContainer : null,
       child: InkWell(
         onTap: onTap,
         onLongPress: onLongPress,

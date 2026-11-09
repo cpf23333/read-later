@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/api/errors.dart';
 import '../../core/logging/app_logger.dart';
@@ -47,6 +48,23 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
 
   String _message(Object error) => error is ApiException ? error.message : '$error';
 
+  /// 截取当前可见区域；失败时返回 null，不阻塞收藏。
+  Future<String?> _takeScreenshot(InAppWebViewController controller) async {
+    try {
+      final bytes = await controller.takeScreenshot(
+        screenshotConfiguration: ScreenshotConfiguration(
+          compressFormat: CompressFormat.JPEG,
+          quality: 80,
+        ),
+      );
+      AppLogger.d('takeScreenshot bytes=${bytes?.length}');
+      return bytes == null ? null : imageDataUrl(bytes);
+    } catch (error) {
+      AppLogger.e('takeScreenshot failed', error);
+      return null;
+    }
+  }
+
   void _navigate(String url) {
     final controller = _activeController();
     if (controller == null) {
@@ -78,33 +96,30 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
     final controller = _activeController();
     if (controller == null) return;
 
-    final saved = await showModalBottomSheet<bool>(
+    final result = await showModalBottomSheet<LongPressResult>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
       builder: (sheetContext) => LongPressSheet(
         url: payload.url,
         sourcePage: payload.sourcePage,
-        linkText: payload.linkText ?? payload.text,
-        nearbyText: payload.nearbyText,
-        nearbyImage: payload.nearbyImage,
-        takeScreenshot: () async {
-          final bytes = await controller.takeScreenshot(
-            screenshotConfiguration: ScreenshotConfiguration(
-              compressFormat: CompressFormat.JPEG,
-              quality: 80,
-            ),
-          );
-          AppLogger.d('takeScreenshot bytes=${bytes?.length}');
-          return bytes == null ? null : imageDataUrl(bytes);
-        },
+        linkText: payload.text,
+        nearbyImage: null,
+        extraction: payload.extraction,
+        takeScreenshot: () => _takeScreenshot(controller),
         onOpenInNewTab: (url) => ref.read(browserProvider.notifier).openTab(url),
       ),
     );
 
-    if (saved == true) {
-      _snack('已收藏');
-      ref.read(libraryProvider.notifier).refresh();
+    if (result == null) return;
+
+    if (!result.saved) return;
+    ref.read(libraryProvider.notifier).refresh();
+    ref.read(sitesProvider.notifier).refresh();
+    if (result.droppedAny) {
+      _snack('图片过大已跳过');
+    } else {
+      _snack(result.kind == 'site' ? '已收藏主站' : '已收藏');
     }
   }
 
@@ -123,23 +138,41 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
             sourcePage: active.url,
           );
 
-      String? screenshot;
-      if (controller != null) {
-        final bytes = await controller.takeScreenshot(
-          screenshotConfiguration: ScreenshotConfiguration(
-            compressFormat: CompressFormat.JPEG,
-            quality: 80,
-          ),
-        );
-        screenshot = bytes == null ? null : imageDataUrl(bytes);
+      if (preview.exists) {
+        _showAlreadySaved();
+        return;
       }
 
-      await ref.read(captureServiceProvider).save(preview, screenshotBase64: screenshot);
-      _snack(preview.exists ? '已收藏（服务器已有该链接）' : '已收藏当前页');
+      final screenshot = controller == null ? null : await _takeScreenshot(controller);
+      final saved = await ref.read(captureServiceProvider).save(
+            preview,
+            screenshotBase64: screenshot,
+          );
+      if (!saved) {
+        _showAlreadySaved();
+        return;
+      }
+      _snack('已收藏当前页');
       ref.read(libraryProvider.notifier).refresh();
     } catch (error) {
       _snack('收藏失败：${_message(error)}');
     }
+  }
+
+  void _showAlreadySaved() {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('该链接已在收藏库'),
+        action: SnackBarAction(
+          label: '查看',
+          onPressed: () {
+            Navigator.of(context).maybePop();
+            context.go('/library');
+          },
+        ),
+      ),
+    );
   }
 
   Future<void> _collectCurrentSite() async {
@@ -243,12 +276,15 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
                     for (final tab in state.tabs)
                       Offstage(
                         offstage: tab.id != state.activeTabId,
-                        child: TabWebView(
-                          key: ValueKey(tab.id),
-                          tab: tab,
-                          onCreated: (controller) => registry.register(tab.id, controller),
-                          onLongPressLink: _openLongPressSheet,
-                        ),
+                        child: tab.loaded
+                            ? TabWebView(
+                                key: ValueKey(tab.id),
+                                tab: tab,
+                                active: tab.id == state.activeTabId,
+                                onCreated: (controller) => registry.register(tab.id, controller),
+                                onLongPressLink: _openLongPressSheet,
+                              )
+                            : const SizedBox.shrink(),
                       ),
                   ],
                 ),

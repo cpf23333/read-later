@@ -12,6 +12,23 @@ import '../../core/util/origin.dart';
 import '../../providers.dart';
 import 'capture_service.dart';
 
+/// 长按菜单保存结果。
+class LongPressResult {
+  final bool saved;
+  final String kind; // 'link' | 'site'
+  final bool droppedImage;
+  final bool droppedScreenshot;
+
+  const LongPressResult({
+    required this.saved,
+    required this.kind,
+    this.droppedImage = false,
+    this.droppedScreenshot = false,
+  });
+
+  bool get droppedAny => droppedImage || droppedScreenshot;
+}
+
 /// 长按链接弹出的收藏菜单（收藏固定第一项，收藏主站第二项）。
 class LongPressSheet extends ConsumerStatefulWidget {
   const LongPressSheet({
@@ -21,6 +38,7 @@ class LongPressSheet extends ConsumerStatefulWidget {
     this.linkText,
     this.nearbyText,
     this.nearbyImage,
+    this.extraction,
     required this.takeScreenshot,
     this.onOpenInNewTab,
   });
@@ -30,6 +48,7 @@ class LongPressSheet extends ConsumerStatefulWidget {
   final String? linkText;
   final String? nearbyText;
   final String? nearbyImage;
+  final Future<Map<String, dynamic>>? extraction;
   final Future<String?> Function() takeScreenshot;
   final ValueChanged<String>? onOpenInNewTab;
 
@@ -55,16 +74,26 @@ class _LongPressSheetState extends ConsumerState<LongPressSheet> {
       _error = null;
     });
     try {
-      final preview = await ref.read(captureServiceProvider).prepare(
+      final previewFuture = ref.read(captureServiceProvider).prepare(
             url: widget.url,
             linkText: widget.linkText,
             nearbyText: widget.nearbyText,
             nearbyImage: widget.nearbyImage,
             sourcePage: widget.sourcePage,
           );
+      final extractionFuture = widget.extraction ?? Future<Map<String, dynamic>>.value(const {});
+
+      final preview = await previewFuture;
+      final extracted = await extractionFuture;
+
+      final firstNonEmpty = [
+        preview.nearbyImage,
+        extracted['nearbyImage'] as String?,
+      ].firstWhere((value) => value != null && value.isNotEmpty, orElse: () => null);
+
       if (!mounted) return;
       setState(() {
-        _preview = preview;
+        _preview = preview.copyWith(nearbyImage: firstNonEmpty);
         _loading = false;
       });
     } catch (error) {
@@ -81,31 +110,47 @@ class _LongPressSheetState extends ConsumerState<LongPressSheet> {
     if (preview == null || _saving) return;
 
     setState(() => _saving = true);
+    String? screenshot;
     try {
-      var screenshot = await widget.takeScreenshot();
-      var image = preview.nearbyImage;
+      screenshot = await widget.takeScreenshot();
+    } catch (_) {
+      // 截图失败不阻塞收藏。
+      screenshot = null;
+    }
 
-      // 8MB 上限：先丢截图，再丢附近图片。
-      const maxBytes = 8 * 1024 * 1024;
-      final total = (image?.length ?? 0) + (screenshot?.length ?? 0);
-      if (total > maxBytes) {
-        screenshot = null;
-        if ((image?.length ?? 0) > maxBytes) image = null;
-      }
+    final caps = applyMediaCaps(
+      nearbyImage: preview.nearbyImage,
+      screenshot: screenshot,
+    );
 
-      final capped = LinkPreview(
-        url: preview.url,
-        title: preview.title,
-        nearbyImage: image,
-        sourcePage: preview.sourcePage,
-        exists: preview.exists,
-        existingTitle: preview.existingTitle,
-      );
-
-      await ref.read(captureServiceProvider).save(capped, screenshotBase64: screenshot);
+    try {
+      final saved = await ref.read(captureServiceProvider).save(
+            preview.copyWith(nearbyImage: caps.nearbyImage),
+            screenshotBase64: caps.screenshot,
+          );
       if (!mounted) return;
       setState(() => _saving = false);
-      Navigator.of(context).maybePop(true);
+      if (!saved) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('该链接已在收藏库'),
+            action: SnackBarAction(
+              label: '查看',
+              onPressed: () {
+                Navigator.of(context).maybePop();
+                context.go('/library');
+              },
+            ),
+          ),
+        );
+        return;
+      }
+      Navigator.of(context).maybePop(LongPressResult(
+        saved: true,
+        kind: 'link',
+        droppedImage: caps.droppedImage,
+        droppedScreenshot: caps.droppedScreenshot,
+      ));
     } catch (error) {
       if (!mounted) return;
       setState(() => _saving = false);
@@ -124,7 +169,7 @@ class _LongPressSheetState extends ConsumerState<LongPressSheet> {
       await service.save(draft);
       if (!mounted) return;
       setState(() => _saving = false);
-      Navigator.of(context).maybePop(true);
+      Navigator.of(context).maybePop(const LongPressResult(saved: true, kind: 'site'));
     } catch (error) {
       if (!mounted) return;
       setState(() => _saving = false);
@@ -153,23 +198,39 @@ class _LongPressSheetState extends ConsumerState<LongPressSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              preview?.title ?? (widget.linkText ?? widget.url),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.titleMedium,
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (preview?.nearbyImage != null) ...[
+                  _PreviewImage(value: preview!.nearbyImage!),
+                  const SizedBox(width: 10),
+                ],
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        preview?.title ?? (widget.linkText ?? widget.url),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        widget.url,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall,
+                      ),
+                      if (preview?.exists == true) ...[
+                        const SizedBox(height: 4),
+                        Text('已收藏', style: TextStyle(color: theme.colorScheme.primary)),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 4),
-            Text(
-              widget.url,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodySmall,
-            ),
-            if (preview?.exists == true) ...[
-              const SizedBox(height: 4),
-              Text('已收藏', style: TextStyle(color: theme.colorScheme.primary)),
-            ],
             const Divider(height: 16),
             if (_loading)
               const Padding(
@@ -247,11 +308,6 @@ class _LongPressSheetState extends ConsumerState<LongPressSheet> {
                 padding: EdgeInsets.only(top: 8),
                 child: LinearProgressIndicator(),
               ),
-            if (preview?.nearbyImage != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: _PreviewImage(value: preview!.nearbyImage!),
-              ),
           ],
         ),
       ),
@@ -269,17 +325,30 @@ class _PreviewImage extends StatelessWidget {
     if (value.startsWith('data:')) {
       try {
         final bytes = base64Decode(value.split(',').last);
-        return Image.memory(bytes, height: 72, fit: BoxFit.cover);
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(6),
+          child: Image.memory(
+            bytes,
+            width: 56,
+            height: 56,
+            cacheWidth: 56,
+            fit: BoxFit.cover,
+          ),
+        );
       } catch (_) {
         return const SizedBox.shrink();
       }
     }
     if (value.startsWith('http')) {
-      return Image.network(
-        value,
-        height: 72,
-        fit: BoxFit.cover,
-        errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(6),
+        child: Image.network(
+          value,
+          width: 56,
+          height: 56,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
+        ),
       );
     }
     return const SizedBox.shrink();

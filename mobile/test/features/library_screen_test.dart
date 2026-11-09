@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:readlater/core/models/link.dart';
+import 'package:readlater/features/library/link_card.dart';
 import 'package:readlater/features/library/library_screen.dart';
 import 'package:readlater/providers.dart';
 
@@ -40,5 +41,22 @@ void main() {
 
     expect(find.text('示例文章'), findsOneWidget);
     expect(find.text('example.com'), findsOneWidget);
+  });
+
+  testWidgets('长按卡片进入多选模式', (tester) async {
+    final api = FakeApiClient(
+      links: [
+        const LinkItem(id: '1', url: 'https://example.com/a', title: '示例', createdAt: 1),
+      ],
+      total: 1,
+    );
+
+    await tester.pumpWidget(wrap(api));
+    await tester.pumpAndSettle();
+
+    await tester.longPress(find.byType(LinkCard));
+    await tester.pumpAndSettle();
+
+    expect(find.text('已选 1'), findsOneWidget);
   });
 }

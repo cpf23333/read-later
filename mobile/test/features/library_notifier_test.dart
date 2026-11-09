@@ -59,6 +59,19 @@ void main() {
     expect(state.error, isNotNull);
   });
 
+  test('batchDelete 调用批量接口并移除', () async {
+    final api = FakeApiClient(links: [link('1'), link('2'), link('3')], total: 3);
+    final container = makeContainer(api);
+    addTearDown(container.dispose);
+    final notifier = container.read(libraryProvider.notifier);
+    await notifier.refresh();
+
+    await notifier.batchDelete(['1', '3']);
+
+    expect(container.read(libraryProvider).links.map((l) => l.id), ['2']);
+    expect(api.batchDeletedLinkIds.single, ['1', '3']);
+  });
+
   test('setSearch 300ms 后才请求服务器', () {
     final api = FakeApiClient(links: [link('1')]);
     final container = makeContainer(api);

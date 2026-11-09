@@ -17,6 +17,7 @@ class TrashScreen extends ConsumerStatefulWidget {
 
 class _TrashScreenState extends ConsumerState<TrashScreen> with SingleTickerProviderStateMixin {
   late final TabController _tabController;
+  final Set<String> _selectedLinks = {};
 
   @override
   void initState() {
@@ -29,6 +30,32 @@ class _TrashScreenState extends ConsumerState<TrashScreen> with SingleTickerProv
   void dispose() {
     _tabController.dispose();
     super.dispose();
+  }
+
+  void _toggleLink(String id) {
+    setState(() {
+      if (!_selectedLinks.add(id)) _selectedLinks.remove(id);
+    });
+  }
+
+  void _clearSelection() {
+    setState(_selectedLinks.clear);
+  }
+
+  Future<void> _batchRestore() async {
+    final ids = _selectedLinks.toList();
+    _clearSelection();
+    await ref.read(trashProvider.notifier).batchRestoreLinks(ids);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('已批量还原')));
+    }
+  }
+
+  Future<void> _batchPurge() async {
+    if (!await _confirm('批量永久删除链接')) return;
+    final ids = _selectedLinks.toList();
+    _clearSelection();
+    await ref.read(trashProvider.notifier).batchPurgeLinks(ids);
   }
 
   Future<bool> _confirm(String title) async {
@@ -76,7 +103,9 @@ class _TrashScreenState extends ConsumerState<TrashScreen> with SingleTickerProv
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('回收站'),
+        title: Text(
+          _selectedLinks.isNotEmpty ? '已选 ${_selectedLinks.length}' : '回收站',
+        ),
         bottom: TabBar(
           controller: _tabController,
           tabs: const [
@@ -84,13 +113,31 @@ class _TrashScreenState extends ConsumerState<TrashScreen> with SingleTickerProv
             Tab(text: '站点'),
           ],
         ),
-        actions: [
-          IconButton(
-            tooltip: '刷新',
-            icon: const Icon(Icons.refresh),
-            onPressed: () => ref.read(trashProvider.notifier).load(),
-          ),
-        ],
+        actions: _selectedLinks.isNotEmpty
+            ? [
+                IconButton(
+                  tooltip: '批量还原',
+                  icon: const Icon(Icons.restore),
+                  onPressed: _batchRestore,
+                ),
+                IconButton(
+                  tooltip: '批量永久删除',
+                  icon: const Icon(Icons.delete_forever),
+                  onPressed: _batchPurge,
+                ),
+                IconButton(
+                  tooltip: '取消选择',
+                  icon: const Icon(Icons.close),
+                  onPressed: _clearSelection,
+                ),
+              ]
+            : [
+                IconButton(
+                  tooltip: '刷新',
+                  icon: const Icon(Icons.refresh),
+                  onPressed: () => ref.read(trashProvider.notifier).load(),
+                ),
+              ],
       ),
       body: TabBarView(
         controller: _tabController,
@@ -115,24 +162,33 @@ class _TrashScreenState extends ConsumerState<TrashScreen> with SingleTickerProv
       separatorBuilder: (context, index) => const Divider(height: 1),
       itemBuilder: (context, index) {
         final item = state.links[index];
+        final selecting = _selectedLinks.isNotEmpty;
+        final selected = _selectedLinks.contains(item.id);
         return ListTile(
+          leading: selecting
+              ? Checkbox(value: selected, onChanged: (value) => _toggleLink(item.id))
+              : null,
+          onTap: selecting ? () => _toggleLink(item.id) : null,
+          onLongPress: () => _toggleLink(item.id),
           title: Text(item.title.isEmpty ? item.url : item.title, maxLines: 2, overflow: TextOverflow.ellipsis),
           subtitle: Text(hostOf(item.url) ?? item.url, maxLines: 1, overflow: TextOverflow.ellipsis),
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              IconButton(
-                tooltip: '还原',
-                icon: const Icon(Icons.restore),
-                onPressed: () => _restoreLink(item),
-              ),
-              IconButton(
-                tooltip: '永久删除',
-                icon: const Icon(Icons.delete_forever),
-                onPressed: () => _purgeLink(item),
-              ),
-            ],
-          ),
+          trailing: selecting
+              ? null
+              : Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      tooltip: '还原',
+                      icon: const Icon(Icons.restore),
+                      onPressed: () => _restoreLink(item),
+                    ),
+                    IconButton(
+                      tooltip: '永久删除',
+                      icon: const Icon(Icons.delete_forever),
+                      onPressed: () => _purgeLink(item),
+                    ),
+                  ],
+                ),
         );
       },
     );

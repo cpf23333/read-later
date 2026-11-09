@@ -12,25 +12,22 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../platform/system_ui.dart';
 import '../../platform/webview_settings.dart';
 import '../../providers.dart';
+import 'browser_notifier.dart';
 import 'browser_state.dart';
 import 'inject_loader.dart';
 
-/// 长按链接回调数据（含页面内提取结果）。
+/// 长按链接回调数据（页面内提取结果通过 Future 并行返回）。
 class LinkPressPayload {
   final String url;
   final String? text;
   final String sourcePage;
-  final String? linkText;
-  final String? nearbyText;
-  final String? nearbyImage;
+  final Future<Map<String, dynamic>>? extraction;
 
   const LinkPressPayload({
     required this.url,
     this.text,
     required this.sourcePage,
-    this.linkText,
-    this.nearbyText,
-    this.nearbyImage,
+    this.extraction,
   });
 }
 
@@ -41,11 +38,13 @@ class TabWebView extends ConsumerStatefulWidget {
     required this.tab,
     required this.onCreated,
     this.onLongPressLink,
+    this.active = true,
   });
 
   final BrowserTab tab;
   final void Function(InAppWebViewController controller) onCreated;
   final void Function(LinkPressPayload payload)? onLongPressLink;
+  final bool active;
 
   @override
   ConsumerState<TabWebView> createState() => _TabWebViewState();
@@ -53,6 +52,7 @@ class TabWebView extends ConsumerStatefulWidget {
 
 class _TabWebViewState extends ConsumerState<TabWebView> {
   String? _injectJs;
+  InAppWebViewController? _controller;
   Completer<Map<String, dynamic>>? _extractCompleter;
 
   @override
@@ -61,10 +61,34 @@ class _TabWebViewState extends ConsumerState<TabWebView> {
     _loadInjectScript();
   }
 
+  @override
+  void didUpdateWidget(covariant TabWebView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.active && !widget.active) {
+      _pauseMedia();
+    }
+  }
+
   Future<void> _loadInjectScript() async {
     final source = await loadInjectJs(rootBundle);
     if (!mounted) return;
     setState(() => _injectJs = source);
+  }
+
+  Future<void> _pauseMedia() async {
+    final controller = _controller;
+    if (controller == null) return;
+    try {
+      await controller.evaluateJavascript(source: '''
+        (() => {
+          document.querySelectorAll('video, audio').forEach((el) => {
+            try { el.pause(); } catch (_) {}
+          });
+        })();
+      ''');
+    } catch (_) {
+      // 页面已销毁等情况忽略。
+    }
   }
 
   void _update({
@@ -84,32 +108,37 @@ class _TabWebViewState extends ConsumerState<TabWebView> {
         );
   }
 
-  Future<void> _handleLongPress(Map<dynamic, dynamic> data, InAppWebViewController controller) async {
+  Future<Map<String, dynamic>> _extract(String url) {
+    final controller = _controller;
+    if (controller == null) return Future.value(const {});
+
+    final completer = Completer<Map<String, dynamic>>();
+    _extractCompleter = completer;
+    unawaited(
+      controller
+          .evaluateJavascript(source: 'window.__rlExtract(${jsonEncode(url)})')
+          .catchError((Object _) {
+        if (!completer.isCompleted) completer.complete(const {});
+        return true;
+      }),
+    );
+
+    return completer.future.timeout(
+      const Duration(seconds: 4),
+      onTimeout: () => const {},
+    );
+  }
+
+  void _handleLongPress(Map<dynamic, dynamic> data) {
     final url = data['url'];
     if (url is! String || url.isEmpty) return;
 
-    Map<String, dynamic>? extracted;
-    try {
-      final completer = Completer<Map<String, dynamic>>();
-      _extractCompleter = completer;
-      await controller.evaluateJavascript(
-        source: 'window.__rlExtract(${jsonEncode(url)})',
-      );
-      extracted = await completer.future.timeout(const Duration(seconds: 4));
-    } catch (_) {
-      extracted = null;
-    } finally {
-      _extractCompleter = null;
-    }
-
-    if (!mounted) return;
+    // 立即把 payload 交给 UI（sheet 先显示加载态），提取在后台并行完成。
     widget.onLongPressLink?.call(LinkPressPayload(
       url: url,
       text: data['text'] as String?,
       sourcePage: data['sourcePage'] as String? ?? '',
-      linkText: extracted?['linkText'] as String?,
-      nearbyText: extracted?['nearbyText'] as String?,
-      nearbyImage: extracted?['nearbyImage'] as String?,
+      extraction: _extract(url),
     ));
   }
 
@@ -121,9 +150,13 @@ class _TabWebViewState extends ConsumerState<TabWebView> {
     }
 
     final isAndroid = defaultTargetPlatform == TargetPlatform.android;
+    final windowId = widget.tab.windowId;
 
     return InAppWebView(
-      initialUrlRequest: URLRequest(url: WebUri(widget.tab.url)),
+      windowId: windowId,
+      initialUrlRequest: windowId == null
+          ? URLRequest(url: WebUri(widget.tab.url))
+          : null,
       initialSettings: buildWebViewSettings(isAndroid: isAndroid),
       initialUserScripts: UnmodifiableListView<UserScript>([
         UserScript(
@@ -133,12 +166,13 @@ class _TabWebViewState extends ConsumerState<TabWebView> {
         ),
       ]),
       onWebViewCreated: (controller) {
+        _controller = controller;
         controller.addJavaScriptHandler(
           handlerName: 'rl:longPress',
           callback: (args) {
             final map = args.isNotEmpty ? args.first : null;
             if (map is Map) {
-              _handleLongPress(map, controller);
+              _handleLongPress(map);
             }
             return null;
           },
@@ -194,10 +228,11 @@ class _TabWebViewState extends ConsumerState<TabWebView> {
         exitFullscreen();
       },
       onCreateWindow: (controller, action) async {
-        final url = action.request.url?.toString();
-        if (url != null && url.isNotEmpty) {
-          ref.read(browserProvider.notifier).openTab(url);
-        }
+        final url = action.request.url?.toString() ?? '';
+        ref.read(browserProvider.notifier).openTab(
+              url.isEmpty ? BrowserNotifier.blankUrl : url,
+              windowId: action.windowId,
+            );
         return true;
       },
       shouldOverrideUrlLoading: (controller, navigationAction) async {
