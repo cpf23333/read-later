@@ -6,7 +6,15 @@ export default defineConfig({
   plugins: [vue()],
   test: {
     environment: 'jsdom',
-    exclude: ['node_modules', '.output', 'server/node_modules', 'server/dist', 'e2e/**'],
+    exclude: [
+      'node_modules',
+      '.output',
+      'server/node_modules',
+      'server/dist',
+      'e2e/**',
+      '.vfox/**',
+      'mobile/build/**',
+    ],
     root: fileURLToPath(new URL('./', import.meta.url)),
   },
 });
