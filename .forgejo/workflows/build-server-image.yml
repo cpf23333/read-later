@@ -47,9 +47,12 @@ jobs:
       - name: Build image with Buildah
         env:
           STORAGE_DRIVER: vfs
+          CI_REGISTRY: ${{ vars.CI_REGISTRY }}
           DOCKER_MIRROR: ${{ vars.DOCKER_MIRROR }}
           SERVER_BASE_IMAGE: ${{ vars.SERVER_BASE_IMAGE }}
           PRIVATE_REGISTRIES: ${{ vars.PRIVATE_REGISTRIES || vars.CI_REGISTRY }}
+          DOCKER_REGISTRY_USER: ${{ secrets.DOCKER_REGISTRY_USER }}
+          DOCKER_REGISTRY_PASSWORD: ${{ secrets.DOCKER_REGISTRY_PASSWORD }}
         run: |
           echo "=== 配置 Buildah registry mirror ==="
           mkdir -p /etc/containers
@@ -82,6 +85,10 @@ jobs:
           echo "=== 复制 Dockerfile 到部署目录 ==="
           cp server/deploy.Dockerfile server-deploy/Dockerfile
           echo "=== 使用 Buildah 构建镜像 ==="
+          if [ -n "${DOCKER_REGISTRY_USER:-}" ] && [ -n "${DOCKER_REGISTRY_PASSWORD:-}" ] && [ -n "${CI_REGISTRY:-}" ]; then
+            echo "=== 登录私有 registry: ${CI_REGISTRY} ==="
+            echo "${DOCKER_REGISTRY_PASSWORD}" | buildah login -u "${DOCKER_REGISTRY_USER}" --password-stdin "${CI_REGISTRY}"
+          fi
           BASE_IMAGE="${SERVER_BASE_IMAGE:-node:24-alpine}"
           echo "使用服务器基础镜像: ${BASE_IMAGE}"
           buildah bud --build-arg "BASE_IMAGE=${BASE_IMAGE}" -f server-deploy/Dockerfile -t read-later-server:latest ./server-deploy
