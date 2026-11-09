@@ -5,6 +5,10 @@ import 'core/api/api_client.dart';
 import 'core/api/dio_api_client.dart';
 import 'core/config/config_store.dart';
 import 'core/config/key_value_store.dart';
+import 'core/storage/session_store.dart';
+import 'features/browser/browser_notifier.dart';
+import 'features/browser/browser_state.dart';
+import 'features/browser/tab_registry.dart';
 
 /// 服务器配置存储。
 final configStoreProvider = Provider<ConfigStore>(
@@ -14,4 +18,17 @@ final configStoreProvider = Provider<ConfigStore>(
 /// 服务器 API 客户端。
 final apiClientProvider = Provider<ApiClient>(
   (ref) => DioApiClient(Dio(), ref.watch(configStoreProvider)),
+);
+
+/// 浏览器会话持久化。
+final sessionStoreProvider = Provider<SessionStore>(
+  (ref) => SharedPreferencesSessionStore(),
+);
+
+/// 标签控制器注册表。
+final tabRegistryProvider = Provider<TabRegistry>((ref) => TabRegistry());
+
+/// 多标签状态。
+final browserProvider = NotifierProvider<BrowserNotifier, BrowserState>(
+  BrowserNotifier.new,
 );

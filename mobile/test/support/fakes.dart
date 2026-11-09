@@ -1,5 +1,6 @@
 import 'package:readlater/core/config/key_value_store.dart';
 import 'package:readlater/core/config/config_store.dart';
+import 'package:readlater/core/storage/session_store.dart';
 
 /// 内存键值存储（测试用）。
 class InMemoryKeyValueStore implements KeyValueStore {
@@ -25,4 +26,19 @@ ConfigStore fakeConfigStore({required String baseUrl, required String apiKey}) {
   store.values[ConfigStore.storageKey] =
       '{"baseUrl":"$baseUrl","apiKey":"$apiKey","enabled":true}';
   return ConfigStore(store);
+}
+
+/// 内存会话存储（测试用）。
+class InMemorySessionStore implements SessionStore {
+  SessionData? data;
+  int saveCount = 0;
+
+  @override
+  Future<SessionData?> load() async => data;
+
+  @override
+  Future<void> save(SessionData value) async {
+    data = value;
+    saveCount++;
+  }
 }
