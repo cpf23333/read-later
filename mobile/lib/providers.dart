@@ -16,6 +16,7 @@ import 'features/browser/tab_registry.dart';
 import 'features/library/library_notifier.dart';
 import 'features/library/trash_notifier.dart';
 import 'features/settings/theme_controller.dart';
+import 'features/settings/video_settings_controller.dart';
 import 'features/sites/sites_notifier.dart';
 
 /// 服务器配置存储。
@@ -80,4 +81,10 @@ final sitesProvider = NotifierProvider<SitesNotifier, SitesState>(
 /// 主题模式。
 final themeProvider = NotifierProvider<ThemeController, ThemeMode>(
   ThemeController.new,
+);
+
+/// 视频播放偏好（自动播放、是否显示播放按钮）。
+final videoSettingsProvider =
+    NotifierProvider<VideoSettingsController, VideoSettings>(
+  VideoSettingsController.new,
 );

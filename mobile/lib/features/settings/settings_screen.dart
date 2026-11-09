@@ -144,6 +144,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final themeMode = ref.watch(themeProvider);
+    final videoSettings = ref.watch(videoSettingsProvider);
     final theme = Theme.of(context);
 
     return Scaffold(
@@ -207,6 +208,25 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             onSelectionChanged: (selection) {
               ref.read(themeProvider.notifier).setMode(selection.first);
             },
+          ),
+          const Divider(height: 32),
+          Text('视频播放', style: theme.textTheme.titleMedium),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('检测到视频时自动播放'),
+            subtitle: const Text('用内置 Media3 播放器打开直链视频（m3u8/mpd/mp4）'),
+            value: videoSettings.autoPlay,
+            onChanged: (value) =>
+                ref.read(videoSettingsProvider.notifier).setAutoPlay(value),
+          ),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('显示「播放视频」按钮'),
+            subtitle: const Text('关闭后浏览器不显示视频入口；自动播放设置仍生效'),
+            value: videoSettings.showPlayerButton,
+            onChanged: (value) => ref
+                .read(videoSettingsProvider.notifier)
+                .setShowPlayerButton(value),
           ),
           const Divider(height: 32),
           Text('浏览器', style: theme.textTheme.titleMedium),

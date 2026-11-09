@@ -26,6 +26,8 @@ class BrowserScreen extends ConsumerStatefulWidget {
 
 class _BrowserScreenState extends ConsumerState<BrowserScreen> {
   final Map<String, DetectedMedia> _mediaByTab = {};
+  final Set<String> _autoOpenedMedia = {};
+  bool _playerOpen = false;
 
   @override
   void initState() {
@@ -43,15 +45,28 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
     final current = _mediaByTab[tabId];
     if (current?.url == media.url) return;
     setState(() => _mediaByTab[tabId] = media);
+
+    final settings = ref.read(videoSettingsProvider);
+    if (!settings.autoPlay || _playerOpen) return;
+    if (tabId != ref.read(browserProvider).activeTabId) return;
+    final key = '$tabId|${media.url}';
+    if (!_autoOpenedMedia.add(key)) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _openMediaPlayer(media);
+    });
   }
 
   void _openMediaPlayer(DetectedMedia media) {
-    Navigator.of(context, rootNavigator: true).push(
-      MaterialPageRoute(
-        fullscreenDialog: true,
-        builder: (routeContext) => MediaPlayerScreen(media: media),
-      ),
-    );
+    if (_playerOpen) return;
+    _playerOpen = true;
+    Navigator.of(context, rootNavigator: true)
+        .push(
+          MaterialPageRoute(
+            fullscreenDialog: true,
+            builder: (routeContext) => MediaPlayerScreen(media: media),
+          ),
+        )
+        .whenComplete(() => _playerOpen = false);
   }
 
   Future<void> _restoreSession() async {
@@ -261,6 +276,7 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(browserProvider);
+    final videoSettings = ref.watch(videoSettingsProvider);
     final active = state.activeTab;
     final registry = ref.watch(tabRegistryProvider);
 
@@ -313,7 +329,9 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
                               )
                             : const SizedBox.shrink(),
                       ),
-                    if (active != null && _mediaByTab.containsKey(active.id))
+                    if (videoSettings.showPlayerButton &&
+                        active != null &&
+                        _mediaByTab.containsKey(active.id))
                       Positioned(
                         right: 16,
                         bottom: 16,

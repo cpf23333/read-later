@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:readlater/core/api/errors.dart';
 import 'package:readlater/core/config/config_store.dart';
 import 'package:readlater/features/settings/settings_screen.dart';
+import 'package:readlater/features/settings/video_settings_controller.dart';
 import 'package:readlater/providers.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -68,5 +69,32 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
 
     expect(find.textContaining('连接失败'), findsWidgets);
+  });
+
+  testWidgets('视频播放开关可切换', (tester) async {
+    final configStore = ConfigStore(InMemoryKeyValueStore());
+    await tester.pumpWidget(wrap(api: FakeApiClient(), configStore: configStore));
+    await tester.pumpAndSettle();
+
+    final autoTile = find.widgetWithText(SwitchListTile, '检测到视频时自动播放');
+    await tester.scrollUntilVisible(
+      autoTile,
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(tester.widget<SwitchListTile>(autoTile).value, isFalse);
+
+    await tester.tap(autoTile);
+    await tester.pumpAndSettle();
+    expect(tester.widget<SwitchListTile>(autoTile).value, isTrue);
+    expect(await SharedPreferences.getInstance().then(
+          (prefs) => prefs.getBool(VideoSettingsController.autoPlayKey),
+        ), isTrue);
+
+    final buttonTile = find.widgetWithText(SwitchListTile, '显示「播放视频」按钮');
+    expect(tester.widget<SwitchListTile>(buttonTile).value, isTrue);
+    await tester.tap(buttonTile);
+    await tester.pumpAndSettle();
+    expect(tester.widget<SwitchListTile>(buttonTile).value, isFalse);
   });
 }

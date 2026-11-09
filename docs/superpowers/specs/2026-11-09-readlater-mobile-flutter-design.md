@@ -356,7 +356,7 @@ window.__rlExtract = async (url) => JSON.stringify({
 ### 6.7 视频检测与 Media3 播放（v1.1）
 
 - 检测：`inject.js` 扫描 `<video>` 的 `currentSrc/src`、`<source>`，并 hook `fetch` / `XMLHttpRequest`，命中 `.m3u8/.mpd/.mp4` 的 http(s) 地址时通过 `callHandler('rl:media', {...})` 上报；同一 URL 去重。
-- UI：当前标签检测到可播放地址时，浏览器右下角出现「播放视频」FAB；点击打开全屏 Media3 页面。
+- UI：当前标签检测到可播放地址时，浏览器右下角出现「播放视频」FAB；点击打开全屏 Media3 页面。设置页「视频播放」提供两个开关：`检测到视频时自动播放`（默认关，检测到直链视频自动全屏播放）和 `显示「播放视频」按钮`（默认开，关闭后只隐藏入口，自动播放仍生效）。
 - 播放器：Android PlatformView（`readlater/media3`）+ Media3 ExoPlayer 1.11.x，支持 HLS/DASH/MP4；自动带当前页 Referer、WebView UA 和 Cookie（`CookieManager`），减少 403。
 - 限制：只支持可直连的 http(s) 媒体地址；`blob:`/MSE、DRM（Widevine）和需复杂鉴权的站点仍用 WebView 播放；不会自动抢占页面的视频播放。
 - 后续可选：检测到视频自动打开（默认关）、清晰度/字幕选择、PIP/投屏、长按菜单「用内置播放器打开」。
