@@ -137,6 +137,18 @@ openssl rand -base64 32
 | GET    | /api/sites/exists          | 检查站点是否存在（含 inTrash）         |
 | POST   | /api/upload                | 上传图片（保留兼容）                   |
 
+## 移动端（Flutter）
+
+`mobile/` 是 Android 平板 app：内置浏览器（多标签、视频全屏、长按收藏置顶）+ 收藏库 + 站点页，数据走同一服务器。
+
+- 设计：`docs/superpowers/specs/2026-11-09-readlater-mobile-flutter-design.md`
+- 计划：`docs/superpowers/plans/2026-11-09-mobile-app-v1.md`
+- 工具链：Flutter 3.38.10、JDK 21、AGP 8.11.1（`mobile/android/gradle.properties` 通过 `org.gradle.java.home` 指定 JDK）
+- 开发/测试：`cd mobile && flutter run`、`flutter test`
+- 集成测试（需设备/模拟器）：`flutter test integration_test/long_press_test.dart -d <device-id>`
+- 构建：`flutter build apk --release --split-per-abi`（个人侧载，release 用 debug 签名）
+- 包名 `com.cpf23333.readlater`，`minSdk 26`
+
 ## 关键代码位置
 
 ### 图片提取 (utils/imageExtractor.ts)
