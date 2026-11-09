@@ -48,7 +48,8 @@ jobs:
         env:
           STORAGE_DRIVER: vfs
           DOCKER_MIRROR: ${{ vars.DOCKER_MIRROR }}
-          PRIVATE_REGISTRIES: ${{ vars.PRIVATE_REGISTRIES }}
+          SERVER_BASE_IMAGE: ${{ vars.SERVER_BASE_IMAGE }}
+          PRIVATE_REGISTRIES: ${{ vars.PRIVATE_REGISTRIES || vars.CI_REGISTRY }}
         run: |
           echo "=== 配置 Buildah registry mirror ==="
           mkdir -p /etc/containers
@@ -81,7 +82,9 @@ jobs:
           echo "=== 复制 Dockerfile 到部署目录 ==="
           cp server/deploy.Dockerfile server-deploy/Dockerfile
           echo "=== 使用 Buildah 构建镜像 ==="
-          buildah bud -f server-deploy/Dockerfile -t read-later-server:latest ./server-deploy
+          BASE_IMAGE="${SERVER_BASE_IMAGE:-node:24-alpine}"
+          echo "使用服务器基础镜像: ${BASE_IMAGE}"
+          buildah bud --build-arg "BASE_IMAGE=${BASE_IMAGE}" -f server-deploy/Dockerfile -t read-later-server:latest ./server-deploy
 
       - name: Export image to tar
         env:
