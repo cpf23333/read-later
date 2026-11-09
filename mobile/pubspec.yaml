@@ -10,6 +10,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_localizations:
+    sdk: flutter
 
   cupertino_icons: ^1.0.8
   flutter_inappwebview: ^6.1.5
@@ -23,7 +25,7 @@ dependencies:
   share_plus: ^10.1.2
   logger: ^2.5.0
   html: ^0.15.5
-  intl: ^0.20.3
+  intl: ^0.20.2
 
 dev_dependencies:
   flutter_test:
