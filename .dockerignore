@@ -1,4 +1,13 @@
 node_modules
+extension/node_modules
+extension/.output
+extension/.wxt
+mobile
+.vfox
+.superpowers
+docs
+tools
+stores
 dist
 data
 .env

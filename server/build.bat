@@ -6,8 +6,19 @@ echo === 构建 read-later-server 镜像 ===
 REM Dockerfile 需要项目根目录作为 build context
 cd /d "%~dp0\.."
 
+REM 基础镜像：优先读环境变量，其次 server\.env 的 BASE_IMAGE，最后默认 node:24-alpine
+if not defined BASE_IMAGE if exist "server\.env" (
+    for /f "usebackq tokens=1,* delims==" %%A in ("server\.env") do (
+        if /i "%%A"=="BASE_IMAGE" if not defined BASE_IMAGE set "BASE_IMAGE=%%B"
+    )
+)
+if not defined BASE_IMAGE set "BASE_IMAGE=node:24-alpine"
+
+echo 使用基础镜像: %BASE_IMAGE%
+echo.
+
 REM 构建
-docker build -f server/Dockerfile -t read-later-server:latest .
+docker build -f server/Dockerfile -t read-later-server:latest --build-arg "BASE_IMAGE=%BASE_IMAGE%" .
 if %ERRORLEVEL% neq 0 (
     echo 构建失败！
     exit /b 1

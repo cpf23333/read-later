@@ -246,8 +246,12 @@ BASE_IMAGE=node:24-alpine
 
 # 私有镜像仓库 / 加速服务
 BASE_IMAGE=your-registry/library/node:24-alpine
+
+# 国内加速示例（可用性以实际网络为准）
+BASE_IMAGE=docker.m.daocloud.io/library/node:24-alpine
 ```
 
+> `build.sh` / `build.bat` 会读取 `server/.env` 的 `BASE_IMAGE` 并传给 `docker build --build-arg`；`docker compose` 也会自动读取同一值。
 > 使用 HTTP 私有仓库时，需要在 Docker 配置中添加 `insecure-registries`。
 
 ### npm 源
@@ -348,15 +352,21 @@ DATA_PATH=/vol1/backup/readlater
 PORT=3001
 ```
 
-### 4. 镜像拉取失败
+### 4. 镜像拉取 / 构建失败
 
-默认使用本地构建，无需访问外部镜像仓库。如果你使用预构建镜像但无法访问，请检查 `.env`：
+如果报 `load metadata for docker.io/library/node:24-alpine`，说明拉不到 Docker Hub 基础镜像。在 `server/.env` 设置可用的基础镜像源（国内加速或私有仓库）后重新执行 `build.bat` / `build.sh`：
 
 ```env
-DOCKER_REGISTRY=your-registry-domain
+BASE_IMAGE=docker.m.daocloud.io/library/node:24-alpine
 ```
 
-或清空 `DOCKER_REGISTRY` 切换回本地构建模式。
+若 `apk add` 阶段偶发报错（如 `gdk-pixbuf` trigger error），通常是 Alpine 源网络波动，清理构建缓存后重试：
+
+```bash
+docker builder prune -f
+```
+
+使用预构建镜像但无法访问时，检查 `DOCKER_REGISTRY`，或清空后切换回本地构建模式。
 
 ---
 

@@ -25,11 +25,11 @@ WORKDIR /app
 RUN apk add --no-cache python3 make g++ vips-dev && \
     npm install -g pnpm@10.15.1
 
-# 复制 workspace 配置（完整项目，entrypoints 存在，wxt prepare 可正常执行）
+# 复制 workspace 配置（完整项目，extension 存在，wxt prepare 可正常执行）
 # 使用 .npmrc* 通配符：存在 .npmrc 时复制，不存在也不报错
 COPY .npmrc* pnpm-workspace.yaml package.json pnpm-lock.yaml ./
-COPY wxt.config.ts ./
-COPY entrypoints ./entrypoints
+COPY extension/package.json extension/tsconfig.json extension/wxt.config.ts ./extension/
+COPY extension/entrypoints ./extension/entrypoints
 COPY server/package.json ./server/
 
 # 安装依赖（完整项目上下文，生命周期脚本正常执行）
