@@ -377,7 +377,8 @@ reload.bat   # Windows
 | `CI_BASE_IMAGE` | 否 | CI 镜像基础镜像 | `node:24` |
 | `NPM_CONFIG_REGISTRY` | 否 | npm 源 | `https://registry.npmmirror.com` |
 | `EXTENSION_KEY` | 否 | 扩展固定 ID 的签名 key | - |
-| `DOCKER_MIRROR` | CI runner 无外网时填 | Buildah 的 Docker Hub 镜像加速源 | `docker.m.daocloud.io` |`n| `SERVER_BASE_IMAGE` | 内网仓库时填 | 服务器镜像基础镜像的完整地址（优先于 mirror） | `192.168.1.100:8083/library/node:24-alpine` |
+| `DOCKER_MIRROR` | CI runner 无外网时填 | Buildah 的 Docker Hub 镜像加速源 | `docker.m.daocloud.io` |
+| `SERVER_BASE_IMAGE` | 内网仓库时填 | 服务器镜像基础镜像的完整地址（优先于 mirror） | `192.168.1.100:8083/library/node:24-alpine` |
 | `PRIVATE_REGISTRIES` | 内网仓库时填 | Buildah 允许的 HTTP 私有仓库（逗号分隔） | `192.168.1.100:8083` |
 | `APT_REPO_DEBIAN` / `APT_REPO_SECURITY` | 否 | CI 镜像 Debian 源 | - |
 
