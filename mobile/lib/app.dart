@@ -1,22 +1,26 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'providers.dart';
 import 'router.dart';
 
-class ReadLaterApp extends StatefulWidget {
+class ReadLaterApp extends ConsumerStatefulWidget {
   const ReadLaterApp({super.key});
 
   @override
-  State<ReadLaterApp> createState() => _ReadLaterAppState();
+  ConsumerState<ReadLaterApp> createState() => _ReadLaterAppState();
 }
 
-class _ReadLaterAppState extends State<ReadLaterApp> {
+class _ReadLaterAppState extends ConsumerState<ReadLaterApp> {
   late final GoRouter _router = createRouter();
 
   static const _seedColor = Color(0xFF4F6BED);
 
   @override
   Widget build(BuildContext context) {
+    final themeMode = ref.watch(themeProvider);
+
     return MaterialApp.router(
       title: '稍后再看',
       debugShowCheckedModeBanner: false,
@@ -31,7 +35,7 @@ class _ReadLaterAppState extends State<ReadLaterApp> {
           brightness: Brightness.dark,
         ),
       ),
-      themeMode: ThemeMode.system,
+      themeMode: themeMode,
       routerConfig: _router,
     );
   }

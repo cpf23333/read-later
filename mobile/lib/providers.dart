@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/api/api_client.dart';
@@ -14,6 +15,7 @@ import 'features/browser/site_service.dart';
 import 'features/browser/tab_registry.dart';
 import 'features/library/library_notifier.dart';
 import 'features/library/trash_notifier.dart';
+import 'features/settings/theme_controller.dart';
 import 'features/sites/sites_notifier.dart';
 
 /// 服务器配置存储。
@@ -73,4 +75,9 @@ final trashProvider = NotifierProvider<TrashNotifier, TrashState>(
 /// 站点页状态。
 final sitesProvider = NotifierProvider<SitesNotifier, SitesState>(
   SitesNotifier.new,
+);
+
+/// 主题模式。
+final themeProvider = NotifierProvider<ThemeController, ThemeMode>(
+  ThemeController.new,
 );
