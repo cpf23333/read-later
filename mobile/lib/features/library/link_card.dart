@@ -25,6 +25,8 @@ class LinkCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final image = link.nearbyImage ?? link.screenshot;
+    final title = link.title.trim();
+    final hasTitle = title.isNotEmpty;
 
     return Card(
       clipBehavior: Clip.antiAlias,
@@ -43,19 +45,24 @@ class LinkCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      link.title.isEmpty ? link.url : link.title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodyMedium,
+                    Tooltip(
+                      message: link.url,
+                      child: Text(
+                        hasTitle ? title : link.url,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      hostOf(link.url) ?? link.url,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
+                    if (hasTitle) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        hostOf(link.url) ?? link.url,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
                     const SizedBox(height: 4),
                     Text(
                       _formatDate(link.createdAt),

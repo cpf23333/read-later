@@ -147,4 +147,25 @@ void main() {
 
     expect(api.addedSites.single.url, 'https://a.com');
   });
+
+  test('updateExisting 调用 updateLink 刷新标题/图片/截图', () async {
+    final api = FakeApiClient();
+    final service = CaptureService(api, FakePageMetaResolver());
+
+    final updated = await service.updateExisting(
+      const LinkPreview(
+        url: 'https://a.com',
+        title: '新标题',
+        sourcePage: 'https://a.com',
+        exists: true,
+        existingId: '1',
+      ),
+      screenshotBase64: 'data:image/jpeg;base64,abc',
+    );
+
+    expect(updated, isTrue);
+    expect(api.updatedLinks.single['id'], '1');
+    expect(api.updatedLinks.single['title'], '新标题');
+    expect(api.updatedLinks.single['screenshot'], 'data:image/jpeg;base64,abc');
+  });
 }

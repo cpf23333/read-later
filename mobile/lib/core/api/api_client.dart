@@ -1,4 +1,5 @@
 import '../models/link.dart';
+import '../models/domain_stat.dart';
 import '../models/site.dart';
 import '../models/health.dart';
 
@@ -18,6 +19,13 @@ abstract class ApiClient {
   });
   Future<void> deleteLink(String id);
   Future<void> batchDeleteLinks(List<String> ids);
+  Future<void> updateLink(
+    String id, {
+    String? title,
+    String? nearbyImage,
+    String? screenshot,
+  });
+  Future<List<DomainStat>> listDomains();
 
   Future<List<TrashItem>> listTrash();
   Future<void> restoreTrash(String id);

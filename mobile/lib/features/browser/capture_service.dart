@@ -11,6 +11,7 @@ class LinkPreview {
   final String sourcePage;
   final bool exists;
   final String? existingTitle;
+  final String? existingId;
 
   const LinkPreview({
     required this.url,
@@ -19,6 +20,7 @@ class LinkPreview {
     required this.sourcePage,
     required this.exists,
     this.existingTitle,
+    this.existingId,
   });
 
   LinkPreview copyWith({String? nearbyImage}) {
@@ -29,6 +31,7 @@ class LinkPreview {
       sourcePage: sourcePage,
       exists: exists,
       existingTitle: existingTitle,
+      existingId: existingId,
     );
   }
 }
@@ -118,6 +121,7 @@ class CaptureService {
       sourcePage: sourcePage,
       exists: exists.exists,
       existingTitle: exists.link?.title,
+      existingId: exists.link?.id,
     );
   }
 
@@ -136,6 +140,26 @@ class CaptureService {
       sourcePage: preview.sourcePage,
       customData: const {'kind': 'link', 'platform': 'android'},
     ));
+    return true;
+  }
+
+  /// 已收藏时刷新标题/图片/截图，返回是否更新成功。
+  Future<bool> updateExisting(
+    LinkPreview preview, {
+    String? screenshotBase64,
+  }) async {
+    final id = preview.existingId;
+    if (!preview.exists || id == null || id.isEmpty) return false;
+
+    AppLogger.d(
+      'update link $id: nearbyImage=${preview.nearbyImage?.length} screenshot=${screenshotBase64?.length}',
+    );
+    await _api.updateLink(
+      id,
+      title: preview.title,
+      nearbyImage: preview.nearbyImage,
+      screenshot: screenshotBase64,
+    );
     return true;
   }
 

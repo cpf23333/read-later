@@ -16,6 +16,7 @@ class LibraryState {
   final String search;
   final String sortBy;
   final bool sortDesc;
+  final String? domain;
 
   const LibraryState({
     this.links = const [],
@@ -27,6 +28,7 @@ class LibraryState {
     this.search = '',
     this.sortBy = 'created_at',
     this.sortDesc = true,
+    this.domain,
   });
 
   bool get hasMore => links.length < total;
@@ -42,6 +44,8 @@ class LibraryState {
     String? search,
     String? sortBy,
     bool? sortDesc,
+    String? domain,
+    bool clearDomain = false,
   }) {
     return LibraryState(
       links: links ?? this.links,
@@ -53,6 +57,7 @@ class LibraryState {
       search: search ?? this.search,
       sortBy: sortBy ?? this.sortBy,
       sortDesc: sortDesc ?? this.sortDesc,
+      domain: clearDomain ? null : (domain ?? this.domain),
     );
   }
 }
@@ -76,6 +81,7 @@ class LibraryNotifier extends Notifier<LibraryState> {
             page: 1,
             pageSize: pageSize,
             search: state.search.isEmpty ? null : state.search,
+            domain: state.domain,
             sortBy: state.sortBy,
             sortOrder: state.sortDesc ? 'desc' : 'asc',
           );
@@ -101,6 +107,7 @@ class LibraryNotifier extends Notifier<LibraryState> {
             page: nextPage,
             pageSize: pageSize,
             search: state.search.isEmpty ? null : state.search,
+            domain: state.domain,
             sortBy: state.sortBy,
             sortOrder: state.sortDesc ? 'desc' : 'asc',
           );
@@ -130,6 +137,11 @@ class LibraryNotifier extends Notifier<LibraryState> {
   void setSort({String? sortBy, bool? sortDesc}) {
     state = state.copyWith(sortBy: sortBy, sortDesc: sortDesc);
     refresh();
+  }
+
+  Future<void> setDomain(String? domain) async {
+    state = state.copyWith(domain: domain, clearDomain: domain == null);
+    await refresh();
   }
 
   Future<void> deleteLink(String id) async {

@@ -249,6 +249,42 @@ export function deleteLink(id: string): void {
   database.prepare('DELETE FROM links WHERE id = ?').run(id);
 }
 
+/**
+ * 更新链接的标题/图片字段（只更新传入的字段）。
+ */
+export function updateLink(
+  id: string,
+  fields: {
+    title?: string;
+    nearby_image?: string | null;
+    screenshot?: string | null;
+  }
+): void {
+  const database = getDatabase();
+  const sets: string[] = [];
+  const params: (string | number | null)[] = [];
+
+  if (fields.title !== undefined) {
+    sets.push('title = ?');
+    params.push(fields.title);
+  }
+  if (fields.nearby_image !== undefined) {
+    sets.push('nearby_image = ?');
+    params.push(fields.nearby_image);
+  }
+  if (fields.screenshot !== undefined) {
+    sets.push('screenshot = ?');
+    params.push(fields.screenshot);
+  }
+  if (sets.length === 0) return;
+
+  sets.push('updated_at = ?');
+  params.push(Date.now());
+  params.push(id);
+
+  database.prepare(`UPDATE links SET ${sets.join(', ')} WHERE id = ?`).run(...params);
+}
+
 // ===== 回收站操作 =====
 
 /**

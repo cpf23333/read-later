@@ -41,7 +41,7 @@ void main() {
     expect((tiles[1].title as Text).data, '收藏主站 a.com');
   });
 
-  testWidgets('已收藏时收藏按钮禁用并显示提示', (tester) async {
+  testWidgets('已收藏时提供更新入口，点击调用 updateLink', (tester) async {
     final api = FakeApiClient(
       linkExistsResult: const ExistsResult(
         exists: true,
@@ -51,9 +51,16 @@ void main() {
     await tester.pumpWidget(wrapSheet(api));
     await tester.pumpAndSettle();
 
+    expect(find.text('已收藏'), findsOneWidget);
+    expect(find.text('更新收藏信息'), findsOneWidget);
     final first = tester.widget<ListTile>(find.byType(ListTile).first);
-    expect(first.enabled, isFalse);
-    expect(find.text('该链接已在收藏库'), findsOneWidget);
+    expect(first.enabled, isTrue);
+
+    await tester.tap(find.text('更新收藏信息'));
+    await tester.pumpAndSettle();
+
+    expect(api.updatedLinks.length, 1);
+    expect(api.updatedLinks.first['id'], '1');
   });
 
   testWidgets('点击收藏会调用 Save（发送 addLink）', (tester) async {

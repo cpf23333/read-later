@@ -83,4 +83,20 @@ void main() {
     expect(container.read(libraryProvider).search, 'flutter');
     expect(api.listLinksCalls, before);
   });
+
+  test('setDomain 传域名给服务器并刷新', () async {
+    final api = FakeApiClient(links: [link('1')]);
+    final container = makeContainer(api);
+    addTearDown(container.dispose);
+    final notifier = container.read(libraryProvider.notifier);
+
+    await notifier.setDomain('example.com');
+
+    expect(container.read(libraryProvider).domain, 'example.com');
+    expect(api.listLinksDomains.last, 'example.com');
+
+    await notifier.setDomain(null);
+    expect(container.read(libraryProvider).domain, isNull);
+    expect(api.listLinksDomains.last, isNull);
+  });
 }

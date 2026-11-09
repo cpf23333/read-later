@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/models/link.dart';
+import '../../core/models/domain_stat.dart';
 import '../../providers.dart';
 import 'library_notifier.dart';
 import 'link_card.dart';
@@ -78,6 +79,48 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     context.go('/browser');
   }
 
+  Future<void> _showDomainFilter() async {
+    List<DomainStat> domains;
+    try {
+      domains = await ref.read(apiClientProvider).listDomains();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('加载域名失败：$error')),
+      );
+      return;
+    }
+    if (!mounted) return;
+
+    final current = ref.read(libraryProvider).domain;
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            ListTile(
+              title: const Text('全部域名'),
+              trailing: current == null ? const Icon(Icons.check) : null,
+              onTap: () => Navigator.pop(sheetContext, ''),
+            ),
+            for (final item in domains)
+              ListTile(
+                title: Text(item.domain),
+                subtitle: Text('${item.count} 条'),
+                trailing: current == item.domain ? const Icon(Icons.check) : null,
+                onTap: () => Navigator.pop(sheetContext, item.domain),
+              ),
+          ],
+        ),
+      ),
+    );
+
+    if (selected == null || !mounted) return;
+    ref.read(libraryProvider.notifier).setDomain(selected.isEmpty ? null : selected);
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(libraryProvider);
@@ -102,6 +145,14 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                 ),
               ]
             : [
+                IconButton(
+                  tooltip: '按域名筛选',
+                  icon: Badge(
+                    isLabelVisible: state.domain != null,
+                    child: const Icon(Icons.filter_alt_outlined),
+                  ),
+                  onPressed: _showDomainFilter,
+                ),
                 PopupMenuButton<String>(
                   tooltip: '排序',
                   icon: const Icon(Icons.sort),
@@ -155,6 +206,20 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
               onChanged: (value) => ref.read(libraryProvider.notifier).setSearch(value),
             ),
           ),
+          if (state.domain != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
+              child: Row(
+                children: [
+                  InputChip(
+                    label: Text(state.domain!),
+                    onDeleted: () => ref.read(libraryProvider.notifier).setDomain(null),
+                  ),
+                  const Spacer(),
+                  Text('${state.total} 条', style: Theme.of(context).textTheme.bodySmall),
+                ],
+              ),
+            ),
           Expanded(child: _buildBody(state)),
         ],
       ),

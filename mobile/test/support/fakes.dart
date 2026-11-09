@@ -4,6 +4,7 @@ import 'package:readlater/core/config/key_value_store.dart';
 import 'package:readlater/core/config/config_store.dart';
 import 'package:readlater/core/models/health.dart';
 import 'package:readlater/core/models/link.dart';
+import 'package:readlater/core/models/domain_stat.dart';
 import 'package:readlater/core/models/site.dart';
 import 'package:readlater/core/storage/session_store.dart';
 import 'package:readlater/core/web/title_resolver.dart';
@@ -69,6 +70,7 @@ class FakeApiClient implements ApiClient {
     this.trash = const [],
     this.linkExistsResult = const ExistsResult(exists: false),
     this.siteExistsResult = const SiteExistsResult(exists: false, inTrash: false),
+    this.domains = const [],
     this.error,
   });
 
@@ -77,6 +79,7 @@ class FakeApiClient implements ApiClient {
   List<Site> sites;
   List<Site> siteTrash;
   List<TrashItem> trash;
+  List<DomainStat> domains;
   ExistsResult linkExistsResult;
   SiteExistsResult siteExistsResult;
   ApiException? error;
@@ -88,8 +91,10 @@ class FakeApiClient implements ApiClient {
   final List<List<String>> batchDeletedLinkIds = [];
   final List<List<String>> batchRestoredTrashIds = [];
   final List<List<String>> batchPurgedTrashIds = [];
+  final List<Map<String, Object?>> updatedLinks = [];
   int listLinksCalls = 0;
   final List<int> listLinksPages = [];
+  final List<String?> listLinksDomains = [];
 
   @override
   Future<HealthStatus> health() async {
@@ -121,6 +126,7 @@ class FakeApiClient implements ApiClient {
     _throwIfError();
     listLinksCalls++;
     listLinksPages.add(page);
+    listLinksDomains.add(domain);
     return PagedLinks(links: links, total: total ?? links.length);
   }
 
@@ -134,6 +140,28 @@ class FakeApiClient implements ApiClient {
   Future<void> batchDeleteLinks(List<String> ids) async {
     _throwIfError();
     batchDeletedLinkIds.add(List<String>.from(ids));
+  }
+
+  @override
+  Future<void> updateLink(
+    String id, {
+    String? title,
+    String? nearbyImage,
+    String? screenshot,
+  }) async {
+    _throwIfError();
+    updatedLinks.add({
+      'id': id,
+      'title': title,
+      'nearbyImage': nearbyImage,
+      'screenshot': screenshot,
+    });
+  }
+
+  @override
+  Future<List<DomainStat>> listDomains() async {
+    _throwIfError();
+    return domains;
   }
 
   @override

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../core/api/errors.dart';
 import '../../core/logging/app_logger.dart';
@@ -11,6 +10,7 @@ import '../../providers.dart';
 import '../player/media_player_screen.dart';
 import 'browser_notifier.dart';
 import 'browser_toolbar.dart';
+import 'capture_service.dart';
 import 'detected_media.dart';
 import 'long_press_sheet.dart';
 import 'tab_strip.dart';
@@ -156,7 +156,9 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
     if (!result.saved) return;
     ref.read(libraryProvider.notifier).refresh();
     ref.read(sitesProvider.notifier).refresh();
-    if (result.droppedAny) {
+    if (result.kind == 'update') {
+      _snack('已更新收藏信息');
+    } else if (result.droppedAny) {
       _snack('图片过大已跳过');
     } else {
       _snack(result.kind == 'site' ? '已收藏主站' : '已收藏');
@@ -179,7 +181,9 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
           );
 
       if (preview.exists) {
-        _showAlreadySaved();
+        _showAlreadySaved(
+          onUpdate: () => _updateCurrentPage(preview, controller),
+        );
         return;
       }
 
@@ -199,18 +203,35 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
     }
   }
 
-  void _showAlreadySaved() {
+  Future<void> _updateCurrentPage(
+    LinkPreview preview,
+    InAppWebViewController? controller,
+  ) async {
+    try {
+      final screenshot = controller == null ? null : await _takeScreenshot(controller);
+      final updated = await ref.read(captureServiceProvider).updateExisting(
+            preview,
+            screenshotBase64: screenshot,
+          );
+      if (!updated) {
+        _snack('没有找到可更新的收藏');
+        return;
+      }
+      _snack('已更新收藏信息');
+      ref.read(libraryProvider.notifier).refresh();
+    } catch (error) {
+      _snack('更新失败：${_message(error)}');
+    }
+  }
+
+  void _showAlreadySaved({VoidCallback? onUpdate}) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: const Text('该链接已在收藏库'),
-        action: SnackBarAction(
-          label: '查看',
-          onPressed: () {
-            Navigator.of(context).maybePop();
-            context.go('/library');
-          },
-        ),
+        action: onUpdate == null
+            ? null
+            : SnackBarAction(label: '更新', onPressed: onUpdate),
       ),
     );
   }

@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import '../api/errors.dart';
 import '../config/config_store.dart';
 import '../models/config.dart';
+import '../models/domain_stat.dart';
 import '../models/health.dart';
 import '../models/link.dart';
 import '../models/site.dart';
@@ -209,6 +210,32 @@ class DioApiClient implements ApiClient {
   @override
   Future<void> batchDeleteLinks(List<String> ids) async {
     _unwrap(await _request('POST', '/api/links/batch-delete', data: {'ids': ids}));
+  }
+
+  @override
+  Future<void> updateLink(
+    String id, {
+    String? title,
+    String? nearbyImage,
+    String? screenshot,
+  }) async {
+    final data = <String, dynamic>{'title': title};
+    if (nearbyImage != null && nearbyImage.isNotEmpty) {
+      data['nearby_image'] = nearbyImage;
+    }
+    if (screenshot != null && screenshot.isNotEmpty) {
+      data['screenshot'] = screenshot;
+    }
+    _unwrap(await _request('PATCH', '/api/links/$id', data: data));
+  }
+
+  @override
+  Future<List<DomainStat>> listDomains() async {
+    final body = _unwrap(await _request('GET', '/api/domains'));
+    final data = body['data'];
+    return data is List
+        ? data.whereType<Map<String, dynamic>>().map(DomainStat.fromJson).toList()
+        : <DomainStat>[];
   }
 
   @override

@@ -10,6 +10,7 @@ import {
   findLinkByNormalizedUrl,
   addLink,
   deleteLink,
+  updateLink,
   addToTrash,
   exportLinks,
   batchInsertLinks,
@@ -240,6 +241,48 @@ app.post('/batch-delete', apiRateLimit, async (c) => {
     success: true,
     data: { succeeded, failed },
   });
+});
+
+/**
+ * 更新链接的标题/图片（用于重新收藏时刷新元信息）
+ * PATCH /api/links/:id
+ */
+app.patch('/:id', apiRateLimit, async (c) => {
+  const id = sanitizeId(c.req.param('id'));
+  if (!id) {
+    return c.json<ApiResponse>({ success: false, error: 'Invalid ID' }, 400);
+  }
+
+  const link = getLinkById(id);
+  if (!link) {
+    return c.json<ApiResponse>({ success: false, error: 'Link not found' }, 404);
+  }
+
+  const body = await c.req.json<{
+    title?: string;
+    nearby_image?: string | null;
+    screenshot?: string | null;
+  }>();
+
+  const fields: {
+    title?: string;
+    nearby_image?: string | null;
+    screenshot?: string | null;
+  } = {};
+
+  if (typeof body.title === 'string') {
+    fields.title = body.title;
+  }
+  if (typeof body.nearby_image === 'string' && body.nearby_image.trim()) {
+    fields.nearby_image = await processImage(body.nearby_image, 'nearby');
+  }
+  if (typeof body.screenshot === 'string' && body.screenshot.trim()) {
+    fields.screenshot = await processImage(body.screenshot, 'screenshot');
+  }
+
+  updateLink(id, fields);
+
+  return c.json<ApiResponse>({ success: true });
 });
 
 /**
