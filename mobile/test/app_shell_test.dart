@@ -13,13 +13,13 @@ void main() {
     expect(find.text('收藏库占位'), findsOneWidget);
   });
 
-  testWidgets('点击浏览器切换到浏览器占位页', (tester) async {
+  testWidgets('点击站点切换到站点占位页', (tester) async {
     await tester.pumpWidget(const ProviderScope(child: ReadLaterApp()));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('浏览器').first);
+    await tester.tap(find.text('站点').first);
     await tester.pumpAndSettle();
 
-    expect(find.text('浏览器占位'), findsOneWidget);
+    expect(find.text('站点占位'), findsOneWidget);
   });
 }
