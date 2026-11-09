@@ -1,5 +1,8 @@
+import 'dart:collection';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -8,6 +11,7 @@ import '../../platform/system_ui.dart';
 import '../../platform/webview_settings.dart';
 import '../../providers.dart';
 import 'browser_state.dart';
+import 'inject_loader.dart';
 
 /// 长按链接回调数据。
 class LinkPressPayload {
@@ -22,7 +26,7 @@ class LinkPressPayload {
   });
 }
 
-/// 单个标签的 WebView。
+/// 单个标签的 WebView（注入长按检测与提取脚本）。
 class TabWebView extends ConsumerStatefulWidget {
   const TabWebView({
     super.key,
@@ -40,6 +44,20 @@ class TabWebView extends ConsumerStatefulWidget {
 }
 
 class _TabWebViewState extends ConsumerState<TabWebView> {
+  String? _injectJs;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadInjectScript();
+  }
+
+  Future<void> _loadInjectScript() async {
+    final source = await loadInjectJs(rootBundle);
+    if (!mounted) return;
+    setState(() => _injectJs = source);
+  }
+
   void _update({
     String? url,
     String? title,
@@ -59,12 +77,41 @@ class _TabWebViewState extends ConsumerState<TabWebView> {
 
   @override
   Widget build(BuildContext context) {
+    final injectJs = _injectJs;
+    if (injectJs == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
     final isAndroid = defaultTargetPlatform == TargetPlatform.android;
 
     return InAppWebView(
       initialUrlRequest: URLRequest(url: WebUri(widget.tab.url)),
       initialSettings: buildWebViewSettings(isAndroid: isAndroid),
+      initialUserScripts: UnmodifiableListView<UserScript>([
+        UserScript(
+          source: injectJs,
+          injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+          forMainFrameOnly: true,
+        ),
+      ]),
       onWebViewCreated: (controller) {
+        controller.addJavaScriptHandler(
+          handlerName: 'rl:longPress',
+          callback: (args) {
+            final map = args.isNotEmpty ? args.first : null;
+            if (map is Map) {
+              final url = map['url'];
+              if (url is String && url.isNotEmpty) {
+                widget.onLongPressLink?.call(LinkPressPayload(
+                  url: url,
+                  text: map['text'] as String?,
+                  sourcePage: map['sourcePage'] as String? ?? '',
+                ));
+              }
+            }
+            return null;
+          },
+        );
         widget.onCreated(controller);
       },
       onLoadStart: (controller, url) {
