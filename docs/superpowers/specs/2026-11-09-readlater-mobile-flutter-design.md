@@ -288,8 +288,8 @@ class BrowserTab {
 - 返回键优先级：`WebView.canGoBack()` → back；否则多标签时关闭当前标签；否则退出。
 - `PopScope` 实现拦截，避免 Android 直接杀 Activity。
 - 后台标签：切走后暂停其定时器与媒体播放，切回恢复（使用插件提供的 pause/resume 能力或 WebView 生命周期接口，具体 API 在 M0 确认）。
-- 外链处理：`intent://`、`mailto:`、`tel:`、非 http(s) scheme 交给 `url_launcher`；同一 scheme 的 http(s) 在当前标签内导航。
-- `target=_blank` / `window.open`：`supportMultipleWindows: true` + `onCreateWindow` 回调创建新标签，不交给系统。
+- 外链处理：非 http(s) scheme（`taobao://`、`intent://`、`mailto:`、`tel:` 等）**默认不自动启动外部应用**。用户手势触发时先弹确认框（显示 scheme 与 URL），确认后由 Android 原生 `Intent` 启动（支持 `intent://` 解析）；页面脚本/重定向无手势触发时直接拦截并提示（3 秒节流），避免网页自动拉起 app。
+- `target=_blank` / `window.open`：`supportMultipleWindows: true` + `onCreateWindow` 回调创建新标签，不交给系统；若目标是非 http(s) scheme，同样走 6.2 的确认/拦截逻辑，不创建标签。
 - 工具栏另有"收藏当前页"按钮：直接用当前页标题 + 截图保存（不取附近图片），行为对齐扩展 popup 的"收好当前页面"。
 
 ### 6.3 视频全屏

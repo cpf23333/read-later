@@ -7,13 +7,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:url_launcher/url_launcher.dart';
 
+import '../../platform/external_app_launcher.dart';
 import '../../platform/system_ui.dart';
 import '../../platform/webview_settings.dart';
 import '../../providers.dart';
 import 'browser_notifier.dart';
 import 'browser_state.dart';
+import 'external_navigation.dart';
 import 'inject_loader.dart';
 
 /// 长按链接回调数据（页面内提取结果通过 Future 并行返回）。
@@ -54,6 +55,7 @@ class _TabWebViewState extends ConsumerState<TabWebView> {
   String? _injectJs;
   InAppWebViewController? _controller;
   Completer<Map<String, dynamic>>? _extractCompleter;
+  DateTime? _lastExternalBlockedAt;
 
   @override
   void initState() {
@@ -89,6 +91,25 @@ class _TabWebViewState extends ConsumerState<TabWebView> {
     } catch (_) {
       // 页面已销毁等情况忽略。
     }
+  }
+
+  /// 自动跳转拉起应用时提示拦截（3 秒内只提示一次，避免循环重定向刷屏）。
+  void _notifyExternalBlocked() {
+    final now = DateTime.now();
+    final last = _lastExternalBlockedAt;
+    if (last != null && now.difference(last) < const Duration(seconds: 3)) return;
+    _lastExternalBlockedAt = now;
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('已拦截网页自动打开外部应用')),
+    );
+  }
+
+  void _showLaunchFailed() {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('未找到可打开的应用')),
+    );
   }
 
   void _update({
@@ -229,6 +250,23 @@ class _TabWebViewState extends ConsumerState<TabWebView> {
       },
       onCreateWindow: (controller, action) async {
         final url = action.request.url?.toString() ?? '';
+        final uri = Uri.tryParse(url);
+        if (isExternalScheme(uri?.scheme)) {
+          // target=_blank / window.open 指向外部 scheme：同样需要用户确认。
+          if (!mounted) return false;
+          final confirmed = await confirmExternalLaunch(
+            context,
+            url: url,
+            scheme: uri!.scheme,
+          );
+          if (confirmed && mounted) {
+            final launched = await launchExternalUrl(url);
+            if (!launched && mounted) {
+              _showLaunchFailed();
+            }
+          }
+          return false;
+        }
         ref.read(browserProvider.notifier).openTab(
               url.isEmpty ? BrowserNotifier.blankUrl : url,
               windowId: action.windowId,
@@ -238,12 +276,33 @@ class _TabWebViewState extends ConsumerState<TabWebView> {
       shouldOverrideUrlLoading: (controller, navigationAction) async {
         final url = navigationAction.request.url?.toString() ?? '';
         final scheme = Uri.tryParse(url)?.scheme;
-        const internalSchemes = {'http', 'https', 'about', 'data', 'blob', 'javascript'};
-        if (scheme != null && !internalSchemes.contains(scheme)) {
-          await launchUrl(Uri.parse(url));
+        final kind = classifyNavigation(
+          scheme: scheme,
+          hasGesture: navigationAction.hasGesture ?? false,
+        );
+
+        if (kind == ExternalNavigationKind.internal) {
+          return NavigationActionPolicy.ALLOW;
+        }
+        if (kind == ExternalNavigationKind.externalAutomatic) {
+          // 页面脚本/重定向自动拉起应用：直接拦截，不弹窗。
+          _notifyExternalBlocked();
           return NavigationActionPolicy.CANCEL;
         }
-        return NavigationActionPolicy.ALLOW;
+
+        if (!mounted) return NavigationActionPolicy.CANCEL;
+        final confirmed = await confirmExternalLaunch(
+          context,
+          url: url,
+          scheme: scheme!,
+        );
+        if (!confirmed) return NavigationActionPolicy.CANCEL;
+
+        final launched = await launchExternalUrl(url);
+        if (!launched && mounted) {
+          _showLaunchFailed();
+        }
+        return NavigationActionPolicy.CANCEL;
       },
       onDownloadStartRequest: (controller, request) {
         if (!mounted) return;
