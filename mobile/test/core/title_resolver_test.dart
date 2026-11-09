@@ -24,6 +24,10 @@ void main() {
       parseIconUrl('<link rel="shortcut icon" href="f.ico">', Uri.parse('https://a.com/x/')),
       'https://a.com/x/f.ico',
     );
+    expect(
+      parseIconUrl('<link rel="icon" href="data:,">', Uri.parse('https://a.com/x')),
+      isNull,
+    );
   });
 
   test('TitleResolver 解析页面标题与图标', () async {

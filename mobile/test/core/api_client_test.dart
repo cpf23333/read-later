@@ -20,15 +20,23 @@ ApiClient buildClient(FakeHttpAdapter adapter, {ConfigStore? configStore}) {
 }
 
 void main() {
-  test('listLinks 解析 data 与 total，并带 Bearer 头', () async {
+  test('listLinks 解析嵌套 data.data 与 total，并带 Bearer 头', () async {
     final adapter = FakeHttpAdapter({
       'GET http://s/api/links?page=1&pageSize=50&sortBy=created_at&sortOrder=desc': (options) =>
           jsonResponse(200, {
             'success': true,
-            'data': [
-              {'id': '1', 'url': 'https://a.com', 'title': 'A', 'created_at': 1}
-            ],
-            'total': 1,
+            'data': {
+              'data': [
+                {
+                  'id': '1',
+                  'url': 'https://a.com',
+                  'title': 'A',
+                  'nearby_image': '/images/x.jpg',
+                  'created_at': 1,
+                }
+              ],
+              'total': 1,
+            },
           }),
     });
     final client = buildClient(adapter);
@@ -37,6 +45,7 @@ void main() {
 
     expect(page.total, 1);
     expect(page.links.single.title, 'A');
+    expect(page.links.single.nearbyImage, 'http://s/images/x.jpg');
     expect(adapter.requests.single.headers['Authorization'], 'Bearer k');
   });
 

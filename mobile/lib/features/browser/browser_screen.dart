@@ -1,11 +1,11 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/errors.dart';
+import '../../core/logging/app_logger.dart';
+import '../../core/util/image_data.dart';
 import '../../providers.dart';
 import 'browser_notifier.dart';
 import 'browser_toolbar.dart';
@@ -89,8 +89,14 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
         nearbyText: payload.nearbyText,
         nearbyImage: payload.nearbyImage,
         takeScreenshot: () async {
-          final bytes = await controller.takeScreenshot();
-          return bytes == null ? null : base64Encode(bytes);
+          final bytes = await controller.takeScreenshot(
+            screenshotConfiguration: ScreenshotConfiguration(
+              compressFormat: CompressFormat.JPEG,
+              quality: 80,
+            ),
+          );
+          AppLogger.d('takeScreenshot bytes=${bytes?.length}');
+          return bytes == null ? null : imageDataUrl(bytes);
         },
         onOpenInNewTab: (url) => ref.read(browserProvider.notifier).openTab(url),
       ),
@@ -98,6 +104,7 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
 
     if (saved == true) {
       _snack('已收藏');
+      ref.read(libraryProvider.notifier).refresh();
     }
   }
 
@@ -118,12 +125,18 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
 
       String? screenshot;
       if (controller != null) {
-        final bytes = await controller.takeScreenshot();
-        screenshot = bytes == null ? null : base64Encode(bytes);
+        final bytes = await controller.takeScreenshot(
+          screenshotConfiguration: ScreenshotConfiguration(
+            compressFormat: CompressFormat.JPEG,
+            quality: 80,
+          ),
+        );
+        screenshot = bytes == null ? null : imageDataUrl(bytes);
       }
 
       await ref.read(captureServiceProvider).save(preview, screenshotBase64: screenshot);
       _snack(preview.exists ? '已收藏（服务器已有该链接）' : '已收藏当前页');
+      ref.read(libraryProvider.notifier).refresh();
     } catch (error) {
       _snack('收藏失败：${_message(error)}');
     }
@@ -141,6 +154,7 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
       final draft = await service.prepare(active.url);
       await service.save(draft);
       _snack(draft.exists ? '已收藏该站点' : '已收藏主站');
+      ref.read(sitesProvider.notifier).refresh();
     } catch (error) {
       _snack('收藏主站失败：${_message(error)}');
     }

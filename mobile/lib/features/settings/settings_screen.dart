@@ -80,6 +80,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         _status = '连接成功';
       });
       _snack('已保存，连接成功');
+      // 配置变更后刷新依赖服务器的页面。
+      ref.read(libraryProvider.notifier).refresh();
+      ref.read(sitesProvider.notifier).refresh();
     } catch (error) {
       if (!mounted) return;
       setState(() {

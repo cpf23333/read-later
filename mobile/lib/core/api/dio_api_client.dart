@@ -137,11 +137,24 @@ class DioApiClient implements ApiClient {
       if (search != null && search.isNotEmpty) 'search': search,
       if (domain != null && domain.isNotEmpty) 'domain': domain,
     }));
-    final data = body['data'];
-    final links = data is List
-        ? data.whereType<Map<String, dynamic>>().map(LinkItem.fromJson).toList()
-        : <LinkItem>[];
-    final total = (body['total'] as num?)?.toInt() ?? links.length;
+    final payload = body['data'];
+    final List<dynamic> rawLinks;
+    final int total;
+    if (payload is List) {
+      rawLinks = payload;
+      total = (body['total'] as num?)?.toInt() ?? payload.length;
+    } else if (payload is Map) {
+      rawLinks = (payload['data'] as List?) ?? const [];
+      total = (payload['total'] as num?)?.toInt() ?? rawLinks.length;
+    } else {
+      rawLinks = const [];
+      total = 0;
+    }
+
+    final links = rawLinks
+        .whereType<Map<String, dynamic>>()
+        .map(LinkItem.fromJson)
+        .toList();
     final baseUrl = (await _configStore.read()).baseUrl;
     return PagedLinks(
       links: links.map((link) => _resolveLinkImages(link, baseUrl)).toList(),

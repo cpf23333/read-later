@@ -23,5 +23,8 @@ String? parseIconUrl(String html, Uri pageUrl) {
   final href = link?.attributes['href']?.trim();
   if (href == null || href.isEmpty) return null;
 
-  return pageUrl.resolve(href).toString();
+  final resolved = pageUrl.resolve(href);
+  // 只接受 http(s) 图标（部分站点用 data:, 占位，无法作为图标展示）。
+  if (resolved.scheme != 'http' && resolved.scheme != 'https') return null;
+  return resolved.toString();
 }

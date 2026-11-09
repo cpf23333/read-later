@@ -1,4 +1,5 @@
 import '../../core/api/api_client.dart';
+import '../../core/logging/app_logger.dart';
 import '../../core/models/link.dart';
 import '../../core/web/title_resolver.dart';
 
@@ -59,6 +60,9 @@ class CaptureService {
   }
 
   Future<void> save(LinkPreview preview, {String? screenshotBase64}) async {
+    AppLogger.d(
+      'save link: nearbyImage=${preview.nearbyImage?.length} screenshot=${screenshotBase64?.length}',
+    );
     await _api.addLink(AddLinkRequest(
       url: preview.url,
       title: preview.title,
