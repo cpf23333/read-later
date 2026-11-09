@@ -115,7 +115,7 @@ openssl rand -base64 32
 | ------ | -------------------------- | -------------------------------------- |
 | GET    | /api/health                | 健康检查（无需鉴权）                   |
 | GET    | /api/links                 | 获取链接列表                           |
-| POST   | /api/links                 | 添加链接（支持 base64/URL/路径）       |
+| POST   | /api/links                 | 添加链接（重复时更新标题/图片并刷新收藏时间） |
 | DELETE | /api/links/:id             | 删除链接（移入回收站）                 |
 | PATCH  | /api/links/:id             | 更新标题/图片（重新收藏时刷新）        |
 | POST   | /api/links/batch           | 批量添加                               |

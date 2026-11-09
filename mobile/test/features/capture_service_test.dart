@@ -62,7 +62,7 @@ void main() {
     expect(request.customData?['kind'], 'link');
   });
 
-  test('save 在已收藏时返回 false 且不写库', () async {
+  test('save 始终提交到新增接口（服务端负责去重/更新）', () async {
     final api = FakeApiClient();
     final service = CaptureService(api, FakePageMetaResolver());
 
@@ -71,12 +71,11 @@ void main() {
         url: 'https://a.com',
         title: 'A',
         sourcePage: 'https://b.com',
-        exists: true,
       ),
     );
 
-    expect(saved, isFalse);
-    expect(api.addedLinks, isEmpty);
+    expect(saved, isTrue);
+    expect(api.addedLinks.length, 1);
   });
 
   test('applyMediaCaps 超 8MB 时先丢截图', () {
@@ -101,7 +100,7 @@ void main() {
     expect(caps.droppedImage, isTrue);
   });
 
-  test('prepare 回传已收藏状态与已有标题', () async {
+  test('prepare 不再预先查询 exists', () async {
     final api = FakeApiClient(
       linkExistsResult: const ExistsResult(
         exists: true,
@@ -112,8 +111,9 @@ void main() {
 
     final preview = await service.prepare(url: 'https://a.com', sourcePage: 'https://b.com');
 
-    expect(preview.exists, isTrue);
-    expect(preview.existingTitle, '旧标题');
+    expect(api.linkExistsCalls, 0);
+    expect(preview.exists, isFalse);
+    expect(preview.existingTitle, isNull);
   });
 
   test('SiteService.prepare 计算 origin、标题、favicon 与 inTrash', () async {

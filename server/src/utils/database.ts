@@ -258,6 +258,7 @@ export function updateLink(
     title?: string;
     nearby_image?: string | null;
     screenshot?: string | null;
+    created_at?: number;
   }
 ): void {
   const database = getDatabase();
@@ -275,6 +276,10 @@ export function updateLink(
   if (fields.screenshot !== undefined) {
     sets.push('screenshot = ?');
     params.push(fields.screenshot);
+  }
+  if (fields.created_at !== undefined) {
+    sets.push('created_at = ?');
+    params.push(fields.created_at);
   }
   if (sets.length === 0) return;
 

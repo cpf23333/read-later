@@ -105,51 +105,6 @@ class _LongPressSheetState extends ConsumerState<LongPressSheet> {
     }
   }
 
-  Future<void> _updateLink() async {
-    final preview = _preview;
-    if (preview == null || _saving) return;
-
-    setState(() => _saving = true);
-    String? screenshot;
-    try {
-      screenshot = await widget.takeScreenshot();
-    } catch (_) {
-      screenshot = null;
-    }
-
-    final caps = applyMediaCaps(
-      nearbyImage: preview.nearbyImage,
-      screenshot: screenshot,
-    );
-
-    try {
-      final updated = await ref.read(captureServiceProvider).updateExisting(
-            preview.copyWith(nearbyImage: caps.nearbyImage),
-            screenshotBase64: caps.screenshot,
-          );
-      if (!mounted) return;
-      setState(() => _saving = false);
-      if (!updated) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('没有找到可更新的收藏')),
-        );
-        return;
-      }
-      Navigator.of(context).maybePop(const LongPressResult(
-        saved: true,
-        kind: 'update',
-        droppedImage: false,
-        droppedScreenshot: false,
-      ));
-    } catch (error) {
-      if (!mounted) return;
-      setState(() => _saving = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('更新失败：${_message(error)}')),
-      );
-    }
-  }
-
   Future<void> _saveLink() async {
     final preview = _preview;
     if (preview == null || _saving) return;
@@ -169,27 +124,12 @@ class _LongPressSheetState extends ConsumerState<LongPressSheet> {
     );
 
     try {
-      final saved = await ref.read(captureServiceProvider).save(
+      await ref.read(captureServiceProvider).save(
             preview.copyWith(nearbyImage: caps.nearbyImage),
             screenshotBase64: caps.screenshot,
           );
       if (!mounted) return;
       setState(() => _saving = false);
-      if (!saved) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('该链接已在收藏库'),
-            action: SnackBarAction(
-              label: '查看',
-              onPressed: () {
-                Navigator.of(context).maybePop();
-                context.go('/library');
-              },
-            ),
-          ),
-        );
-        return;
-      }
       Navigator.of(context).maybePop(LongPressResult(
         saved: true,
         kind: 'link',
@@ -267,11 +207,16 @@ class _LongPressSheetState extends ConsumerState<LongPressSheet> {
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.bodySmall,
                       ),
-                      if (preview?.exists == true) ...[
+                      if (preview?.existingTitle != null &&
+                          preview!.existingTitle!.isNotEmpty) ...[
                         const SizedBox(height: 4),
-                        Text('已收藏', style: TextStyle(color: theme.colorScheme.primary)),
-                      ],
-                    ],
+                        Text(
+                          '已有收藏：${preview.existingTitle}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall,
+                        ),
+                      ],                    ],
                   ),
                 ),
               ],
@@ -305,14 +250,9 @@ class _LongPressSheetState extends ConsumerState<LongPressSheet> {
               ),
             ListTile(
               enabled: !_saving && !_loading && preview != null,
-              leading: Icon(preview?.exists == true
-                  ? Icons.refresh
-                  : Icons.bookmark_add_outlined),
-              title: Text(preview?.exists == true ? '更新收藏信息' : '收藏到稍后再看'),
-              subtitle: preview?.exists == true
-                  ? const Text('已收藏，重新抓取标题与截图')
-                  : null,
-              onTap: preview?.exists == true ? _updateLink : _saveLink,
+              leading: const Icon(Icons.bookmark_add_outlined),
+              title: const Text('收藏到稍后再看'),
+              onTap: _saveLink,
             ),
             ListTile(
               enabled: !_saving && !_loading,

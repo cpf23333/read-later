@@ -52,12 +52,16 @@ class InMemorySessionStore implements SessionStore {
 
 /// 固定元信息的解析器（测试用）。
 class FakePageMetaResolver implements PageMetaResolver {
-  FakePageMetaResolver({this.meta = const PageMeta()});
+  FakePageMetaResolver({this.meta = const PageMeta(), this.error});
 
   PageMeta meta;
+  Object? error;
 
   @override
-  Future<PageMeta> resolve(String url) async => meta;
+  Future<PageMeta> resolve(String url) async {
+    if (error != null) throw error!;
+    return meta;
+  }
 }
 
 /// 可注入异常的假 API 客户端（测试用）。
@@ -95,6 +99,7 @@ class FakeApiClient implements ApiClient {
   int listLinksCalls = 0;
   final List<int> listLinksPages = [];
   final List<String?> listLinksDomains = [];
+  int linkExistsCalls = 0;
 
   @override
   Future<HealthStatus> health() async {
@@ -105,6 +110,7 @@ class FakeApiClient implements ApiClient {
   @override
   Future<ExistsResult> linkExists(String url) async {
     _throwIfError();
+    linkExistsCalls++;
     return linkExistsResult;
   }
 

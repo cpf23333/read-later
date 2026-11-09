@@ -41,7 +41,7 @@ void main() {
     expect((tiles[1].title as Text).data, '收藏主站 a.com');
   });
 
-  testWidgets('已收藏时提供更新入口，点击调用 updateLink', (tester) async {
+  testWidgets('已收藏也始终显示收藏，点击调用 addLink', (tester) async {
     final api = FakeApiClient(
       linkExistsResult: const ExistsResult(
         exists: true,
@@ -51,16 +51,14 @@ void main() {
     await tester.pumpWidget(wrapSheet(api));
     await tester.pumpAndSettle();
 
-    expect(find.text('已收藏'), findsOneWidget);
-    expect(find.text('更新收藏信息'), findsOneWidget);
-    final first = tester.widget<ListTile>(find.byType(ListTile).first);
-    expect(first.enabled, isTrue);
+    expect(find.text('收藏到稍后再看'), findsOneWidget);
+    expect(find.text('更新收藏信息'), findsNothing);
+    expect(api.linkExistsCalls, 0);
 
-    await tester.tap(find.text('更新收藏信息'));
+    await tester.tap(find.text('收藏到稍后再看'));
     await tester.pumpAndSettle();
 
-    expect(api.updatedLinks.length, 1);
-    expect(api.updatedLinks.first['id'], '1');
+    expect(api.addedLinks.length, 1);
   });
 
   testWidgets('点击收藏会调用 Save（发送 addLink）', (tester) async {
@@ -75,13 +73,13 @@ void main() {
   });
 
   testWidgets('加载失败时显示重试，重试后恢复', (tester) async {
-    final api = FakeApiClient(error: const NetworkException());
-    await tester.pumpWidget(wrapSheet(api));
+    final resolver = FakePageMetaResolver(error: const NetworkException());
+    await tester.pumpWidget(wrapSheet(FakeApiClient(), resolver: resolver));
     await tester.pumpAndSettle();
 
     expect(find.textContaining('加载失败'), findsOneWidget);
 
-    api.error = null;
+    resolver.error = null;
     await tester.tap(find.text('重试'));
     await tester.pumpAndSettle();
 
@@ -89,8 +87,8 @@ void main() {
   });
 
   testWidgets('服务器未配置时显示去设置入口', (tester) async {
-    final api = FakeApiClient(error: const NotConfiguredException());
-    await tester.pumpWidget(wrapSheet(api));
+    final resolver = FakePageMetaResolver(error: const NotConfiguredException());
+    await tester.pumpWidget(wrapSheet(FakeApiClient(), resolver: resolver));
     await tester.pumpAndSettle();
 
     expect(find.text('服务器未配置，去设置'), findsOneWidget);

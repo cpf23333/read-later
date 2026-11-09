@@ -18,7 +18,7 @@ class LinkPreview {
     required this.title,
     this.nearbyImage,
     required this.sourcePage,
-    required this.exists,
+    this.exists = false,
     this.existingTitle,
     this.existingId,
   });
@@ -101,11 +101,7 @@ class CaptureService {
     String? nearbyImage,
     required String sourcePage,
   }) async {
-    final existsFuture = _api.linkExists(url);
-    final metaFuture = _resolver.resolve(url);
-
-    final exists = await existsFuture;
-    final meta = await metaFuture;
+    final meta = await _resolver.resolve(url);
 
     final title = _firstNonEmpty([
       meta.title,
@@ -119,16 +115,12 @@ class CaptureService {
       title: title,
       nearbyImage: nearbyImage,
       sourcePage: sourcePage,
-      exists: exists.exists,
-      existingTitle: exists.link?.title,
-      existingId: exists.link?.id,
+      exists: false,
     );
   }
 
-  /// 返回是否真的写入了服务器（已收藏时不写入）。
+  /// 提交收藏；服务端在新增接口内做重复检查，重复时更新标题/图片/收藏时间。
   Future<bool> save(LinkPreview preview, {String? screenshotBase64}) async {
-    if (preview.exists) return false;
-
     AppLogger.d(
       'save link: nearbyImage=${preview.nearbyImage?.length} screenshot=${screenshotBase64?.length}',
     );

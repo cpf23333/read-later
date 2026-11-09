@@ -108,8 +108,25 @@ app.post('/', apiRateLimit, async (c) => {
 
   const now = Date.now();
 
+  // 同一个标准化 URL 已存在时不再插入，更新标题/图片并把收藏时间刷新为当前时间。
+  const existing = findLinkByNormalizedUrl(url);
+  if (existing) {
+    updateLink(existing.id, {
+      title: title || existing.title,
+      ...(nearbyImagePath ? { nearby_image: nearbyImagePath } : {}),
+      ...(screenshotPath ? { screenshot: screenshotPath } : {}),
+      created_at: now,
+    });
+    return c.json<ApiResponse<{ updated: boolean; id: string }>>({
+      success: true,
+      data: { updated: true, id: existing.id },
+    });
+  }
+
+  const linkId = id || `${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+
   addLink({
-    id: id || `${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+    id: linkId,
     url,
     title: title || '',
     nearby_image: nearbyImagePath,
@@ -119,7 +136,10 @@ app.post('/', apiRateLimit, async (c) => {
     custom_data: JSON.stringify(custom_data || {}),
   });
 
-  return c.json<ApiResponse>({ success: true });
+  return c.json<ApiResponse<{ updated: boolean; id: string }>>({
+    success: true,
+    data: { updated: false, id: linkId },
+  });
 });
 
 /**

@@ -150,7 +150,7 @@ mobile/
 | 健康检查 | `GET /api/health` |
 | 列表 | `GET /api/links?page&pageSize&sortBy&sortOrder&search&domain` |
 | 新增 | `POST /api/links` |
-| 去重检查 | `GET /api/links/exists?url=` → `{ exists, link? }` |
+| 重复保存 | `POST /api/links` 内按 `normalized_url` 查重；命中则更新标题/图片并把 `created_at` 刷新为当前时间，不新增记录 |
 | 删除（进回收站） | `DELETE /api/links/:id` |
 | 回收站 | `GET /api/trash`（返回全部，无分页参数，客户端本地分页） |
 | 还原 | `POST /api/trash/:id/restore` |
@@ -203,7 +203,7 @@ abstract class ApiClient {
 
 - 超时：普通请求 10s，`addLink` 30s（图片 base64 较大）。
 - 错误分类：`NotConfigured`、`NetworkError`、`AuthError(401)`、`Validation(400)`、`ServerError(5xx)`，统一映射为可展示文案。
-- 不自动重试 `addLink`；服务端 `POST /api/links` **不做去重**，客户端保存前必须调用 `GET /api/links/exists` 判断（与扩展 popup 行为一致）。已收藏时通过 `PATCH /api/links/:id`（标题/图片/截图）刷新元信息，不新增记录。
+- 不自动重试 `addLink`；客户端**不在长按时预检** `exists`，点击收藏后直接把元信息提交给 `POST /api/links`，由服务端按标准化 URL 查重：重复则更新标题/图片并把 `created_at` 刷新为当前时间，不新增记录。`GET /api/links/exists` 仍保留给扩展/导入脚本使用，`PATCH /api/links/:id` 保留为手动更新能力。
 - 401 统一行为：提示"API Key 无效"，并提供跳转设置页入口。
 
 ### 5.3 配置模型
@@ -370,13 +370,12 @@ window.__rlExtract = async (url) => JSON.stringify({
   → Flutter：立即弹 LongPressSheet（加载态）
   → 并行：
       a) Dart evaluateJavascript(window.__rlExtract) → 标题文本/附近图片(base64)
-      b) ApiClient.exists(url) → 是否已收藏
-      c) TitleResolver：HTTP 拉目标页解析 <title>/og:title（5s 超时，失败回退）
-  → Sheet 展示：链接、标题、缩略图、"已收藏"标记
+      b) TitleResolver：HTTP 拉目标页解析 <title>/og:title（5s 超时，失败回退）
+  → Sheet 展示：链接、标题、缩略图
   → 用户点"收藏到稍后再看"（第一项，主按钮）
       → controller.takeScreenshot() 取当前可见区域（JPEG 80）
-      → POST /api/links（字段名见 5.1，snake_case）
-      → 成功：SnackBar + "查看"；失败：可重试
+      → POST /api/links（字段名见 5.1，snake_case；服务端按 URL 查重/更新）
+      → 成功：SnackBar 已收藏；失败：可重试
 ```
 
 ### 7.2 菜单结构（顺序即产品要求）
@@ -384,7 +383,7 @@ window.__rlExtract = async (url) => JSON.stringify({
 ```
 ┌─────────────────────────────────┐
 │ ● 链接标题（最多两行）             │
-│   example.com/a  ·  已收藏/未收藏  │
+│   example.com/a                 │
 │ ─────────────────────────────── │
 │ ★ 收藏到稍后再看        [主按钮]   │  ← 第一项
 │ ☆ 收藏主站 example.com            │  ← 第二项
@@ -395,7 +394,7 @@ window.__rlExtract = async (url) => JSON.stringify({
 └─────────────────────────────────┘
 ```
 
-- "收藏"必须在视觉与交互上都排最前；已收藏时默认禁用收藏按钮并提供"查看"入口（交互是否允许再次保存见 15.3）。
+- "收藏"必须在视觉与交互上都排最前；不预先判断是否已收藏，始终可点击（重复保存由服务端 upsert 处理）。
 - 菜单项点击后关闭 sheet 再执行，避免平台视图与弹层竞争。
 
 ### 7.3 标题与图片规则
@@ -413,8 +412,8 @@ window.__rlExtract = async (url) => JSON.stringify({
 
 ### 7.4 重复收藏
 
-- Sheet 打开时查 `/api/links/exists`，命中则显示"已收藏"。
-- v1 默认禁用收藏按钮（见 15.3）；若确认允许再次保存，则走同一 `POST /api/links`，按服务端结果提示，不在客户端拦截。
+- Sheet 打开时不查 `exists`，始终显示"收藏到稍后再看"。
+- 点击后走 `POST /api/links`，服务端负责重复检查与更新，客户端按结果提示。
 
 ### 7.5 失败与离线
 
@@ -424,7 +423,7 @@ window.__rlExtract = async (url) => JSON.stringify({
 ### 7.6 收藏当前页
 
 - 工具栏"收藏当前页"复用同一保存链路：`title` 取 WebView 当前标题，`screenshot` 取当前可见区域，`nearby_image` 为空，`source_page` 为当前 URL。
-- 同样先查 `exists`；已收藏时提示并给"查看"入口。
+- 同样不做 `exists` 预检，直接提交；重复时服务端更新标题/图片/收藏时间。
 
 ## 8. 链接库与设置
 
@@ -551,7 +550,7 @@ window.__rlExtract = async (url) => JSON.stringify({
 
 1. 包名 `com.cpf23333.readlater`。
 2. 批量删除/批量还原进 v1；导入/导出后置。
-3. 已收藏时禁用收藏按钮 + 提供"查看"入口。
+3. 重复保存由服务端 upsert（更新标题/图片、刷新收藏时间），客户端不做 exists 预检。
 4. 服务器地址同时支持 `http://` 与 `https://`；内网 http 走明文配置并在设置页提示。
 5. 地址栏搜索默认 Bing（设置页可改）。
 6. 站点删除进回收站：`sites.deleted_at` 软删除，回收站页"站点"tab 还原/永久删除；重新收藏回收站中的站点会自动恢复。
