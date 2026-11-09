@@ -12,6 +12,7 @@ import 'features/browser/browser_state.dart';
 import 'features/browser/capture_service.dart';
 import 'features/browser/site_service.dart';
 import 'features/browser/tab_registry.dart';
+import 'features/library/library_notifier.dart';
 
 /// 服务器配置存储。
 final configStoreProvider = Provider<ConfigStore>(
@@ -55,4 +56,9 @@ final siteServiceProvider = Provider<SiteService>(
     ref.watch(apiClientProvider),
     ref.watch(titleResolverProvider),
   ),
+);
+
+/// 收藏库列表状态。
+final libraryProvider = NotifierProvider<LibraryNotifier, LibraryState>(
+  LibraryNotifier.new,
 );

@@ -142,7 +142,47 @@ class DioApiClient implements ApiClient {
         ? data.whereType<Map<String, dynamic>>().map(LinkItem.fromJson).toList()
         : <LinkItem>[];
     final total = (body['total'] as num?)?.toInt() ?? links.length;
-    return PagedLinks(links: links, total: total);
+    final baseUrl = (await _configStore.read()).baseUrl;
+    return PagedLinks(
+      links: links.map((link) => _resolveLinkImages(link, baseUrl)).toList(),
+      total: total,
+    );
+  }
+
+  String? _resolvePath(String? path, String baseUrl) {
+    if (path == null || path.isEmpty) return null;
+    if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('data:')) {
+      return path;
+    }
+    if (path.startsWith('/')) return '$baseUrl$path';
+    return path;
+  }
+
+  LinkItem _resolveLinkImages(LinkItem link, String baseUrl) {
+    return LinkItem(
+      id: link.id,
+      url: link.url,
+      title: link.title,
+      nearbyImage: _resolvePath(link.nearbyImage, baseUrl),
+      screenshot: _resolvePath(link.screenshot, baseUrl),
+      sourcePage: link.sourcePage,
+      createdAt: link.createdAt,
+      customData: link.customData,
+    );
+  }
+
+  TrashItem _resolveTrashImages(TrashItem item, String baseUrl) {
+    return TrashItem(
+      id: item.id,
+      linkId: item.linkId,
+      url: item.url,
+      title: item.title,
+      nearbyImage: _resolvePath(item.nearbyImage, baseUrl),
+      screenshot: _resolvePath(item.screenshot, baseUrl),
+      sourcePage: item.sourcePage,
+      createdAt: item.createdAt,
+      deletedAt: item.deletedAt,
+    );
   }
 
   @override
@@ -154,9 +194,11 @@ class DioApiClient implements ApiClient {
   Future<List<TrashItem>> listTrash() async {
     final body = _unwrap(await _request('GET', '/api/trash'));
     final data = body['data'];
-    return data is List
+    final items = data is List
         ? data.whereType<Map<String, dynamic>>().map(TrashItem.fromJson).toList()
         : <TrashItem>[];
+    final baseUrl = (await _configStore.read()).baseUrl;
+    return items.map((item) => _resolveTrashImages(item, baseUrl)).toList();
   }
 
   @override

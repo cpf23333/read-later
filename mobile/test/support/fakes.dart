@@ -85,6 +85,8 @@ class FakeApiClient implements ApiClient {
   final List<String> deletedSiteIds = [];
   final List<AddLinkRequest> addedLinks = [];
   final List<SiteInput> addedSites = [];
+  int listLinksCalls = 0;
+  final List<int> listLinksPages = [];
 
   @override
   Future<HealthStatus> health() async {
@@ -114,6 +116,8 @@ class FakeApiClient implements ApiClient {
     String sortOrder = 'desc',
   }) async {
     _throwIfError();
+    listLinksCalls++;
+    listLinksPages.add(page);
     return PagedLinks(links: links, total: total ?? links.length);
   }
 
