@@ -128,6 +128,13 @@ openssl rand -base64 32
 | POST   | /api/trash/batch-restore   | 批量还原回收站项目                     |
 | POST   | /api/trash/batch-delete    | 批量永久删除回收站项目                 |
 | GET    | /api/stats                 | 获取统计                               |
+| GET    | /api/sites                 | 站点列表（不含回收站）                 |
+| POST   | /api/sites                 | 新增站点（origin 去重，回收站中则恢复） |
+| DELETE | /api/sites/:id             | 删除站点（软删除进回收站）             |
+| GET    | /api/sites/trash           | 回收站站点                             |
+| POST   | /api/sites/:id/restore     | 还原站点                               |
+| DELETE | /api/sites/trash/:id       | 永久删除站点                           |
+| GET    | /api/sites/exists          | 检查站点是否存在（含 inTrash）         |
 | POST   | /api/upload                | 上传图片（保留兼容）                   |
 
 ## 关键代码位置

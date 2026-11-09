@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/lang/zh-CN/
 
 ## [Unreleased]
 
+### Server
+
+#### Added
+
+- 站点收藏：新增 `sites` 表与 `/api/sites` 路由组（列表、新增、软删除、回收站、还原、永久删除、存在性检查）。
+- 站点重复收藏：活跃站点幂等返回；回收站中的站点自动恢复并更新标题/图标。
+
 ## [0.9.0] - 2026-08-11
 
 ### Extension
