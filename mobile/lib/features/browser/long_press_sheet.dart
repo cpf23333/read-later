@@ -291,7 +291,7 @@ class _LongPressSheetState extends ConsumerState<LongPressSheet> {
               leading: const Icon(Icons.share_outlined),
               title: const Text('分享'),
               onTap: () async {
-                await Share.share(widget.url);
+                await SharePlus.instance.share(ShareParams(text: widget.url));
                 if (context.mounted) Navigator.of(context).maybePop();
               },
             ),
