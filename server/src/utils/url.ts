@@ -36,3 +36,19 @@ export function normalizeUrl(url: string): string {
     return url.toLowerCase().trim();
   }
 }
+
+/**
+ * 归一化为站点 origin（scheme://host[:port]）
+ * 非 http(s) 或非法 URL 返回 null
+ */
+export function normalizeOrigin(url: string): string | null {
+  try {
+    const urlObj = new URL(url);
+    if (urlObj.protocol !== 'http:' && urlObj.protocol !== 'https:') {
+      return null;
+    }
+    return urlObj.origin;
+  } catch {
+    return null;
+  }
+}

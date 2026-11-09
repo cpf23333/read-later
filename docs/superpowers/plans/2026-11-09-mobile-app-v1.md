@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 交付一个 Android 平板 app：内置浏览器（多标签、网页视频全屏、长按链接弹菜单且"收藏到稍后再看"置顶）、收藏库、站点页（含回收站）、设置；数据全部走现有自建服务器。
+**Goal:** 交付一个 Android app（个人自用；作者主要用平板）：内置浏览器（多标签、网页视频全屏、长按链接弹菜单且"收藏到稍后再看"置顶）、收藏库、站点页（含回收站）、设置；数据全部走现有自建服务器。
 
 **Architecture:** Flutter + `flutter_inappwebview`（系统 WebView）+ Riverpod + go_router。浏览器长按由注入脚本 `assets/js/inject.js` 检测并通过 JS handler 回调 Dart，菜单用 Flutter 自绘；收藏链路在页面上下文取标题/附近图片、用 WebView 截图，POST 到现有 `/api/links`；站点走本仓库另一份计划 `2026-11-09-server-sites-api.md` 新增的 `/api/sites`。
 
@@ -311,7 +311,7 @@ git commit -m "feat(mobile): API 客户端"
 
 ---
 
-### Task 4: App 外壳（主题、路由、平板自适应导航）
+### Task 4: App 外壳（主题、路由、宽屏自适应导航）
 
 **Files:**
 - Create: `mobile/lib/main.dart`、`app.dart`、`router.dart`
@@ -351,7 +351,7 @@ testWidgets('点击浏览器切换到浏览器占位页', (tester) async { ... e
 flutter test test/app_shell_test.dart
 flutter analyze
 git add lib test/app_shell_test.dart
-git commit -m "feat(mobile): 应用外壳与平板自适应导航"
+git commit -m "feat(mobile): 应用外壳与自适应导航"
 ```
 
 ---
@@ -464,7 +464,7 @@ testWidgets('地址栏显示当前 URL，提交触发 onNavigate', (tester) asyn
 ```bash
 flutter test test/features/browser_toolbar_test.dart
 flutter analyze
-flutter run -d <tablet-device>   # 手动：打开 2 个标签切换、点全屏视频
+flutter run -d <android-device>   # 手动：打开 2 个标签切换、点全屏视频
 git add lib test
 git commit -m "feat(mobile): 内置浏览器界面与多标签"
 ```
@@ -682,7 +682,7 @@ git commit -m "feat(mobile): 长按收藏菜单与收藏当前页"
 **Files:**
 - Create: `docs/superpowers/plans/m0-verification.md`（记录结果）
 
-- [ ] **Step 1: 在平板真机跑通以下 6 项并记录**
+- [ ] **Step 1: 在作者真机（平板/手机）跑通以下 6 项并记录**
 
 1. 2 个标签切换不白屏、返回不丢状态（`IndexedStack + Offstage` 有效）。
 2. B 站/YouTube 点全屏可横屏播放，退出后工具栏与系统栏恢复。
@@ -822,7 +822,7 @@ git commit -m "feat(mobile): 站点收藏页"
 - Consumes: `ConfigStore`、`ApiClient`。
 - Produces:
   - `ThemeController extends Notifier<ThemeMode>`：`setMode(ThemeMode)`，持久化到 `SharedPreferences`（key `theme_mode`）。
-  - 设置页：服务器地址 + API Key + 保存并测试连接、连接状态、主题选择、清除浏览数据（`CookieManager.deleteAllCookies()` + `InAppWebViewController.clearAllCache()` / `WebStorageManager`）、"从平板浏览器导入标签页"说明弹窗（只展示 adb 命令，不执行）、版本号。
+  - 设置页：服务器地址 + API Key + 保存并测试连接、连接状态、主题选择、清除浏览数据（`CookieManager.deleteAllCookies()` + `InAppWebViewController.clearAllCache()` / `WebStorageManager`）、"从本机浏览器导入标签页"说明弹窗（只展示 adb 命令，不执行）、版本号。
 
 - [ ] **Step 1: 写 widget 测试**
 
@@ -867,7 +867,7 @@ git commit -m "feat(mobile): 设置页与服务器配置"
 cd mobile
 flutter analyze
 flutter test
-flutter build apk --release --split-per-abi
+flutter build apk --release --target-platform android-arm64 --split-per-abi
 adb install -r build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
 ```
 
@@ -875,7 +875,7 @@ Expected: 构建成功；安装后能启动、连接服务器、完成一次长�
 
 - [ ] **Step 3: 全量验收（对照 spec 11/13.1）**
 
-在平板真机勾选：多标签、视频全屏、长按菜单置顶、截图、去重、列表搜索/删除、回收站（链接+站点）、站点收藏/删除/还原、设置连接、深色模式、横竖屏。任何一项失败记录后回补修复任务。
+在作者真机勾选：多标签、视频全屏、长按菜单置顶、截图、去重、列表搜索/删除、回收站（链接+站点）、站点收藏/删除/还原、设置连接、深色模式、横竖屏。任何一项失败记录后回补修复任务。
 
 - [ ] **Step 4: 文档与提交**
 

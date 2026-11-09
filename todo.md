@@ -44,14 +44,15 @@
 
 > 设计见 `docs/superpowers/specs/2026-11-09-readlater-mobile-flutter-design.md`；v1 只做浏览器 + 收藏/站点 + 设置。
 
-- [ ] 标签页导入工具：`tools/import-tabs`，adb + Chromium DevTools（设计见 spec 第 16 节）
+- [ ] 标签页导入工具（v1）：`tools/import-tabs`，PC adb + Chromium DevTools（spec 16.3）
+- [ ] 免电脑标签页导入 spike：无线调试 + app 内 ADB host，或 Shizuku 直连 `chrome_devtools_remote`（spec 16.7，需真机验证）
 - [ ] 导入/导出（JSON/HTML）
 - [ ] 下载管理器（Android DownloadManager）
 - [ ] 系统分享入口（其他 app 分享链接到本 app）
 - [ ] iOS 适配（WKWebView；需要 Mac + 开发者账号）
 - [ ] 站点排序/分组/编辑、站点与链接关联
 - [ ] 扩展端支持"收藏主站"（复用 `/api/sites`）
-- [ ] 标签会话恢复细节、桌面/平板 UA 切换
+- [ ] 标签会话恢复细节、桌面/移动 UA 切换
 - [ ] 视频嗅探 + 自研播放器（Media3）、后台播放、画中画
 - [ ] 广告拦截/脚本拦截
 - [ ] 多用户/多账号（需要后端鉴权体系调整）

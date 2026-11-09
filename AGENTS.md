@@ -128,7 +128,26 @@ openssl rand -base64 32
 | POST   | /api/trash/batch-restore   | 批量还原回收站项目                     |
 | POST   | /api/trash/batch-delete    | 批量永久删除回收站项目                 |
 | GET    | /api/stats                 | 获取统计                               |
+| GET    | /api/sites                 | 站点列表（不含回收站）                 |
+| POST   | /api/sites                 | 新增站点（origin 去重，回收站中则恢复） |
+| DELETE | /api/sites/:id             | 删除站点（软删除进回收站）             |
+| GET    | /api/sites/trash           | 回收站站点                             |
+| POST   | /api/sites/:id/restore     | 还原站点                               |
+| DELETE | /api/sites/trash/:id       | 永久删除站点                           |
+| GET    | /api/sites/exists          | 检查站点是否存在（含 inTrash）         |
 | POST   | /api/upload                | 上传图片（保留兼容）                   |
+
+## 移动端（Flutter）
+
+`mobile/` 是 Android app（个人自用；作者主要用平板）：内置浏览器（多标签、视频全屏、长按收藏置顶）+ 收藏库 + 站点页，数据走同一服务器。
+
+- 设计：`docs/superpowers/specs/2026-11-09-readlater-mobile-flutter-design.md`
+- 计划：`docs/superpowers/plans/2026-11-09-mobile-app-v1.md`
+- 工具链：Flutter 3.38.10、JDK 21、AGP 8.11.1；Flutter 优先使用 Android Studio 自带 JDK，需用 `flutter config --jdk-dir="<JDK21路径>"` 指定（不要把本机路径写进 `gradle.properties`）
+- 开发/测试：`cd mobile && flutter run`、`flutter test`
+- 集成测试（需设备/模拟器）：`flutter test integration_test/long_press_test.dart -d <device-id>`
+- 构建：`flutter build apk --release --target-platform android-arm64 --split-per-abi`（只出 arm64；其他 ABI 需要者自行编译；个人侧载，release 用 debug 签名）
+- 包名 `com.cpf23333.readlater`，`minSdk 26`
 
 ## 关键代码位置
 

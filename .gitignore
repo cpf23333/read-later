@@ -37,3 +37,4 @@ server/read-later-server.tar
 .env.*.local
 .vfox/
 deploy
+.superpowers/
