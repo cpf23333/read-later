@@ -13,6 +13,7 @@ import 'features/browser/capture_service.dart';
 import 'features/browser/site_service.dart';
 import 'features/browser/tab_registry.dart';
 import 'features/library/library_notifier.dart';
+import 'features/library/trash_notifier.dart';
 
 /// 服务器配置存储。
 final configStoreProvider = Provider<ConfigStore>(
@@ -61,4 +62,9 @@ final siteServiceProvider = Provider<SiteService>(
 /// 收藏库列表状态。
 final libraryProvider = NotifierProvider<LibraryNotifier, LibraryState>(
   LibraryNotifier.new,
+);
+
+/// 回收站状态。
+final trashProvider = NotifierProvider<TrashNotifier, TrashState>(
+  TrashNotifier.new,
 );

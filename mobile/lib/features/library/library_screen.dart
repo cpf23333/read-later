@@ -6,6 +6,7 @@ import '../../core/models/link.dart';
 import '../../providers.dart';
 import 'library_notifier.dart';
 import 'link_card.dart';
+import 'trash_screen.dart';
 
 /// 收藏库：搜索、排序、网格/列表、分页、删除。
 class LibraryScreen extends ConsumerStatefulWidget {
@@ -93,6 +94,15 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
             tooltip: _grid ? '列表视图' : '网格视图',
             icon: Icon(_grid ? Icons.view_list : Icons.grid_view),
             onPressed: () => setState(() => _grid = !_grid),
+          ),
+          IconButton(
+            tooltip: '回收站',
+            icon: const Icon(Icons.delete_outline),
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (routeContext) => const TrashScreen()),
+              );
+            },
           ),
         ],
       ),
