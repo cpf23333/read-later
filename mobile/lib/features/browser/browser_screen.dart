@@ -8,8 +8,10 @@ import '../../core/api/errors.dart';
 import '../../core/logging/app_logger.dart';
 import '../../core/util/image_data.dart';
 import '../../providers.dart';
+import '../player/media_player_screen.dart';
 import 'browser_notifier.dart';
 import 'browser_toolbar.dart';
+import 'detected_media.dart';
 import 'long_press_sheet.dart';
 import 'tab_strip.dart';
 import 'tab_webview.dart';
@@ -23,10 +25,33 @@ class BrowserScreen extends ConsumerStatefulWidget {
 }
 
 class _BrowserScreenState extends ConsumerState<BrowserScreen> {
+  final Map<String, DetectedMedia> _mediaByTab = {};
+
   @override
   void initState() {
     super.initState();
     _restoreSession();
+  }
+
+  @override
+  void dispose() {
+    _mediaByTab.clear();
+    super.dispose();
+  }
+
+  void _onMediaDetected(String tabId, DetectedMedia media) {
+    final current = _mediaByTab[tabId];
+    if (current?.url == media.url) return;
+    setState(() => _mediaByTab[tabId] = media);
+  }
+
+  void _openMediaPlayer(DetectedMedia media) {
+    Navigator.of(context, rootNavigator: true).push(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (routeContext) => MediaPlayerScreen(media: media),
+      ),
+    );
   }
 
   Future<void> _restoreSession() async {
@@ -283,8 +308,23 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
                                 active: tab.id == state.activeTabId,
                                 onCreated: (controller) => registry.register(tab.id, controller),
                                 onLongPressLink: _openLongPressSheet,
+                                onMediaDetected: (media) =>
+                                    _onMediaDetected(tab.id, media),
                               )
                             : const SizedBox.shrink(),
+                      ),
+                    if (active != null && _mediaByTab.containsKey(active.id))
+                      Positioned(
+                        right: 16,
+                        bottom: 16,
+                        child: SafeArea(
+                          child: FloatingActionButton.extended(
+                            heroTag: 'media-player-fab',
+                            onPressed: () => _openMediaPlayer(_mediaByTab[active.id]!),
+                            icon: const Icon(Icons.play_arrow),
+                            label: const Text('播放视频'),
+                          ),
+                        ),
                       ),
                   ],
                 ),

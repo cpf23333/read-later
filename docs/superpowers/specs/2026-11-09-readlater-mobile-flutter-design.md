@@ -300,7 +300,7 @@ class BrowserTab {
 - Android `AndroidManifest.xml` 的 Activity 声明 `configChanges="orientation|screenSize|smallestScreenSize|keyboardHidden"`，避免旋转重建导致视频中断。
 - `InAppWebViewSettings`：保持 `mediaPlaybackRequiresUserGesture` 默认（true），避免自动播放；`useHybridComposition` 使用默认（true）。
 - 兜底：若个别站点用 `requestFullscreen()` 而非 `<video>` 全屏且 WebView 不接管，在 `inject.js` 里重写 `Element.prototype.requestFullscreen` 为 `callHandler('rl:fullscreen')`，由 Flutter 侧接管容器。该兜底在 M0 验证后再决定是否启用。
-- v1 不引入任何播放器依赖。
+- v1 不引入播放器依赖；v1.1 起检测到直链视频可用 Media3 ExoPlayer 播放（见 6.7），WebView 仍是网页内播放的默认路径。
 
 ### 6.4 WebView 安全设置
 
@@ -353,6 +353,13 @@ window.__rlExtract = async (url) => JSON.stringify({
 - 文件选择：使用插件内置 `onShowFileChooser` 能力，v1 用系统文件选择器。
 - 权限（相机/麦克风/定位）：v1 不主动申请，站点触发时拒绝并提示。
 
+### 6.7 视频检测与 Media3 播放（v1.1）
+
+- 检测：`inject.js` 扫描 `<video>` 的 `currentSrc/src`、`<source>`，并 hook `fetch` / `XMLHttpRequest`，命中 `.m3u8/.mpd/.mp4` 的 http(s) 地址时通过 `callHandler('rl:media', {...})` 上报；同一 URL 去重。
+- UI：当前标签检测到可播放地址时，浏览器右下角出现「播放视频」FAB；点击打开全屏 Media3 页面。
+- 播放器：Android PlatformView（`readlater/media3`）+ Media3 ExoPlayer 1.11.x，支持 HLS/DASH/MP4；自动带当前页 Referer、WebView UA 和 Cookie（`CookieManager`），减少 403。
+- 限制：只支持可直连的 http(s) 媒体地址；`blob:`/MSE、DRM（Widevine）和需复杂鉴权的站点仍用 WebView 播放；不会自动抢占页面的视频播放。
+- 后续可选：检测到视频自动打开（默认关）、清晰度/字幕选择、PIP/投屏、长按菜单「用内置播放器打开」。
 ## 7. 长按收藏（核心流程）
 
 ### 7.1 时序

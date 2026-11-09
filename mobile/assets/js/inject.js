@@ -235,6 +235,84 @@
     // 忽略 CSP 限制。
   }
 
+  // ---- 视频地址检测：<video>/<source> + fetch/XHR ----
+  const MEDIA_URL_RE = /\.(m3u8|mpd|mp4)(?=$|[?#])/i;
+  const reportedMedia = new Set();
+
+  function sendMedia(url, type) {
+    if (!isHttpUrl(url) || !MEDIA_URL_RE.test(url)) return;
+    if (reportedMedia.has(url)) return;
+    reportedMedia.add(url);
+    try {
+      window.flutter_inappwebview.callHandler('rl:media', {
+        url: url,
+        type: type,
+        title: document.title,
+        sourcePage: location.href,
+        ua: navigator.userAgent,
+      });
+    } catch (_) {
+      // 非 app 环境忽略。
+    }
+  }
+
+  function scanMediaUrl(raw) {
+    if (!raw) return;
+    try {
+      const url = new URL(String(raw), location.href).href;
+      if (MEDIA_URL_RE.test(url)) sendMedia(url, 'network');
+    } catch (_) {
+      // 忽略非法 URL。
+    }
+  }
+
+  function scanMediaElements() {
+    document.querySelectorAll('video').forEach((video) => {
+      const src = video.currentSrc || video.src;
+      if (src) sendMedia(src, 'video');
+      video.querySelectorAll('source').forEach((source) => {
+        if (source.src) sendMedia(source.src, 'source');
+      });
+    });
+  }
+
+  try {
+    const originalFetch = window.fetch;
+    if (typeof originalFetch === 'function') {
+      window.fetch = function (...args) {
+        try {
+          const input = args[0];
+          scanMediaUrl(typeof input === 'string' ? input : input && input.url);
+        } catch (_) {}
+        return originalFetch.apply(this, args);
+      };
+    }
+  } catch (_) {}
+
+  try {
+    const originalOpen = XMLHttpRequest.prototype.open;
+    XMLHttpRequest.prototype.open = function (method, url, ...rest) {
+      try {
+        scanMediaUrl(url);
+      } catch (_) {}
+      return originalOpen.call(this, method, url, ...rest);
+    };
+  } catch (_) {}
+
+  function scheduleMediaScan() {
+    scanMediaElements();
+    setTimeout(scanMediaElements, 1000);
+    setTimeout(scanMediaElements, 3000);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', scheduleMediaScan);
+  } else {
+    scheduleMediaScan();
+  }
+  setInterval(scanMediaElements, 3000);
+  window.__rlScanMedia = scheduleMediaScan;
+
   // 集成测试钩子：直接触发长按回调（不模拟真实手势）。
   window.__rlTestLongPress = function (selector) {
     const anchor = document.querySelector(selector);

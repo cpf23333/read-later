@@ -14,6 +14,7 @@ import '../../platform/webview_settings.dart';
 import '../../providers.dart';
 import 'browser_notifier.dart';
 import 'browser_state.dart';
+import 'detected_media.dart';
 import 'external_navigation.dart';
 import 'inject_loader.dart';
 
@@ -39,12 +40,14 @@ class TabWebView extends ConsumerStatefulWidget {
     required this.tab,
     required this.onCreated,
     this.onLongPressLink,
+    this.onMediaDetected,
     this.active = true,
   });
 
   final BrowserTab tab;
   final void Function(InAppWebViewController controller) onCreated;
   final void Function(LinkPressPayload payload)? onLongPressLink;
+  final void Function(DetectedMedia media)? onMediaDetected;
   final bool active;
 
   @override
@@ -213,6 +216,18 @@ class _TabWebViewState extends ConsumerState<TabWebView> {
               } catch (_) {
                 completer.complete({});
               }
+            }
+            return null;
+          },
+        );
+        controller.addJavaScriptHandler(
+          handlerName: 'rl:media',
+          callback: (args) {
+            final map = args.isNotEmpty ? args.first : null;
+            if (map is Map) {
+              widget.onMediaDetected?.call(
+                DetectedMedia.fromMap(Map<String, dynamic>.from(map)),
+              );
             }
             return null;
           },
