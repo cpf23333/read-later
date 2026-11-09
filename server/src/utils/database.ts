@@ -7,7 +7,7 @@ import path from 'path';
 import { tokenizeSearchQuery } from './security.ts';
 import { normalizeUrl } from './url.ts';
 import { moveImageToTrash, restoreImageFromTrash, deleteImageFile } from './image.ts';
-import type { Link, TrashItem } from '../types/index.ts';
+import type { Link, TrashItem, Site } from '../types/index.ts';
 
 let db: Database.Database | null = null;
 
@@ -59,6 +59,17 @@ export function initDatabase(dataDir: string): Database.Database {
       file_size INTEGER,
       error TEXT
     );
+
+    CREATE TABLE IF NOT EXISTS sites (
+      id TEXT PRIMARY KEY,
+      url TEXT NOT NULL,
+      title TEXT,
+      icon_url TEXT,
+      created_at INTEGER NOT NULL,
+      deleted_at INTEGER
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_sites_url ON sites(url);
+    CREATE INDEX IF NOT EXISTS idx_sites_deleted ON sites(deleted_at);
   `);
 
   // 迁移：添加 normalized_url 列并回填已有数据
@@ -585,4 +596,99 @@ export function getExportTaskById(id: string): ExportTask | undefined {
 export function deleteExportTask(id: string): void {
   const database = getDatabase();
   database.prepare('DELETE FROM export_tasks WHERE id = ?').run(id);
+}
+
+// ===== 站点操作 =====
+
+/**
+ * 新增站点（url 由调用方归一化为 origin）
+ */
+export function addSite(input: {
+  id?: string;
+  url: string;
+  title: string;
+  icon_url: string | null;
+}): Site {
+  const database = getDatabase();
+  const id = input.id || `${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+
+  database
+    .prepare(
+      `INSERT INTO sites (id, url, title, icon_url, created_at, deleted_at)
+       VALUES (?, ?, ?, ?, ?, NULL)`
+    )
+    .run(id, input.url, input.title, input.icon_url, Date.now());
+
+  return getSiteById(id)!;
+}
+
+/**
+ * 根据 id 获取站点（含回收站）
+ */
+export function getSiteById(id: string): Site | undefined {
+  const database = getDatabase();
+  return database.prepare('SELECT * FROM sites WHERE id = ?').get(id) as Site | undefined;
+}
+
+/**
+ * 根据 origin 获取站点（含回收站）
+ */
+export function getSiteByOrigin(origin: string): Site | undefined {
+  const database = getDatabase();
+  return database.prepare('SELECT * FROM sites WHERE url = ?').get(origin) as Site | undefined;
+}
+
+/**
+ * 正常站点列表
+ */
+export function getSites(): Site[] {
+  const database = getDatabase();
+  return database
+    .prepare('SELECT * FROM sites WHERE deleted_at IS NULL ORDER BY created_at DESC')
+    .all() as Site[];
+}
+
+/**
+ * 回收站站点列表
+ */
+export function getSiteTrash(): Site[] {
+  const database = getDatabase();
+  return database
+    .prepare('SELECT * FROM sites WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC')
+    .all() as Site[];
+}
+
+/**
+ * 从回收站恢复站点并更新标题/图标
+ */
+export function reviveSite(site: Site, title: string, icon_url: string | null): Site {
+  const database = getDatabase();
+  database
+    .prepare('UPDATE sites SET deleted_at = NULL, title = ?, icon_url = ? WHERE id = ?')
+    .run(title, icon_url, site.id);
+  return getSiteById(site.id)!;
+}
+
+/**
+ * 软删除站点（进回收站）
+ */
+export function softDeleteSite(id: string): void {
+  const database = getDatabase();
+  database.prepare('UPDATE sites SET deleted_at = ? WHERE id = ?').run(Date.now(), id);
+}
+
+/**
+ * 还原站点
+ */
+export function restoreSite(id: string): void {
+  const database = getDatabase();
+  database.prepare('UPDATE sites SET deleted_at = NULL WHERE id = ?').run(id);
+}
+
+/**
+ * 永久删除站点（仅回收站内记录）
+ */
+export function deleteSitePermanently(id: string): void {
+  const database = getDatabase();
+  database.prepare('DELETE FROM sites WHERE id = ? AND deleted_at IS NOT NULL').run(id);
 }

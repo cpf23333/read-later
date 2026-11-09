@@ -34,6 +34,7 @@ import statsRoute from './routes/stats.ts';
 import uploadRoute from './routes/upload.ts';
 import healthRoute from './routes/health.ts';
 import exportsRoute from './routes/exports.ts';
+import sitesRoute from './routes/sites.ts';
 
 // 配置
 const PORT = parseInt(process.env.PORT || '3000', 10);
@@ -153,6 +154,7 @@ app.route('/api/links', linksRoute);
 app.route('/api/trash', trashRoute);
 app.route('/api/domains', domainsRoute);
 app.route('/api/stats', statsRoute);
+app.route('/api/sites', sitesRoute);
 app.route('/api/upload', uploadRoute);
 
 // 搜索路由（挂载在 /api/search）

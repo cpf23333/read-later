@@ -141,3 +141,26 @@ export interface Env {
   NODE_ENV: 'development' | 'production';
   MAX_IMAGE_SIZE_MB: string;
 }
+
+// 站点收藏数据结构
+export interface Site {
+  id: string;
+  url: string;
+  title: string;
+  icon_url: string | null;
+  created_at: number;
+  deleted_at: number | null;
+}
+
+// 新增站点请求体
+export interface SiteInput {
+  url: string;
+  title?: string;
+  icon_url?: string;
+}
+
+// 站点存在性响应
+export interface SiteExistsResponse {
+  exists: boolean;
+  inTrash: boolean;
+}
