@@ -36,7 +36,7 @@
 - 离线缓存、增量同步、本地数据库（服务器仍是唯一数据源）。
 - 系统分享入口（其他 app 分享链接到本 app），列为 v1.1。
 - 站点排序/分组/编辑、站点关联链接（v1 站点删除进回收站，见 5.4）。
-- app 内直接读取本机 Chrome/Brave 的标签页（平台不提供该能力，见 16）。
+- app 内直接读取本机 Chrome/Brave 的标签页（v1 不做；免电脑方案见 16.7）。
 - 标签页导入脚本（设计见 16，排期见 `todo.md`；v1 不做）。
 
 ## 3. 关键决策
@@ -51,7 +51,7 @@
 | 导航 | `go_router` | 声明式路由，便于以后接 deep link |
 | 数据源 | 现有 Hono 服务器；仅新增 `/api/sites`（见 5.4），现有接口与数据表不动 | 契约稳定，扩展与 app 共用；去重、图片处理都在服务端 |
 | 站点数据模型 | 服务端新建独立 `sites` 表（4 个端点） | 站点字段（origin/图标）与链接差异大，独立表避免污染 links/trash；列表可按站点批量返回 |
-| 标签页导入 | 外部 adb 工具（Node 脚本），不做进 app | Android 不向第三方 app 暴露标签页；adb+CDP 是唯一可行路径，app 内无法完成 |
+| 标签页导入 | v1 用外部 adb 脚本；免电脑方案（无线 ADB / Shizuku）列 backlog | 普通 app 不能直接读标签页；ADB+CDP 已验证，Shizuku 直连需实机验证（16.7） |
 | 数据库 | 保持 SQLite（v1 不换 PostgreSQL） | 单用户、数据量小、图片在文件系统；换 PG 的收益不足以抵消部署与代码改动，触发条件与优化项记入 todo.md |
 | 配置存储 | `flutter_secure_storage`（API Key、服务器地址、自定义配置） | Keystore 加密；个人自用不做多账号 |
 | 主题 | Material 3，跟随系统，支持深色 | 与扩展视觉习惯一致即可，不做像素级复刻 |
@@ -438,7 +438,7 @@ window.__rlExtract = async (url) => JSON.stringify({
 - 主题：跟随系统 / 浅色 / 深色。
 - 浏览器：搜索源、清除缓存与 Cookie（`WebView` 的 `CookieManager` / `clearCache`）。
 - 关于：版本号、API 契约说明、隐私说明（无统计上报）。
-- "从本机浏览器导入标签页"入口：只展示 16 节的 adb 步骤说明与命令，不在 app 内执行。
+- "从本机浏览器导入标签页"入口：v1 只展示 16 节的 adb 步骤说明与命令，不在 app 内执行；免电脑方案见 16.7（backlog）。
 
 ### 8.3 宽屏与自适应布局
 
@@ -535,7 +535,7 @@ window.__rlExtract = async (url) => JSON.stringify({
 | WebView 内核版本碎片化 | 个别站点渲染/播放异常 | 以作者真机为准；必要时提供 UA 切换兜底（v1.1） |
 | 跨域 iframe 内的链接无法被注入脚本捕获 | 部分站点长按无菜单 | v1 明确只支持主框架；v1.1 用 Android 原生 hit-test 作为补充通道 |
 | 站点收藏需要服务端改动 | 可能影响现有部署/数据 | 新增独立 `sites` 表与路由，不改现有接口与表；上线前备份 SQLite；服务端版本号 bump |
-| Android 浏览器标签页只能靠 adb | 导入是手动流程，不是 app 功能 | 定位为一次性迁移工具；文档写清步骤；只支持 Chromium 系；不承诺自动化 |
+| v1 标签页导入依赖 adb/PC | 导入是手动流程，不是 app 功能 | 定位为一次性迁移工具；文档写清步骤；只支持 Chromium 系；免电脑方案见 16.7，验证前不承诺 |
 | 无线调试端口变化 / adb forward 失效 | 导入脚本连不上 | 脚本先校验 `adb devices`，失败提示重新 forward；文档给无线调试完整步骤 |
 
 ## 15. 评审结论
@@ -552,18 +552,19 @@ window.__rlExtract = async (url) => JSON.stringify({
 
 追加需求（站点收藏、本机浏览器标签页导入）已并入 2.1、5.4、8.4、16；如与预期不符请指出。
 
-## 16. 浏览器标签页导入（外部 adb 工具）
+## 16. 浏览器标签页导入（v1：外部 adb 工具）
 
 ### 16.1 背景与结论
 
-- Android 设备上的 Chrome/Brave 不向第三方 app 暴露"已打开标签页"，Android 沙箱下 app 内无法读取，没有合规 API。
-- Chromium 系浏览器通过 abstract Unix socket `chrome_devtools_remote` 暴露 DevTools HTTP 端点，`adb forward` 后可取 `/json/list`（含每个标签页的 `url`、`title`）。
-- 因此导入做成 PC 上运行的一次性脚本，不进 app UI；网络 adb 可行，但同样需要一台 PC/主机执行。
+- Android 设备上的 Chrome/Brave 不向普通第三方 app 暴露"已打开标签页"，没有公开 API；沙箱下 app 不能直接读浏览器数据。
+- Chromium 系浏览器通过 abstract Unix socket `chrome_devtools_remote` 暴露 DevTools HTTP 端点，可读取 `/json/list`（每个标签页的 `url`、`title`）。
+- v1 实现：PC 上运行的 Node 脚本，通过 USB/无线 adb `forward` 到该 socket，作为一次性迁移工具，不随 app 分发。
+- 免电脑方案（无线调试 + app 内 ADB host，或 Shizuku）技术上存在，但需要用户授权/配对且未验证，见 16.7。因此不能再说"app 内完全无法完成"，只能说 v1 不做。
 
 ### 16.2 前置条件
 
-- 手机/平板：开发者选项 + USB 调试开启；Chrome/Brave 正在运行。
-- 电脑：`platform-tools`（adb）、Node.js ≥ 20。
+- 手机/平板：开发者选项 + USB 调试（或无线调试）开启；Chrome/Brave 正在运行。
+- 电脑：`platform-tools`（adb）、Node.js ≥ 20（v1 方案）。
 - 服务器：地址与 API Key（与 app 相同）。
 
 ### 16.3 步骤（USB）
@@ -586,25 +587,37 @@ node tools/import-tabs/import.mjs \
 3. `POST /api/links/batch`，每条带 `url`、`title`、`custom_data.importedFrom = "chromium-tabs"`；不传截图/图片。
 4. 输出导入 / 跳过（已存在）/ 失败 统计；`--dry-run` 只打印不写库。
 
-### 16.4 网络 adb
+### 16.4 网络 adb（PC 作为主机）
 
 - Android 11+：开启"无线调试"，`adb pair <ip>:<pair-port>` 配对后 `adb connect <ip>:<port>`。
 - 或先 USB 连一次：`adb tcpip 5555`，拔线后 `adb connect <ip>:5555`。
 - 连接成功后 `adb forward` 用法不变；要求设备与电脑同一网络、设备休眠不断网。
 - 注意：无线调试的端口在重启/重新配对后会变；`adb forward` 在 adb 重连后需要重新执行。
 
-### 16.5 限制
+### 16.5 限制（v1 工具）
 
 - 只能导入当前打开的标签页（URL + 标题），没有截图和附近图片。
 - Chrome/Brave 进程被杀后 socket 消失；需要保持浏览器在前台或后台运行。
 - Firefox 不适用（调试协议不同）；仅 Chromium 系（Chrome、Brave、Edge 等，socket 名以实测为准）。
 - 不含历史记录、书签、已关闭标签页。
-- 这是开发/迁移工具，不随 app 分发。
+- v1 是开发/迁移工具，不随 app 分发。
 
 ### 16.6 备选方案（记录，不实现）
 
 Chrome 开启"标签页同步"后，桌面扩展可用 `chrome.sessions.getDevices()` 读取其他设备打开的标签页并入库；仅 Chrome、需同一账号同步，Brave 不支持该能力。v1 不实现。
 
+### 16.7 免电脑方案（backlog，需实机 spike）
+
+目标：不接电脑，在 app 内完成导入。两条路径，均不是"零操作"：
+
+1. **无线调试 + app 内 ADB host**
+   - Android 11+ 用户手动开启"无线调试"，用设备显示的配对码配对（系统安全限制，app 不能静默开启）。
+   - app 内实现 ADB host 协议（Kotlin `dadb` 之类；Flutter 走平台通道），连接 `127.0.0.1:<port>`，执行等价 `forward`/`shell`，再走 CDP 读标签页。成本：ADB 协议 + TLS 配对、端口发现与重连；仅 Android 11+。
+2. **Shizuku（shell 身份）**
+   - Shizuku 在 Android 11+ 可借无线调试启动（仍需用户配对一次），之后 app 通过 Shizuku API 以 shell UID 执行命令/访问系统服务。
+   - 可尝试让 shell 身份直连 `chrome_devtools_remote` socket，或由 Shizuku 启动的 helper 进程代理；成功则完全不需要 ADB/TCP，只需 Shizuku 授权。
+   - 风险：SELinux 可能拒绝 shell 域访问 Chrome 的 socket，必须真机验证；Shizuku 未运行时不可用；Android <11 需 root。
+3. **建议**：先做 1–2 天 spike（真机 + Shizuku 已启动 + Chrome 多标签），优先验证路径 2；失败再评估路径 1。验证通过前不改进 v1 的 PC 脚本方案。
 ## 17. 与现有项目的关系
 
 - `server/`：仅新增 `sites` 表与 `/api/sites` 路由组（7 个端点，含回收站），现有接口、数据表、部署方式不变；服务端版本号 bump。
