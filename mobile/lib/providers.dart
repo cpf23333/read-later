@@ -6,8 +6,11 @@ import 'core/api/dio_api_client.dart';
 import 'core/config/config_store.dart';
 import 'core/config/key_value_store.dart';
 import 'core/storage/session_store.dart';
+import 'core/web/title_resolver.dart';
 import 'features/browser/browser_notifier.dart';
 import 'features/browser/browser_state.dart';
+import 'features/browser/capture_service.dart';
+import 'features/browser/site_service.dart';
 import 'features/browser/tab_registry.dart';
 
 /// 服务器配置存储。
@@ -31,4 +34,25 @@ final tabRegistryProvider = Provider<TabRegistry>((ref) => TabRegistry());
 /// 多标签状态。
 final browserProvider = NotifierProvider<BrowserNotifier, BrowserState>(
   BrowserNotifier.new,
+);
+
+/// 目标页标题/favicon 解析。
+final titleResolverProvider = Provider<PageMetaResolver>(
+  (ref) => TitleResolver(Dio()),
+);
+
+/// 收藏链接链路。
+final captureServiceProvider = Provider<CaptureService>(
+  (ref) => CaptureService(
+    ref.watch(apiClientProvider),
+    ref.watch(titleResolverProvider),
+  ),
+);
+
+/// 收藏主站链路。
+final siteServiceProvider = Provider<SiteService>(
+  (ref) => SiteService(
+    ref.watch(apiClientProvider),
+    ref.watch(titleResolverProvider),
+  ),
 );
