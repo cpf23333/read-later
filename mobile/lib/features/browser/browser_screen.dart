@@ -1,11 +1,15 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter/services.dart';
 
+import '../../core/api/errors.dart';
 import '../../providers.dart';
 import 'browser_notifier.dart';
 import 'browser_toolbar.dart';
+import 'long_press_sheet.dart';
 import 'tab_strip.dart';
 import 'tab_webview.dart';
 
@@ -36,6 +40,13 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
     return ref.read(tabRegistryProvider).of(active.id);
   }
 
+  void _snack(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  String _message(Object error) => error is ApiException ? error.message : '$error';
+
   void _navigate(String url) {
     final controller = _activeController();
     if (controller == null) {
@@ -63,6 +74,78 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
     await SystemNavigator.pop();
   }
 
+  Future<void> _openLongPressSheet(LinkPressPayload payload) async {
+    final controller = _activeController();
+    if (controller == null) return;
+
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (sheetContext) => LongPressSheet(
+        url: payload.url,
+        sourcePage: payload.sourcePage,
+        linkText: payload.linkText ?? payload.text,
+        nearbyText: payload.nearbyText,
+        nearbyImage: payload.nearbyImage,
+        takeScreenshot: () async {
+          final bytes = await controller.takeScreenshot();
+          return bytes == null ? null : base64Encode(bytes);
+        },
+        onOpenInNewTab: (url) => ref.read(browserProvider.notifier).openTab(url),
+      ),
+    );
+
+    if (saved == true) {
+      _snack('已收藏');
+    }
+  }
+
+  Future<void> _collectCurrentPage() async {
+    final active = ref.read(browserProvider).activeTab;
+    if (active == null || active.url.isEmpty || active.url == BrowserNotifier.blankUrl) {
+      _snack('当前没有可收藏的页面');
+      return;
+    }
+
+    try {
+      final controller = _activeController();
+      final preview = await ref.read(captureServiceProvider).prepare(
+            url: active.url,
+            linkText: active.title,
+            sourcePage: active.url,
+          );
+
+      String? screenshot;
+      if (controller != null) {
+        final bytes = await controller.takeScreenshot();
+        screenshot = bytes == null ? null : base64Encode(bytes);
+      }
+
+      await ref.read(captureServiceProvider).save(preview, screenshotBase64: screenshot);
+      _snack(preview.exists ? '已收藏（服务器已有该链接）' : '已收藏当前页');
+    } catch (error) {
+      _snack('收藏失败：${_message(error)}');
+    }
+  }
+
+  Future<void> _collectCurrentSite() async {
+    final active = ref.read(browserProvider).activeTab;
+    if (active == null || active.url.isEmpty || active.url == BrowserNotifier.blankUrl) {
+      _snack('当前没有可收藏的站点');
+      return;
+    }
+
+    try {
+      final service = ref.read(siteServiceProvider);
+      final draft = await service.prepare(active.url);
+      await service.save(draft);
+      _snack(draft.exists ? '已收藏该站点' : '已收藏主站');
+    } catch (error) {
+      _snack('收藏主站失败：${_message(error)}');
+    }
+  }
+
   void _showTabMenu() {
     showModalBottomSheet<void>(
       context: context,
@@ -70,6 +153,14 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            ListTile(
+              leading: const Icon(Icons.public_outlined),
+              title: const Text('收藏主站'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _collectCurrentSite();
+              },
+            ),
             ListTile(
               leading: const Icon(Icons.add),
               title: const Text('新标签页'),
@@ -121,11 +212,7 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
                 onForward: () => _activeController()?.goForward(),
                 onReload: () => _activeController()?.reload(),
                 onStop: () => _activeController()?.stopLoading(),
-                onCollectPage: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('收藏当前页：稍后接入')),
-                  );
-                },
+                onCollectPage: _collectCurrentPage,
                 onMenu: _showTabMenu,
               ),
               TabStrip(
@@ -146,6 +233,7 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
                           key: ValueKey(tab.id),
                           tab: tab,
                           onCreated: (controller) => registry.register(tab.id, controller),
+                          onLongPressLink: _openLongPressSheet,
                         ),
                       ),
                   ],

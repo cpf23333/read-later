@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:collection';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -13,16 +15,22 @@ import '../../providers.dart';
 import 'browser_state.dart';
 import 'inject_loader.dart';
 
-/// 长按链接回调数据。
+/// 长按链接回调数据（含页面内提取结果）。
 class LinkPressPayload {
   final String url;
   final String? text;
   final String sourcePage;
+  final String? linkText;
+  final String? nearbyText;
+  final String? nearbyImage;
 
   const LinkPressPayload({
     required this.url,
     this.text,
     required this.sourcePage,
+    this.linkText,
+    this.nearbyText,
+    this.nearbyImage,
   });
 }
 
@@ -45,6 +53,7 @@ class TabWebView extends ConsumerStatefulWidget {
 
 class _TabWebViewState extends ConsumerState<TabWebView> {
   String? _injectJs;
+  Completer<Map<String, dynamic>>? _extractCompleter;
 
   @override
   void initState() {
@@ -75,6 +84,35 @@ class _TabWebViewState extends ConsumerState<TabWebView> {
         );
   }
 
+  Future<void> _handleLongPress(Map<dynamic, dynamic> data, InAppWebViewController controller) async {
+    final url = data['url'];
+    if (url is! String || url.isEmpty) return;
+
+    Map<String, dynamic>? extracted;
+    try {
+      final completer = Completer<Map<String, dynamic>>();
+      _extractCompleter = completer;
+      await controller.evaluateJavascript(
+        source: 'window.__rlExtract(${jsonEncode(url)})',
+      );
+      extracted = await completer.future.timeout(const Duration(seconds: 4));
+    } catch (_) {
+      extracted = null;
+    } finally {
+      _extractCompleter = null;
+    }
+
+    if (!mounted) return;
+    widget.onLongPressLink?.call(LinkPressPayload(
+      url: url,
+      text: data['text'] as String?,
+      sourcePage: data['sourcePage'] as String? ?? '',
+      linkText: extracted?['linkText'] as String?,
+      nearbyText: extracted?['nearbyText'] as String?,
+      nearbyImage: extracted?['nearbyImage'] as String?,
+    ));
+  }
+
   @override
   Widget build(BuildContext context) {
     final injectJs = _injectJs;
@@ -100,13 +138,25 @@ class _TabWebViewState extends ConsumerState<TabWebView> {
           callback: (args) {
             final map = args.isNotEmpty ? args.first : null;
             if (map is Map) {
-              final url = map['url'];
-              if (url is String && url.isNotEmpty) {
-                widget.onLongPressLink?.call(LinkPressPayload(
-                  url: url,
-                  text: map['text'] as String?,
-                  sourcePage: map['sourcePage'] as String? ?? '',
-                ));
+              _handleLongPress(map, controller);
+            }
+            return null;
+          },
+        );
+        controller.addJavaScriptHandler(
+          handlerName: 'rl:extractResult',
+          callback: (args) {
+            final completer = _extractCompleter;
+            if (completer != null && !completer.isCompleted) {
+              try {
+                final raw = args.first;
+                if (raw is String) {
+                  completer.complete(jsonDecode(raw) as Map<String, dynamic>);
+                } else if (raw is Map<String, dynamic>) {
+                  completer.complete(raw);
+                }
+              } catch (_) {
+                completer.complete({});
               }
             }
             return null;
