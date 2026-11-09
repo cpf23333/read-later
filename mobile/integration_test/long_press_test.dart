@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:collection';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -10,8 +12,9 @@ import 'package:readlater/features/browser/inject_loader.dart';
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('fixture 页面：长按钩子回调 URL，提取返回 JSON', (tester) async {
+  testWidgets('fixture 页面：长按钩子回调 URL，提取结果通过 handler 回传', (tester) async {
     final payloads = <Map>[];
+    final extractCompleter = Completer<Map<String, dynamic>>();
     final injectJs = await loadInjectJs(rootBundle);
 
     late InAppWebViewController controller;
@@ -36,6 +39,16 @@ void main() {
                 return null;
               },
             );
+            created.addJavaScriptHandler(
+              handlerName: 'rl:extractResult',
+              callback: (args) {
+                final raw = args.first as String;
+                if (!extractCompleter.isCompleted) {
+                  extractCompleter.complete(jsonDecode(raw) as Map<String, dynamic>);
+                }
+                return null;
+              },
+            );
           },
         ),
       ),
@@ -50,11 +63,12 @@ void main() {
     expect(payloads, isNotEmpty);
     expect(payloads.single['url'], 'https://example.com/article');
 
-    final extracted = await controller.evaluateJavascript(
+    await controller.evaluateJavascript(
       source: "window.__rlExtract('https://example.com/article')",
     );
-    final json = extracted as String;
-    expect(json, contains('文章'));
-    expect(json, contains('nearbyImage'));
+    final data = await extractCompleter.future.timeout(const Duration(seconds: 5));
+
+    expect(data['linkText'], '文章');
+    expect(data['nearbyImage'], isNotNull);
   });
 }

@@ -101,9 +101,9 @@
 
   /**
    * 提取当前长按链接（或按 url 匹配到的链接）的信息。
-   * 返回 JSON 字符串，供 Dart evaluateJavascript 使用。
+   * 结果通过 rl:extractResult 回传给 Dart（evaluateJavascript 不会 await Promise）。
    */
-  window.__rlExtract = async function (url) {
+  async function collectLinkInfo(url) {
     let anchor = window.__rlLastAnchor;
     if (!anchor || (url && anchor.href !== url)) {
       try {
@@ -114,7 +114,7 @@
     }
 
     if (!anchor) {
-      return JSON.stringify({ linkText: '', nearbyText: '', nearbyImage: null });
+      return { linkText: '', nearbyText: '', nearbyImage: null };
     }
 
     const linkText = (anchor.textContent || '').trim();
@@ -129,11 +129,21 @@
           : imageUrl;
     }
 
-    return JSON.stringify({
+    return {
       linkText: linkText,
       nearbyText: nearbyText,
       nearbyImage: nearbyImage,
-    });
+    };
+  }
+
+  window.__rlExtract = async function (url) {
+    const data = await collectLinkInfo(url);
+    try {
+      window.flutter_inappwebview.callHandler('rl:extractResult', JSON.stringify(data));
+    } catch (_) {
+      // 非 app 环境忽略。
+    }
+    return true;
   };
 
   function sendLongPress(anchor) {
