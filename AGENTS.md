@@ -387,6 +387,8 @@ Secrets（`Settings → Actions → Secrets`）：`DOCKER_REGISTRY_USER`、`DOCK
 > 日志出现 `docker pull image=/readlater-ci:latest`、`invalid reference format`，说明 `CI_REGISTRY` 为空——填写仓库地址后重新触发工作流即可。
 >
 > `build-server-image` 的 Buildah 日志出现 `pinging container registry registry-1.docker.io ... i/o timeout`，说明 `DOCKER_MIRROR` 为空或不可达。若使用内网 Nexus：先把 `node:24-alpine` 推进 `192.168.1.100:8083/library/node:24-alpine`，再设 `SERVER_BASE_IMAGE=192.168.1.100:8083/library/node:24-alpine`；`PRIVATE_REGISTRIES` 未填时工作流会自动使用 `CI_REGISTRY`。
+>
+> 如果 mirror 返回 `short read: expected ... but got ...: unexpected EOF`，说明镜像代理缓存的 blob 不完整（kspeeder 等缓存服务常见）；先清理该镜像的代理缓存或重启代理服务，或直接改用 `SERVER_BASE_IMAGE` 指向内网 registry 中已推送的完整镜像。
 ### CI 镜像 (`readlater-ci`)
 
 工作流共用统一的 CI 镜像 `${CI_REGISTRY}/readlater-ci:latest`（通过 Forgejo 项目变量 `CI_REGISTRY` 配置），基于 `node:24`（Debian），预装：
