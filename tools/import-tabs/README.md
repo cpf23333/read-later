@@ -15,6 +15,19 @@ adb devices
 
 ## 用法
 
+### 导出压缩包（推荐）
+
+```bash
+node tools/import-tabs/import.mjs \
+  --with-screenshots \
+  --export readlater-tabs.zip
+```
+
+把 `readlater-tabs.zip` 传到手机，在 App 设置 → 从压缩包导入标签页。
+导出模式不需要 `--server` 和 `--api-key`。
+
+### 直接导入服务器
+
 ```bash
 node tools/import-tabs/import.mjs \
   --server http://192.168.1.10:3000 \

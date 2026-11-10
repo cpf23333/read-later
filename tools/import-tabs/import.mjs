@@ -19,6 +19,8 @@
  */
 
 import { execFileSync } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
 
 const DEFAULT_SERVER = process.env.READLATER_SERVER || '';
 const DEFAULT_API_KEY = process.env.READLATER_API_KEY || '';
@@ -72,6 +74,9 @@ function parseArgs(argv) {
           Math.min(8, Number.parseInt(next(), 10))
         );
         break;
+      case '--export':
+        args.exportPath = next();
+        break;
       case '--batch-size':
         args.batchSize = Math.max(
           1,
@@ -93,8 +98,10 @@ function parseArgs(argv) {
         throw new Error(`Unknown argument: ${arg}`);
     }
   }
-  if (!args.server) throw new Error('Missing --server (or READLATER_SERVER)');
-  if (!args.apiKey) throw new Error('Missing --api-key (or READLATER_API_KEY)');
+  if (!args.exportPath) {
+    if (!args.server) throw new Error('Missing --server (or READLATER_SERVER)');
+    if (!args.apiKey) throw new Error('Missing --api-key (or READLATER_API_KEY)');
+  }
   args.server = args.server.replace(/\/+$/, '');
   return args;
 }
@@ -109,6 +116,7 @@ Options:
   --with-screenshots       capture one CDP screenshot per tab and upload it
   --concurrency <n>        screenshot workers (1-8, default: 3)
   --batch-size <n>         import batch size, max 5000 (default: 5000)
+  --export <file.zip>      export tabs to an archive instead of importing
   --dry-run                only print tabs, do not upload
   --timeout <ms>           CDP/request timeout (default: 15000)
   --adb <path>             adb executable (default: adb or $ADB)
@@ -270,6 +278,73 @@ async function uploadScreenshot(server, apiKey, base64, timeoutMs) {
   return body.data.url;
 }
 
+// ===== ZIP（store，无依赖） =====
+function crc32(buffer) {
+  let crc = 0xffffffff;
+  for (const byte of buffer) {
+    crc ^= byte;
+    for (let i = 0; i < 8; i++) {
+      crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1));
+    }
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function createZip(entries) {
+  const localParts = [];
+  const centralParts = [];
+  let offset = 0;
+  for (const entry of entries) {
+    const name = Buffer.from(entry.name, 'utf8');
+    const data = Buffer.from(entry.data);
+    const crc = crc32(data);
+    const local = Buffer.alloc(30);
+    local.writeUInt32LE(0x04034b50, 0);
+    local.writeUInt16LE(20, 4);
+    local.writeUInt16LE(0x0800, 6); // UTF-8
+    local.writeUInt16LE(0, 8); // store
+    local.writeUInt16LE(0, 10);
+    local.writeUInt16LE(0, 12);
+    local.writeUInt32LE(crc, 14);
+    local.writeUInt32LE(data.length, 18);
+    local.writeUInt32LE(data.length, 22);
+    local.writeUInt16LE(name.length, 26);
+    local.writeUInt16LE(0, 28);
+    localParts.push(local, name, data);
+
+    const central = Buffer.alloc(46);
+    central.writeUInt32LE(0x02014b50, 0);
+    central.writeUInt16LE(20, 4);
+    central.writeUInt16LE(20, 6);
+    central.writeUInt16LE(0x0800, 8);
+    central.writeUInt16LE(0, 10);
+    central.writeUInt16LE(0, 12);
+    central.writeUInt16LE(0, 14);
+    central.writeUInt32LE(crc, 16);
+    central.writeUInt32LE(data.length, 20);
+    central.writeUInt32LE(data.length, 24);
+    central.writeUInt16LE(name.length, 28);
+    central.writeUInt16LE(0, 30);
+    central.writeUInt16LE(0, 32);
+    central.writeUInt16LE(0, 34);
+    central.writeUInt16LE(0, 36);
+    central.writeUInt32LE(0, 38);
+    central.writeUInt32LE(offset, 42);
+    centralParts.push(central, name);
+    offset += local.length + name.length + data.length;
+  }
+  const centralSize = centralParts.reduce((sum, part) => sum + part.length, 0);
+  const end = Buffer.alloc(22);
+  end.writeUInt32LE(0x06054b50, 0);
+  end.writeUInt16LE(0, 4);
+  end.writeUInt16LE(0, 6);
+  end.writeUInt16LE(entries.length, 8);
+  end.writeUInt16LE(entries.length, 10);
+  end.writeUInt32LE(centralSize, 12);
+  end.writeUInt32LE(offset, 16);
+  end.writeUInt16LE(0, 20);
+  return Buffer.concat([...localParts, ...centralParts, end]);
+}
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const device = discoverDevice(args.adb, args.device);
@@ -288,8 +363,7 @@ async function main() {
         tab &&
         tab.type === 'page' &&
         typeof tab.url === 'string' &&
-        !tab.url.startsWith('chrome://') &&
-        !tab.url.startsWith('devtools://')
+        tab.url.startsWith('http')
     );
     console.log(`found ${tabs.length} tabs`);
     for (const tab of tabs) {
@@ -300,6 +374,7 @@ async function main() {
     if (tabs.length === 0 || args.dryRun) return;
 
     const links = tabs.map((tab) => ({ url: tab.url, title: tab.title || '' }));
+    const screenshots = new Map();
 
     // 只对后台标签页做 CDP 截图，不激活/切换标签页。
     // 并发受限，标签页很多时避免同时压垮浏览器。
@@ -320,13 +395,19 @@ async function main() {
               args.timeoutMs
             );
             if (base64) {
-              link.screenshot = await uploadScreenshot(
-                args.server,
-                args.apiKey,
-                base64,
-                args.timeoutMs
-              );
-              console.log(`  ${progress} ${link.screenshot}  ${tab.url}`);
+              if (args.exportPath) {
+                screenshots.set(index, Buffer.from(base64, 'base64'));
+                link.screenshot = `screenshots/${index + 1}.png`;
+                console.log(`  ${progress} ${link.screenshot}  ${tab.url}`);
+              } else {
+                link.screenshot = await uploadScreenshot(
+                  args.server,
+                  args.apiKey,
+                  base64,
+                  args.timeoutMs
+                );
+                console.log(`  ${progress} ${link.screenshot}  ${tab.url}`);
+              }
             } else {
               console.warn(`  ${progress} empty, skipped: ${tab.url}`);
             }
@@ -337,6 +418,35 @@ async function main() {
       };
       const workers = Math.min(args.concurrency, tabs.length);
       await Promise.all(Array.from({ length: workers }, worker));
+    }
+
+    if (args.exportPath) {
+      const manifest = {
+        format: 'readlater-tabs',
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        source: socket,
+        tabs: links.map((link) => ({
+          url: link.url,
+          title: link.title,
+          ...(link.screenshot ? { screenshot: link.screenshot } : {}),
+        })),
+      };
+      const entries = [
+        {
+          name: 'manifest.json',
+          data: Buffer.from(JSON.stringify(manifest, null, 2), 'utf8'),
+        },
+      ];
+      for (const [index, data] of screenshots) {
+        entries.push({ name: `screenshots/${index + 1}.png`, data });
+      }
+      const target = path.resolve(args.exportPath);
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.writeFileSync(target, createZip(entries));
+      console.log(`exported: ${target}`);
+      console.log(`tabs: ${links.length}, screenshots: ${screenshots.size}`);
+      return;
     }
 
     // 服务端单次最多 5000 条；超过时由客户端分批导入。
@@ -370,8 +480,7 @@ async function main() {
         `batch ${batchNo}: imported ${body.data.imported}, failed ${body.data.failed}, total ${body.data.total}`
       );
     }
-    console.log(`imported: ${imported}, failed: ${failed}, total: ${links.length}`);
-  } finally {
+    console.log(`imported: ${imported}, failed: ${failed}, total: ${links.length}`);  } finally {
     try {
       adb([...deviceArgs(device), 'forward', '--remove', `tcp:${args.port}`], {
         adb: args.adb,
