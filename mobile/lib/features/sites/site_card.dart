@@ -6,7 +6,12 @@ import '../../core/util/origin.dart';
 
 /// 站点卡片：图标 + 名称 + host。
 class SiteCard extends StatelessWidget {
-  const SiteCard({super.key, required this.site, required this.onTap, this.onLongPress});
+  const SiteCard({
+    super.key,
+    required this.site,
+    required this.onTap,
+    this.onLongPress,
+  });
 
   final Site site;
   final VoidCallback onTap;
@@ -21,38 +26,44 @@ class SiteCard extends StatelessWidget {
       _ => null,
     };
 
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        onLongPress: onLongPress,
-        child: Padding(
-          padding: const EdgeInsets.all(10),
-          child: Row(
-            children: [
-              _SiteIcon(iconUrl: site.iconUrl, host: host),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      site.title.isEmpty ? host : site.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      uaLabel == null ? host : '$host · $uaLabel',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ],
+    final media = MediaQuery.of(context);
+    return MediaQuery(
+      data: media.copyWith(
+        textScaler: media.textScaler.clamp(maxScaleFactor: 1.2),
+      ),
+      child: Card(
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          onLongPress: onLongPress,
+          child: Padding(
+            padding: const EdgeInsets.all(10),
+            child: Row(
+              children: [
+                _SiteIcon(iconUrl: site.iconUrl, host: host),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        site.title.isEmpty ? host : site.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        uaLabel == null ? host : '$host · $uaLabel',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

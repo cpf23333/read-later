@@ -273,12 +273,21 @@ class _SitesScreenState extends ConsumerState<SitesScreen> {
       onRefresh: () => ref.read(sitesProvider.notifier).refresh(),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final columns = constraints.maxWidth >= 1000 ? 3 : 2;
+          final columns = constraints.maxWidth >= 1000
+              ? 3
+              : constraints.maxWidth >= 600
+              ? 2
+              : 1;
+          final aspectRatio = columns == 1
+              ? 5.2
+              : columns == 2
+              ? 3.6
+              : 3.2;
           return GridView.builder(
             padding: const EdgeInsets.all(8),
             gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: columns,
-              childAspectRatio: 3.2,
+              childAspectRatio: aspectRatio,
               crossAxisSpacing: 8,
               mainAxisSpacing: 8,
             ),
