@@ -201,6 +201,7 @@ openssl rand -base64 32
 | GET    | /api/sites/exists          | 检查站点是否存在（含 inTrash）         |
 | GET    | /api/settings/user-agent   | 获取全局默认 User-Agent                |
 | PATCH  | /api/settings/user-agent   | 更新全局默认 User-Agent                |
+| POST   | /api/import                | 批量导入链接（最多 5000 条，单事务）   |
 | POST   | /api/upload                | 上传图片（保留兼容）                   |
 
 ## 移动端（Flutter）

@@ -18,12 +18,11 @@ import {
 } from '../utils/database.ts';
 import { processImage, moveImageToTrash } from '../utils/image.ts';
 import { sanitizeId, sanitizeSearchQuery } from '../utils/security.ts';
-import { apiRateLimit, importRateLimit } from '../middleware/ratelimit.ts';
+import { apiRateLimit } from '../middleware/ratelimit.ts';
 import type {
   Link,
   CreateLinkBody,
   BatchCreateBody,
-  ImportBody,
   ApiResponse,
   PaginatedResponse,
 } from '../types/index.ts';
@@ -359,58 +358,6 @@ app.delete('/:id', apiRateLimit, async (c) => {
 app.get('/export', async (c) => {
   const links = exportLinks();
   return c.json<ApiResponse<Link[]>>({ success: true, data: links });
-});
-
-/**
- * 导入链接
- * POST /api/import
- */
-app.post('/import', importRateLimit, async (c) => {
-  const body = await c.req.json<ImportBody>();
-  const { links, mode = 'merge' } = body;
-
-  if (!Array.isArray(links)) {
-    return c.json<ApiResponse>({ success: false, error: 'links must be an array' }, 400);
-  }
-
-  if (mode === 'replace') {
-    // 清空现有链接
-    const allLinks = exportLinks();
-    for (const link of allLinks) {
-      deleteLink(link.id);
-    }
-  }
-
-  let imported = 0;
-  for (const item of links) {
-    try {
-      // 处理图片
-      const nearbyImagePath = await processImage(item.nearby_image || item.nearbyImage, 'nearby');
-      const screenshotPath = await processImage(item.screenshot, 'screenshot');
-
-      addLink({
-        id: item.id || `${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
-        url: item.url,
-        title: item.title || '',
-        nearby_image: nearbyImagePath,
-        screenshot: screenshotPath,
-        source_page: item.source_page || item.sourcePage || '',
-        created_at: item.created_at || item.createdAt || Date.now(),
-        custom_data:
-          typeof item.custom_data === 'string'
-            ? item.custom_data
-            : JSON.stringify(item.custom_data || item.customData || {}),
-      });
-      imported++;
-    } catch (e) {
-      // 忽略错误，继续处理下一个
-    }
-  }
-
-  return c.json<ApiResponse<{ imported: number; total: number }>>({
-    success: true,
-    data: { imported, total: links.length },
-  });
 });
 
 export default app;

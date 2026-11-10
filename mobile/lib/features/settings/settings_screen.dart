@@ -167,6 +167,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             '   adb forward tcp:9222 localabstract:chrome_devtools_remote\n'
             '3. 电脑执行导入脚本：\n'
             '   node tools/import-tabs/import.mjs --server <服务器地址> --api-key <API Key>\n\n'
+            '可选：加 --with-screenshots 通过 CDP 为每个标签页截页面预览图（会慢一些）。\n\n'
             '仅支持 Chromium 系浏览器；无线调试（adb connect）同样可用。\n免电脑方案（Shizuku / 无线调试 + app 内 ADB host）在评估中，v1 未实现。',
           ),
         ),

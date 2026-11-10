@@ -18,6 +18,13 @@ export function initDatabase(dataDir: string): Database.Database {
   const dbPath = path.join(dataDir, 'readlater.db');
   db = new Database(dbPath);
 
+  // 单用户场景下优先写入吞吐与读并发；WAL 也能避免导入时的读写互锁。
+  db.pragma('journal_mode = WAL');
+  db.pragma('synchronous = NORMAL');
+  db.pragma('busy_timeout = 5000');
+  db.pragma('temp_store = MEMORY');
+  db.pragma('cache_size = -20000');
+
   // 创建表
   db.exec(`
     CREATE TABLE IF NOT EXISTS links (
@@ -48,6 +55,8 @@ export function initDatabase(dataDir: string): Database.Database {
     );
 
     CREATE INDEX IF NOT EXISTS idx_links_created ON links(created_at);
+    CREATE INDEX IF NOT EXISTS idx_links_normalized_url ON links(normalized_url);
+    CREATE INDEX IF NOT EXISTS idx_links_domain ON links(domain);
     CREATE INDEX IF NOT EXISTS idx_trash_deleted ON trash(deleted_at);
 
     CREATE TABLE IF NOT EXISTS app_settings (
@@ -302,6 +311,14 @@ export function addLink(link: Omit<Link, 'updated_at' | 'normalized_url' | 'doma
 export function deleteLink(id: string): void {
   const database = getDatabase();
   database.prepare('DELETE FROM links WHERE id = ?').run(id);
+}
+
+/**
+ * 清空链接（导入 replace 模式使用，单事务）。
+ */
+export function clearLinks(): number {
+  const database = getDatabase();
+  return database.prepare('DELETE FROM links').run().changes;
 }
 
 /**

@@ -28,6 +28,7 @@ import { isAllowedExtension } from './utils/security.ts';
 
 // 导入路由
 import linksRoute from './routes/links.ts';
+import importRoute from './routes/import.ts';
 import trashRoute from './routes/trash.ts';
 import domainsRoute from './routes/domains.ts';
 import settingsRoute from './routes/settings.ts';
@@ -164,7 +165,7 @@ app.route('/api/search', linksRoute);
 
 // 导出/导入路由
 app.route('/api/export', linksRoute);
-app.route('/api/import', linksRoute);
+app.route('/api/import', importRoute);
 app.route('/api/exports', exportsRoute);
 
 // 启动服务器
