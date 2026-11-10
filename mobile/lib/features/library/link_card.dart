@@ -31,44 +31,45 @@ class LinkCard extends StatelessWidget {
     return Card(
       clipBehavior: Clip.antiAlias,
       color: selected ? Theme.of(context).colorScheme.secondaryContainer : null,
-      child: InkWell(
-        onTap: onTap,
-        onLongPress: onLongPress,
-        child: Padding(
-          padding: const EdgeInsets.all(8),
+      child: IntrinsicHeight(
+        child: InkWell(
+          onTap: onTap,
+          onLongPress: onLongPress,
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              SizedBox(width: 64, height: 64, child: _Thumb(image: image)),
-              const SizedBox(width: 10),
+              SizedBox(width: 92, child: _Thumb(image: image)),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Tooltip(
-                      message: link.url,
-                      child: Text(
-                        hasTitle ? title : link.url,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodyMedium,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 10, 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Tooltip(
+                        message: link.url,
+                        child: Text(
+                          hasTitle ? title : link.url,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
                       ),
-                    ),
-                    if (hasTitle) ...[
+                      if (hasTitle) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          hostOf(link.url) ?? link.url,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
                       const SizedBox(height: 4),
                       Text(
-                        hostOf(link.url) ?? link.url,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall,
+                        _formatDate(link.createdAt),
+                        style: Theme.of(context).textTheme.labelSmall,
                       ),
                     ],
-                    const SizedBox(height: 4),
-                    Text(
-                      _formatDate(link.createdAt),
-                      style: Theme.of(context).textTheme.labelSmall,
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ],

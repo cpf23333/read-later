@@ -132,9 +132,6 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
   }
 
   Future<void> _openLongPressSheet(LinkPressPayload payload) async {
-    final controller = _activeController();
-    if (controller == null) return;
-
     final result = await showModalBottomSheet<LongPressResult>(
       context: context,
       isScrollControlled: true,
@@ -145,7 +142,6 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
         linkText: payload.text,
         nearbyImage: null,
         extraction: payload.extraction,
-        takeScreenshot: () => _takeScreenshot(controller),
         onOpenInNewTab: (url) => ref.read(browserProvider.notifier).openTab(url),
       ),
     );

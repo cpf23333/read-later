@@ -23,7 +23,6 @@ Widget wrapSheet(FakeApiClient api, {FakePageMetaResolver? resolver, String url 
           url: url,
           sourcePage: 'https://b.com',
           linkText: '链接文字',
-          takeScreenshot: () async => null,
         ),
       ),
     ),

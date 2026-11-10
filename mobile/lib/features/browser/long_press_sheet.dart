@@ -39,7 +39,6 @@ class LongPressSheet extends ConsumerStatefulWidget {
     this.nearbyText,
     this.nearbyImage,
     this.extraction,
-    required this.takeScreenshot,
     this.onOpenInNewTab,
   });
 
@@ -49,7 +48,6 @@ class LongPressSheet extends ConsumerStatefulWidget {
   final String? nearbyText;
   final String? nearbyImage;
   final Future<Map<String, dynamic>>? extraction;
-  final Future<String?> Function() takeScreenshot;
   final ValueChanged<String>? onOpenInNewTab;
 
   @override
@@ -110,23 +108,12 @@ class _LongPressSheetState extends ConsumerState<LongPressSheet> {
     if (preview == null || _saving) return;
 
     setState(() => _saving = true);
-    String? screenshot;
-    try {
-      screenshot = await widget.takeScreenshot();
-    } catch (_) {
-      // 截图失败不阻塞收藏。
-      screenshot = null;
-    }
 
-    final caps = applyMediaCaps(
-      nearbyImage: preview.nearbyImage,
-      screenshot: screenshot,
-    );
+    final caps = applyMediaCaps(nearbyImage: preview.nearbyImage);
 
     try {
       await ref.read(captureServiceProvider).save(
             preview.copyWith(nearbyImage: caps.nearbyImage),
-            screenshotBase64: caps.screenshot,
           );
       if (!mounted) return;
       setState(() => _saving = false);
@@ -134,7 +121,6 @@ class _LongPressSheetState extends ConsumerState<LongPressSheet> {
         saved: true,
         kind: 'link',
         droppedImage: caps.droppedImage,
-        droppedScreenshot: caps.droppedScreenshot,
       ));
     } catch (error) {
       if (!mounted) return;
