@@ -51,7 +51,7 @@
 | 导航 | `go_router` | 声明式路由，便于以后接 deep link |
 | 数据源 | 现有 Hono 服务器；仅新增 `/api/sites`（见 5.4），现有接口与数据表不动 | 契约稳定，扩展与 app 共用；去重、图片处理都在服务端 |
 | 站点数据模型 | 服务端新建独立 `sites` 表（4 个端点） | 站点字段（origin/图标）与链接差异大，独立表避免污染 links/trash；列表可按站点批量返回 |
-| 标签页导入 | v1 用外部 adb 脚本；免电脑方案（无线 ADB / Shizuku）列 backlog | 普通 app 不能直接读标签页；ADB+CDP 已验证，Shizuku 直连需实机验证（16.7） |
+| 标签页导入 | v1 用外部 adb 脚本；免电脑方案已评估不可行（SELinux） | 普通 app 不能直接读标签页；ADB+CDP 已验证；网络 ADB / Shizuku 非 root 实测无法连接 Chrome socket（16.7） |
 | 数据库 | 保持 SQLite（v1 不换 PostgreSQL） | 单用户、数据量小、图片在文件系统；换 PG 的收益不足以抵消部署与代码改动，触发条件与优化项记入 todo.md |
 | 配置存储 | `flutter_secure_storage`（API Key、服务器地址、自定义配置） | Keystore 加密；个人自用不做多账号 |
 | 主题 | Material 3，跟随系统，支持深色 | 与扩展视觉习惯一致即可，不做像素级复刻 |
@@ -623,7 +623,7 @@ Chrome 开启"标签页同步"后，桌面扩展可用 `chrome.sessions.getDevic
    - Shizuku 在 Android 11+ 可借无线调试启动（仍需用户配对一次），之后 app 通过 Shizuku API 以 shell UID 执行命令/访问系统服务。
    - 可尝试让 shell 身份直连 `chrome_devtools_remote` socket，或由 Shizuku 启动的 helper 进程代理；成功则完全不需要 ADB/TCP，只需 Shizuku 授权。
    - 风险：SELinux 可能拒绝 shell 域访问 Chrome 的 socket，必须真机验证；Shizuku 未运行时不可用；Android <11 需 root。
-3. **建议**：先做 1–2 天 spike（真机 + Shizuku 已启动 + Chrome 多标签），优先验证路径 2；失败再评估路径 1。验证通过前不改进 v1 的 PC 脚本方案。
+3. **建议**：先做 1–2 天 spike（真机 + Shizuku 已启动 + Chrome 多标签），优先验证路径 2；失败再评估路径 1。验证通过前不改进 v1 的 PC 脚本方案。\n\n### 16.8 实测结论（2026-11-11）\n\n- 网络 ADB 配对、连接、`/json/list` 主机侧转发均成功；\n- app 直接 `open(localabstract:chrome_devtools_remote)` 被 adbd 拒绝；\n- ADB shell / Shizuku `rish`（非 root，UID 2000 shell）启动 helper 后连接 abstract socket 均为 `Permission denied`；\n- 根因是 SELinux 对 shell 域访问 Chrome socket 的限制，电脑 `adb forward` 因 adbd 特权上下文可用；\n- 决定：移除 app 内网络 ADB / Shizuku 入口与 `flutter_adb` 依赖，保留 `tools/import-tabs` 作为 PC adb 导入工具。详见 `docs/superpowers/notes/2026-11-11-network-adb-spike.md`。
 ## 17. 与现有项目的关系
 
 - `server/`：仅新增 `sites` 表与 `/api/sites` 路由组（7 个端点，含回收站），现有接口、数据表、部署方式不变；服务端版本号 bump。
