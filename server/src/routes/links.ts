@@ -8,7 +8,8 @@ import {
   searchLinks,
   getLinkById,
   findLinkByNormalizedUrl,
-  addLink,
+  upsertLink,
+  dedupeLinks,
   deleteLink,
   updateLink,
   addToTrash,
@@ -106,38 +107,23 @@ app.post('/', apiRateLimit, async (c) => {
   });
 
   const now = Date.now();
-
-  // 同一个标准化 URL 已存在时不再插入，更新标题/图片并把收藏时间刷新为当前时间。
-  const existing = findLinkByNormalizedUrl(url);
-  if (existing) {
-    updateLink(existing.id, {
-      title: title || existing.title,
-      ...(nearbyImagePath ? { nearby_image: nearbyImagePath } : {}),
-      ...(screenshotPath ? { screenshot: screenshotPath } : {}),
-      created_at: now,
-    });
-    return c.json<ApiResponse<{ updated: boolean; id: string }>>({
-      success: true,
-      data: { updated: true, id: existing.id },
-    });
-  }
-
-  const linkId = id || `${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-
-  addLink({
-    id: linkId,
-    url,
-    title: title || '',
-    nearby_image: nearbyImagePath,
-    screenshot: screenshotPath,
-    source_page: source_page || '',
-    created_at: created_at || now,
-    custom_data: JSON.stringify(custom_data || {}),
-  });
+  const result = upsertLink(
+    {
+      id: id || `${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+      url,
+      title: title || '',
+      nearby_image: nearbyImagePath,
+      screenshot: screenshotPath,
+      source_page: source_page || '',
+      created_at: created_at || now,
+      custom_data: JSON.stringify(custom_data || {}),
+    },
+    { overwriteTitle: true, refreshCreatedAt: true }
+  );
 
   return c.json<ApiResponse<{ updated: boolean; id: string }>>({
     success: true,
-    data: { updated: false, id: linkId },
+    data: { updated: !result.inserted, id: result.id },
   });
 });
 
@@ -187,11 +173,23 @@ app.post('/batch', apiRateLimit, async (c) => {
   }
 
   // 使用事务批量插入，单条失败不影响其他
-  const { succeeded, failed } = batchInsertLinks(processed);
+  const { succeeded, skipped, failed } = batchInsertLinks(processed);
 
-  return c.json<ApiResponse<{ count: number; total: number; failed: number }>>({
+  return c.json<ApiResponse<{ count: number; total: number; skipped: number; failed: number }>>({
     success: true,
-    data: { count: succeeded, total: links.length, failed },
+    data: { count: succeeded, total: links.length, skipped, failed },
+  });
+});
+
+/**
+ * 清理重复链接
+ * POST /api/links/dedupe
+ */
+app.post('/dedupe', apiRateLimit, async (c) => {
+  const result = dedupeLinks();
+  return c.json<ApiResponse<{ removed: number; groups: number }>>({
+    success: true,
+    data: result,
   });
 });
 

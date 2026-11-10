@@ -88,13 +88,13 @@ app.post('/', importRateLimit, async (c) => {
   }
 
   // 单事务批量写入，单条失败不影响其他。
-  const { succeeded, failed } = batchInsertLinks(processed);
+  const { succeeded, skipped, failed } = batchInsertLinks(processed);
 
   return c.json<
-    ApiResponse<{ imported: number; total: number; failed: number }>
+    ApiResponse<{ imported: number; total: number; skipped: number; failed: number }>
   >({
     success: true,
-    data: { imported: succeeded, total: links.length, failed },
+    data: { imported: succeeded, total: links.length, skipped, failed },
   });
 });
 

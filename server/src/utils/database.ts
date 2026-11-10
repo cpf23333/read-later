@@ -599,6 +599,91 @@ export function getDomainStats(): Array<{ domain: string; count: number }> {
 /**
  * 批量插入链接（使用事务，单条失败不影响其他）
  */
+export interface LinkUpsertInput {
+  id: string;
+  url: string;
+  title: string;
+  nearby_image: string | null;
+  screenshot: string | null;
+  source_page: string;
+  created_at: number;
+  custom_data: string;
+}
+
+export interface UpsertResult {
+  inserted: boolean;
+  skipped: boolean;
+  id: string;
+}
+
+function mergeMissingFields(
+  existing: Link,
+  input: LinkUpsertInput
+): { title?: string; nearby_image?: string; screenshot?: string } {
+  const fields: {
+    title?: string;
+    nearby_image?: string;
+    screenshot?: string;
+  } = {};
+  if (!existing.title && input.title) fields.title = input.title;
+  if (!existing.nearby_image && input.nearby_image) {
+    fields.nearby_image = input.nearby_image;
+  }
+  if (!existing.screenshot && input.screenshot) {
+    fields.screenshot = input.screenshot;
+  }
+  return fields;
+}
+
+/**
+ * 新增/更新单条链接。批量导入与手动新增共用同一套去重语义。
+ */
+export function upsertLink(
+  input: LinkUpsertInput,
+  options: { overwriteTitle?: boolean; refreshCreatedAt?: boolean } = {}
+): UpsertResult {
+  const database = getDatabase();
+  const normalized = normalizeUrl(input.url);
+  const existing = database
+    .prepare('SELECT * FROM links WHERE normalized_url = ?')
+    .get(normalized) as Link | undefined;
+  const now = Date.now();
+
+  if (!existing) {
+    database
+      .prepare(
+        `INSERT INTO links (id, url, normalized_url, title, nearby_image, screenshot, source_page, domain, created_at, updated_at, custom_data)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(
+        input.id,
+        input.url,
+        normalized,
+        input.title || '',
+        input.nearby_image,
+        input.screenshot,
+        input.source_page || '',
+        domainOf(input.url),
+        input.created_at,
+        now,
+        input.custom_data
+      );
+    return { inserted: true, skipped: false, id: input.id };
+  }
+
+  const fields = mergeMissingFields(existing, input);
+  if (options.overwriteTitle && input.title) fields.title = input.title;
+  if (options.refreshCreatedAt) {
+    updateLink(existing.id, {
+      ...fields,
+      created_at: now,
+    });
+  } else if (Object.keys(fields).length > 0) {
+    updateLink(existing.id, fields);
+  }
+  return { inserted: false, skipped: true, id: existing.id };
+}
+
 export function batchInsertLinks(
   items: Array<{
     id: string;
@@ -610,35 +695,19 @@ export function batchInsertLinks(
     created_at: number;
     custom_data: string;
   }>
-): { succeeded: number; failed: number } {
+): { succeeded: number; skipped: number; failed: number } {
   const database = getDatabase();
-  const now = Date.now();
-
-  const insert = database.prepare(
-    `INSERT INTO links (id, url, normalized_url, title, nearby_image, screenshot, source_page, domain, created_at, updated_at, custom_data)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  );
 
   let succeeded = 0;
+  let skipped = 0;
   let failed = 0;
 
   const insertMany = database.transaction((linksToInsert: typeof items) => {
     for (const link of linksToInsert) {
       try {
-        insert.run(
-          link.id,
-          link.url,
-          normalizeUrl(link.url),
-          link.title,
-          link.nearby_image,
-          link.screenshot,
-          link.source_page,
-          domainOf(link.url),
-          link.created_at,
-          now,
-          link.custom_data
-        );
-        succeeded++;
+        const result = upsertLink(link);
+        if (result.inserted) succeeded++;
+        else skipped++;
       } catch (e) {
         failed++;
         console.error('[batchInsertLinks] Failed to insert:', link.url, e);
@@ -648,8 +717,73 @@ export function batchInsertLinks(
 
   insertMany(items);
 
-  return { succeeded, failed };
+  return { succeeded, skipped, failed };
 }
+
+/**
+ * 清理已存在的重复链接（normalized_url 相同）。
+ * 保留信息最完整的一条，并用其他重复项补齐缺失标题/图片。
+ */
+export function dedupeLinks(): { removed: number; groups: number } {
+  const database = getDatabase();
+  const rows = database
+    .prepare(
+      'SELECT * FROM links WHERE normalized_url IS NOT NULL ORDER BY created_at ASC, id ASC'
+    )
+    .all() as Link[];
+  const groups = new Map<string, Link[]>();
+  for (const row of rows) {
+    const key = row.normalized_url || normalizeUrl(row.url);
+    if (!key) continue;
+    const list = groups.get(key) ?? [];
+    list.push(row);
+    groups.set(key, list);
+  }
+
+  const deleteStmt = database.prepare('DELETE FROM links WHERE id = ?');
+  let removed = 0;
+  let duplicateGroups = 0;
+
+  const run = database.transaction(() => {
+    for (const list of groups.values()) {
+      if (list.length <= 1) continue;
+      duplicateGroups++;
+      const keeper = [...list].sort((a, b) => {
+        const score = (link: Link) =>
+          (link.title ? 1 : 0) +
+          (link.nearby_image ? 2 : 0) +
+          (link.screenshot ? 1 : 0);
+        return score(b) - score(a) || a.created_at - b.created_at;
+      })[0];
+
+      const fields: {
+        title?: string;
+        nearby_image?: string;
+        screenshot?: string;
+      } = {};
+      for (const item of list) {
+        if (item.id === keeper.id) continue;
+        if (!keeper.title && !fields.title && item.title) fields.title = item.title;
+        if (!keeper.nearby_image && !fields.nearby_image && item.nearby_image) {
+          fields.nearby_image = item.nearby_image;
+        }
+        if (!keeper.screenshot && !fields.screenshot && item.screenshot) {
+          fields.screenshot = item.screenshot;
+        }
+        deleteStmt.run(item.id);
+        removed++;
+      }
+      if (Object.keys(fields).length > 0) updateLink(keeper.id, fields);
+    }
+  });
+  run();
+
+  return { removed, groups: duplicateGroups };
+}
+
+// ===== 导出任务操作 =====
+
+import type { ExportTask } from '../types/index.ts';
 
 /**
  * 导出所有链接
@@ -658,11 +792,6 @@ export function exportLinks(): Link[] {
   const database = getDatabase();
   return database.prepare('SELECT * FROM links').all() as Link[];
 }
-
-// ===== 导出任务操作 =====
-
-import type { ExportTask } from '../types/index.ts';
-
 export function createExportTask(id: string): void {
   const database = getDatabase();
   database
