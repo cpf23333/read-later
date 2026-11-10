@@ -38,6 +38,24 @@ export function normalizeUrl(url: string): string {
 }
 
 /**
+ * 提取 URL 的主机名（域名），用于按收藏目标归类。
+ * 非 http(s) 或非法 URL 返回 null。
+ */
+export function domainOf(url: string): string | null {
+  try {
+    const urlObj = new URL(url);
+    if (urlObj.protocol !== 'http:' && urlObj.protocol !== 'https:') {
+      return null;
+    }
+    const host = urlObj.hostname.toLowerCase();
+    // www.example.com 和 example.com 通常指向同一服务，归为同一域名
+    return host.startsWith('www.') ? host.slice(4) : host;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * 归一化为站点 origin（scheme://host[:port]）
  * 非 http(s) 或非法 URL 返回 null
  */

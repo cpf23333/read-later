@@ -11,6 +11,7 @@ export interface Link {
   nearby_image: string | null;
   screenshot: string | null;
   source_page: string | null;
+  domain: string | null;
   created_at: number;
   updated_at: number | null;
   custom_data: string | null;

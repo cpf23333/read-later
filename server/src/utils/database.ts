@@ -5,7 +5,7 @@
 import Database from 'better-sqlite3';
 import path from 'path';
 import { tokenizeSearchQuery } from './security.ts';
-import { normalizeUrl } from './url.ts';
+import { normalizeUrl, domainOf } from './url.ts';
 import { moveImageToTrash, restoreImageFromTrash, deleteImageFile } from './image.ts';
 import type { Link, TrashItem, Site } from '../types/index.ts';
 
@@ -28,6 +28,7 @@ export function initDatabase(dataDir: string): Database.Database {
       nearby_image TEXT,
       screenshot TEXT,
       source_page TEXT,
+      domain TEXT,
       created_at INTEGER NOT NULL,
       updated_at INTEGER,
       custom_data TEXT
@@ -92,7 +93,43 @@ export function initDatabase(dataDir: string): Database.Database {
     updateMany(linksWithoutNormalized);
   }
 
+  // 迁移：添加 domain 列并按收藏目标 URL 回填
+  const hasDomain = tableInfo.some((col) => col.name === 'domain');
+  if (!hasDomain) {
+    db.exec(`ALTER TABLE links ADD COLUMN domain TEXT`);
+  }
+
+  const linksWithoutDomain = db
+    .prepare("SELECT id, url FROM links WHERE domain IS NULL OR domain = ''")
+    .all() as Array<{ id: string; url: string }>;
+  if (linksWithoutDomain.length > 0) {
+    const updateDomain = db.prepare('UPDATE links SET domain = ? WHERE id = ?');
+    const updateDomainMany = db.transaction((rows: typeof linksWithoutDomain) => {
+      for (const row of rows) {
+        updateDomain.run(domainOf(row.url), row.id);
+      }
+    });
+    updateDomainMany(linksWithoutDomain);
+  }
+
+  // 迁移：把历史上已写入的 www. 前缀统一去掉
+  const wwwDomains = db
+    .prepare("SELECT id FROM links WHERE domain LIKE 'www.%'")
+    .all() as Array<{ id: string }>;
+  if (wwwDomains.length > 0) {
+    const updateWwwDomain = db.prepare(
+      "UPDATE links SET domain = substr(domain, 5) WHERE id = ?"
+    );
+    const updateWwwMany = db.transaction((rows: typeof wwwDomains) => {
+      for (const row of rows) {
+        updateWwwDomain.run(row.id);
+      }
+    });
+    updateWwwMany(wwwDomains);
+  }
+
   db.exec(`CREATE INDEX IF NOT EXISTS idx_links_normalized_url ON links(normalized_url)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_links_domain ON links(domain)`);
 
   return db;
 }
@@ -137,10 +174,10 @@ export function getLinks(
   const params: (string | number)[] = [];
   const conditions: string[] = [];
 
-  // 域名过滤
+  // 域名过滤：按收藏目标 URL 的域名，而不是来源页面
   if (domain) {
-    conditions.push('source_page LIKE ?');
-    params.push(`%${domain}%`);
+    conditions.push('domain = ?');
+    params.push(domain.trim().toLowerCase().replace(/^www\./, ''));
   }
 
   // 搜索条件：多 token AND 匹配
@@ -218,14 +255,14 @@ export function findLinkByNormalizedUrl(url: string): Link | undefined {
 /**
  * 添加链接
  */
-export function addLink(link: Omit<Link, 'updated_at' | 'normalized_url'>): void {
+export function addLink(link: Omit<Link, 'updated_at' | 'normalized_url' | 'domain'>): void {
   const database = getDatabase();
   const now = Date.now();
 
   database
     .prepare(
-      `INSERT INTO links (id, url, normalized_url, title, nearby_image, screenshot, source_page, created_at, updated_at, custom_data)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO links (id, url, normalized_url, title, nearby_image, screenshot, source_page, domain, created_at, updated_at, custom_data)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .run(
       link.id,
@@ -235,6 +272,7 @@ export function addLink(link: Omit<Link, 'updated_at' | 'normalized_url'>): void
       link.nearby_image,
       link.screenshot,
       link.source_page || '',
+      domainOf(link.url),
       link.created_at,
       now,
       link.custom_data
@@ -505,20 +543,17 @@ export function getStats(): { linkCount: number; trashCount: number } {
  */
 export function getDomainStats(): Array<{ domain: string; count: number }> {
   const database = getDatabase();
-  const links = database.prepare('SELECT source_page FROM links').all() as Array<{
-    source_page: string;
+  const links = database.prepare('SELECT url, domain FROM links').all() as Array<{
+    url: string;
+    domain: string | null;
   }>;
 
   const domainCounts = new Map<string, number>();
 
   for (const link of links) {
-    try {
-      const domain = new URL(link.source_page).hostname;
-      if (domain) {
-        domainCounts.set(domain, (domainCounts.get(domain) || 0) + 1);
-      }
-    } catch {
-      // 忽略无效 URL
+    const domain = link.domain || domainOf(link.url);
+    if (domain) {
+      domainCounts.set(domain, (domainCounts.get(domain) || 0) + 1);
     }
   }
 
@@ -546,8 +581,8 @@ export function batchInsertLinks(
   const now = Date.now();
 
   const insert = database.prepare(
-    `INSERT INTO links (id, url, normalized_url, title, nearby_image, screenshot, source_page, created_at, updated_at, custom_data)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO links (id, url, normalized_url, title, nearby_image, screenshot, source_page, domain, created_at, updated_at, custom_data)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
 
   let succeeded = 0;
@@ -564,6 +599,7 @@ export function batchInsertLinks(
           link.nearby_image,
           link.screenshot,
           link.source_page,
+          domainOf(link.url),
           link.created_at,
           now,
           link.custom_data
