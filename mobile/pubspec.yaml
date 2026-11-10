@@ -44,3 +44,7 @@ flutter:
   assets:
     - assets/js/
     - assets/test/
+
+dependency_overrides:
+  media_kit_libs_android_video:
+    path: third_party/media_kit_libs_android_video
