@@ -83,8 +83,8 @@ final sitesProvider = NotifierProvider<SitesNotifier, SitesState>(
 /// 全局默认 User-Agent。
 final globalUserAgentProvider =
     NotifierProvider<GlobalUserAgentController, GlobalUserAgentState>(
-  GlobalUserAgentController.new,
-);
+      GlobalUserAgentController.new,
+    );
 
 /// 主题模式。
 final themeProvider = NotifierProvider<ThemeController, ThemeMode>(
@@ -94,5 +94,5 @@ final themeProvider = NotifierProvider<ThemeController, ThemeMode>(
 /// 视频播放偏好（自动播放、是否显示播放按钮）。
 final videoSettingsProvider =
     NotifierProvider<VideoSettingsController, VideoSettings>(
-  VideoSettingsController.new,
-);
+      VideoSettingsController.new,
+    );

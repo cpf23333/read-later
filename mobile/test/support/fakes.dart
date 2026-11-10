@@ -3,6 +3,7 @@ import 'package:readlater/core/api/errors.dart';
 import 'package:readlater/core/config/key_value_store.dart';
 import 'package:readlater/core/config/config_store.dart';
 import 'package:readlater/core/models/health.dart';
+import 'package:readlater/core/models/import_link.dart';
 import 'package:readlater/core/models/link.dart';
 import 'package:readlater/core/models/domain_stat.dart';
 import 'package:readlater/core/models/site.dart';
@@ -104,6 +105,7 @@ class FakeApiClient implements ApiClient {
   final List<List<String>> batchRestoredTrashIds = [];
   final List<List<String>> batchPurgedTrashIds = [];
   final List<Map<String, Object?>> updatedLinks = [];
+  final List<ImportLink> importedLinks = [];
   int listLinksCalls = 0;
   final List<int> listLinksPages = [];
   final List<String?> listLinksDomains = [];
@@ -283,6 +285,29 @@ class FakeApiClient implements ApiClient {
   }) async {
     _throwIfError();
     return 'https://example.com/images/uploaded.png';
+  }
+
+  @override
+  Future<String> uploadImagePath(
+    String image, {
+    String? filename,
+    String? purpose,
+  }) async {
+    _throwIfError();
+    return '/images/uploaded.png';
+  }
+
+  @override
+  Future<DedupeResult> dedupeLinks() async {
+    _throwIfError();
+    return const DedupeResult(removed: 0, groups: 0);
+  }
+
+  @override
+  Future<ImportResult> importLinks(List<ImportLink> links) async {
+    _throwIfError();
+    importedLinks.addAll(links);
+    return ImportResult(imported: links.length, failed: 0, total: links.length);
   }
 
   @override

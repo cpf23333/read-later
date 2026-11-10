@@ -3,6 +3,7 @@ import '../models/domain_stat.dart';
 import '../models/site.dart';
 import '../models/user_agent_rule.dart';
 import '../models/health.dart';
+import '../models/import_link.dart';
 
 /// 服务器 API 客户端接口（便于测试替换）。
 abstract class ApiClient {
@@ -51,6 +52,13 @@ abstract class ApiClient {
     String? userAgent,
   });
   Future<String> uploadImage(String image, {String? filename, String? purpose});
+  Future<String> uploadImagePath(
+    String image, {
+    String? filename,
+    String? purpose,
+  });
+  Future<ImportResult> importLinks(List<ImportLink> links);
+  Future<DedupeResult> dedupeLinks();
   Future<List<Site>> listSiteTrash();
   Future<void> restoreSite(String id);
   Future<void> purgeSite(String id);

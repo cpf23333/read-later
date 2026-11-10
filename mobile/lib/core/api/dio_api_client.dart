@@ -5,6 +5,7 @@ import '../config/config_store.dart';
 import '../models/config.dart';
 import '../models/domain_stat.dart';
 import '../models/health.dart';
+import '../models/import_link.dart';
 import '../models/link.dart';
 import '../models/site.dart';
 import '../models/user_agent_rule.dart';
@@ -397,6 +398,21 @@ class DioApiClient implements ApiClient {
     String? filename,
     String? purpose,
   }) async {
+    final path = await uploadImagePath(
+      image,
+      filename: filename,
+      purpose: purpose,
+    );
+    final config = await _configStore.read();
+    return _resolvePath(path, config.baseUrl) ?? path;
+  }
+
+  @override
+  Future<String> uploadImagePath(
+    String image, {
+    String? filename,
+    String? purpose,
+  }) async {
     final body = _unwrap(
       await _request(
         'POST',
@@ -409,8 +425,34 @@ class DioApiClient implements ApiClient {
     if (path == null || path.isEmpty) {
       throw const ServerException('上传失败');
     }
-    final config = await _configStore.read();
-    return _resolvePath(path, config.baseUrl) ?? path;
+    return path;
+  }
+
+  @override
+  Future<ImportResult> importLinks(List<ImportLink> links) async {
+    final body = _unwrap(
+      await _request(
+        'POST',
+        '/api/import',
+        data: {
+          'links': links.map((link) => link.toJson()).toList(),
+          'mode': 'merge',
+        },
+      ),
+    );
+    final data = body['data'];
+    return ImportResult.fromJson(
+      data is Map<String, dynamic> ? data : const {},
+    );
+  }
+
+  @override
+  Future<DedupeResult> dedupeLinks() async {
+    final body = _unwrap(await _request('POST', '/api/links/dedupe'));
+    final data = body['data'];
+    return DedupeResult.fromJson(
+      data is Map<String, dynamic> ? data : const {},
+    );
   }
 
   @override

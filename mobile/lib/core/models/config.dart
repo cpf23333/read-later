@@ -21,10 +21,10 @@ class ServerConfig {
   }
 
   Map<String, dynamic> toJson() => {
-        'baseUrl': baseUrl,
-        'apiKey': apiKey,
-        'enabled': enabled,
-      };
+    'baseUrl': baseUrl,
+    'apiKey': apiKey,
+    'enabled': enabled,
+  };
 
   factory ServerConfig.fromJson(Map<String, dynamic> json) {
     return ServerConfig(

@@ -6,6 +6,7 @@ import '../../core/api/errors.dart';
 import '../../core/config/server_url.dart';
 import '../../core/models/config.dart';
 import '../../core/models/user_agent_rule.dart';
+import '../../features/import_tabs/archive_import_screen.dart';
 import '../../providers.dart';
 
 /// 设置页：服务器配置、主题、清除浏览数据、导入说明。
@@ -161,14 +162,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         title: const Text('从本机浏览器导入标签页'),
         content: const SingleChildScrollView(
           child: SelectableText(
-            '这是电脑上执行的一次性流程（需要 adb）：\n\n'
-            '1. 手机/平板开启开发者选项与 USB 调试，保持 Chrome/Brave 运行。\n'
-            '2. 电脑执行：\n'
-            '   adb forward tcp:9222 localabstract:chrome_devtools_remote\n'
-            '3. 电脑执行导入脚本：\n'
-            '   node tools/import-tabs/import.mjs --server <服务器地址> --api-key <API Key>\n\n'
-            '可选：加 --with-screenshots 通过 CDP 为每个标签页截页面预览图（会慢一些）。\n\n'
-            '仅支持 Chromium 系浏览器；无线调试（adb connect）同样可用。\n免电脑方案（Shizuku / 无线调试 + app 内 ADB host）在评估中，v1 未实现。',
+            '这是电脑上执行的一次性流程（需要 adb + Node.js 24+）：\n\n'
+            '1. 手机/平板开启开发者选项与 USB 调试，保持 Chrome/Brave/Edge 运行。\n'
+            '2. 脚本不在 App 内，位于仓库根目录：\n'
+            '   tools/import-tabs/import.mjs\n'
+            '   从仓库克隆，或单独下载这个文件。\n'
+            '3. 在仓库根目录执行：\n'
+            '   node tools/import-tabs/import.mjs --with-screenshots --export readlater-tabs.zip\n\n'
+            '把 zip 传到手机，用“从压缩包导入标签页”导入；导出模式不需要服务器地址/API Key。\n'
+            '如果直接导入服务器，也可以用 --server/--api-key。\n\n'
+            '仅支持 Chromium 系浏览器；无线调试（adb connect）同样可用。\n'
+            '免电脑方案（无线调试 / Shizuku）已实测受 SELinux 限制，无法读取 Chrome socket；请使用电脑 adb。',
           ),
         ),
         actions: [
@@ -297,9 +301,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
           ListTile(
             contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.folder_zip_outlined),
+            title: const Text('从压缩包导入标签页'),
+            subtitle: const Text('选择 readlater-tabs.zip'),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const ArchiveImportScreen(),
+              ),
+            ),
+          ),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
             leading: const Icon(Icons.download_outlined),
             title: const Text('从本机浏览器导入标签页'),
-            subtitle: const Text('v1 需电脑 + adb，查看步骤'),
+            subtitle: const Text('需电脑 + adb，查看步骤'),
             onTap: _showImportHelp,
           ),
           const Divider(height: 32),
