@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/models/import_link.dart';
 import '../../core/models/link.dart';
 import '../../providers.dart';
 
@@ -77,7 +78,9 @@ class LibraryNotifier extends Notifier<LibraryState> {
   Future<void> refresh() async {
     state = state.copyWith(loading: true, clearError: true, page: 1);
     try {
-      final result = await ref.read(apiClientProvider).listLinks(
+      final result = await ref
+          .read(apiClientProvider)
+          .listLinks(
             page: 1,
             pageSize: pageSize,
             search: state.search.isEmpty ? null : state.search,
@@ -103,7 +106,9 @@ class LibraryNotifier extends Notifier<LibraryState> {
     state = state.copyWith(loadingMore: true);
     try {
       final nextPage = state.page + 1;
-      final result = await ref.read(apiClientProvider).listLinks(
+      final result = await ref
+          .read(apiClientProvider)
+          .listLinks(
             page: nextPage,
             pageSize: pageSize,
             search: state.search.isEmpty ? null : state.search,
@@ -150,14 +155,28 @@ class LibraryNotifier extends Notifier<LibraryState> {
 
     final removed = state.links[index];
     final remaining = List<LinkItem>.from(state.links)..removeAt(index);
-    state = state.copyWith(links: remaining, total: state.total - 1, clearError: true);
+    state = state.copyWith(
+      links: remaining,
+      total: state.total - 1,
+      clearError: true,
+    );
 
     try {
       await ref.read(apiClientProvider).deleteLink(id);
     } catch (error) {
       final restored = List<LinkItem>.from(state.links)..insert(index, removed);
-      state = state.copyWith(links: restored, total: state.total + 1, error: '$error');
+      state = state.copyWith(
+        links: restored,
+        total: state.total + 1,
+        error: '$error',
+      );
     }
+  }
+
+  Future<DedupeResult> dedupe() async {
+    final result = await ref.read(apiClientProvider).dedupeLinks();
+    await refresh();
+    return result;
   }
 
   Future<void> batchDelete(List<String> ids) async {

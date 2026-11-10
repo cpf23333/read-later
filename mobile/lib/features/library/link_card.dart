@@ -27,52 +27,61 @@ class LinkCard extends StatelessWidget {
     final image = link.nearbyImage ?? link.screenshot;
     final title = link.title.trim();
     final hasTitle = title.isNotEmpty;
+    final media = MediaQuery.of(context);
 
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      color: selected ? Theme.of(context).colorScheme.secondaryContainer : null,
-      child: IntrinsicHeight(
-        child: InkWell(
-          onTap: onTap,
-          onLongPress: onLongPress,
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              SizedBox(width: 92, child: _Thumb(image: image)),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 8, 10, 8),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Tooltip(
-                        message: link.url,
-                        child: Text(
-                          hasTitle ? title : link.url,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.bodyMedium,
+    return MediaQuery(
+      data: media.copyWith(
+        textScaler: media.textScaler.clamp(maxScaleFactor: 1.2),
+      ),
+      child: Card(
+        clipBehavior: Clip.antiAlias,
+        color: selected
+            ? Theme.of(context).colorScheme.secondaryContainer
+            : null,
+        child: IntrinsicHeight(
+          child: InkWell(
+            onTap: onTap,
+            onLongPress: onLongPress,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SizedBox(width: 92, child: _Thumb(image: image)),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 4, 10, 4),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Tooltip(
+                          message: link.url,
+                          child: Text(
+                            hasTitle ? title : link.url,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
                         ),
-                      ),
-                      if (hasTitle) ...[
-                        const SizedBox(height: 4),
+                        if (hasTitle) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            hostOf(link.url) ?? link.url,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
+                        const SizedBox(height: 2),
                         Text(
-                          hostOf(link.url) ?? link.url,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.bodySmall,
+                          _formatDate(link.createdAt),
+                          style: Theme.of(context).textTheme.labelSmall,
                         ),
                       ],
-                      const SizedBox(height: 4),
-                      Text(
-                        _formatDate(link.createdAt),
-                        style: Theme.of(context).textTheme.labelSmall,
-                      ),
-                    ],
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -81,7 +90,9 @@ class LinkCard extends StatelessWidget {
 
   String _formatDate(int millis) {
     if (millis <= 0) return '';
-    return DateFormat('yyyy-MM-dd').format(DateTime.fromMillisecondsSinceEpoch(millis));
+    return DateFormat(
+      'yyyy-MM-dd',
+    ).format(DateTime.fromMillisecondsSinceEpoch(millis));
   }
 }
 
@@ -99,7 +110,10 @@ class _Thumb extends StatelessWidget {
 
     if (value.startsWith('data:')) {
       try {
-        return Image.memory(base64Decode(value.split(',').last), fit: BoxFit.cover);
+        return Image.memory(
+          base64Decode(value.split(',').last),
+          fit: BoxFit.cover,
+        );
       } catch (_) {
         return _placeholder(context);
       }
@@ -116,7 +130,10 @@ class _Thumb extends StatelessWidget {
   Widget _placeholder(BuildContext context) {
     return Container(
       color: Theme.of(context).colorScheme.surfaceContainerHighest,
-      child: Icon(Icons.image_outlined, color: Theme.of(context).colorScheme.outline),
+      child: Icon(
+        Icons.image_outlined,
+        color: Theme.of(context).colorScheme.outline,
+      ),
     );
   }
 }

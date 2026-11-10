@@ -20,6 +20,7 @@ class LibraryScreen extends ConsumerStatefulWidget {
 class _LibraryScreenState extends ConsumerState<LibraryScreen> {
   final TextEditingController _searchController = TextEditingController();
   bool _grid = true;
+  bool _deduping = false;
   final Set<String> _selected = {};
 
   @override
@@ -42,6 +43,74 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
 
   void _clearSelection() {
     setState(_selected.clear);
+  }
+
+  Future<void> _confirmDedupe() async {
+    if (_deduping) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('去重'),
+        content: const Text('按标准化 URL 合并重复收藏，保留信息最完整的一条。继续？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('去重'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _deduping = true);
+    // 去重是一个服务端单事务请求，没有可用的细粒度进度，只显示不确定进度。
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => PopScope(
+        canPop: false,
+        child: AlertDialog(
+          content: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+              const SizedBox(width: 16),
+              Text(
+                '正在去重，请稍候...',
+                style: Theme.of(dialogContext).textTheme.bodyMedium,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    try {
+      final result = await ref.read(libraryProvider.notifier).dedupe();
+      if (!mounted) return;
+      Navigator.of(context, rootNavigator: true).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('去重完成：合并 ${result.groups} 组，删除 ${result.removed} 条'),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      Navigator.of(context, rootNavigator: true).pop();
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('去重失败：$error')));
+    } finally {
+      if (mounted) setState(() => _deduping = false);
+    }
   }
 
   Future<void> _confirmBatchDelete() async {
@@ -85,9 +154,9 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
       domains = await ref.read(apiClientProvider).listDomains();
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('加载域名失败：$error')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('加载域名失败：$error')));
       return;
     }
     if (!mounted) return;
@@ -109,7 +178,9 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
               ListTile(
                 title: Text(item.domain),
                 subtitle: Text('${item.count} 条'),
-                trailing: current == item.domain ? const Icon(Icons.check) : null,
+                trailing: current == item.domain
+                    ? const Icon(Icons.check)
+                    : null,
                 onTap: () => Navigator.pop(sheetContext, item.domain),
               ),
           ],
@@ -118,7 +189,9 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     );
 
     if (selected == null || !mounted) return;
-    ref.read(libraryProvider.notifier).setDomain(selected.isEmpty ? null : selected);
+    ref
+        .read(libraryProvider.notifier)
+        .setDomain(selected.isEmpty ? null : selected);
   }
 
   @override
@@ -146,6 +219,11 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
               ]
             : [
                 IconButton(
+                  tooltip: '去重',
+                  icon: const Icon(Icons.auto_fix_high),
+                  onPressed: _deduping ? null : _confirmDedupe,
+                ),
+                IconButton(
                   tooltip: '按域名筛选',
                   icon: Badge(
                     isLabelVisible: state.domain != null,
@@ -159,13 +237,21 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                   onSelected: (value) {
                     switch (value) {
                       case 'created_desc':
-                        ref.read(libraryProvider.notifier).setSort(sortBy: 'created_at', sortDesc: true);
+                        ref
+                            .read(libraryProvider.notifier)
+                            .setSort(sortBy: 'created_at', sortDesc: true);
                       case 'created_asc':
-                        ref.read(libraryProvider.notifier).setSort(sortBy: 'created_at', sortDesc: false);
+                        ref
+                            .read(libraryProvider.notifier)
+                            .setSort(sortBy: 'created_at', sortDesc: false);
                       case 'title_asc':
-                        ref.read(libraryProvider.notifier).setSort(sortBy: 'title', sortDesc: false);
+                        ref
+                            .read(libraryProvider.notifier)
+                            .setSort(sortBy: 'title', sortDesc: false);
                       case 'title_desc':
-                        ref.read(libraryProvider.notifier).setSort(sortBy: 'title', sortDesc: true);
+                        ref
+                            .read(libraryProvider.notifier)
+                            .setSort(sortBy: 'title', sortDesc: true);
                     }
                   },
                   itemBuilder: (context) => const [
@@ -185,7 +271,9 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                   icon: const Icon(Icons.delete_outline),
                   onPressed: () {
                     Navigator.of(context).push(
-                      MaterialPageRoute(builder: (routeContext) => const TrashScreen()),
+                      MaterialPageRoute(
+                        builder: (routeContext) => const TrashScreen(),
+                      ),
                     );
                   },
                 ),
@@ -203,7 +291,8 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                 border: OutlineInputBorder(),
                 hintText: '搜索标题或 URL',
               ),
-              onChanged: (value) => ref.read(libraryProvider.notifier).setSearch(value),
+              onChanged: (value) =>
+                  ref.read(libraryProvider.notifier).setSearch(value),
             ),
           ),
           if (state.domain != null)
@@ -213,10 +302,14 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                 children: [
                   InputChip(
                     label: Text(state.domain!),
-                    onDeleted: () => ref.read(libraryProvider.notifier).setDomain(null),
+                    onDeleted: () =>
+                        ref.read(libraryProvider.notifier).setDomain(null),
                   ),
                   const Spacer(),
-                  Text('${state.total} 条', style: Theme.of(context).textTheme.bodySmall),
+                  Text(
+                    '${state.total} 条',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
                 ],
               ),
             ),
@@ -266,12 +359,21 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
   Widget _buildGrid(LibraryState state) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final columns = constraints.maxWidth >= 1000 ? 3 : 2;
+        final columns = constraints.maxWidth >= 1000
+            ? 3
+            : constraints.maxWidth >= 600
+            ? 2
+            : 1;
+        final aspectRatio = columns == 1
+            ? 5.0
+            : columns == 2
+            ? 3.0
+            : 3.2;
         return GridView.builder(
           padding: const EdgeInsets.all(8),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: columns,
-            childAspectRatio: 2.6,
+            childAspectRatio: aspectRatio,
             crossAxisSpacing: 8,
             mainAxisSpacing: 8,
           ),
