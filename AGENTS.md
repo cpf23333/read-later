@@ -375,7 +375,8 @@ reload.bat   # Windows
 | 变量 | 必需 | 说明 | 示例 |
 | --- | --- | --- | --- |
 | `CI_REGISTRY` | 是 | CI 镜像所在仓库，末尾不要带 `/` | `192.168.1.100:8083` |
-| `MOBILE_CI_IMAGE` | 构建 APK 时必填 | Flutter 3.38 + JDK 21 + Android SDK 镜像 | `192.168.1.100:8083/readlater-flutter:3.38.10` |
+| `MOBILE_CI_IMAGE` | 构建 APK 时必填 | Flutter 3.38 + JDK 21 + Android SDK 镜像 | `192.168.1.100:8083/readlater-android-ci:3.38.10` |
+| `PUB_HOSTED_URL` | 否 | Dart pub 镜像源；不填用 pub.dev | `https://pub.flutter-io.cn` |
 | `CI_BASE_IMAGE` | 否 | CI 镜像基础镜像 | `node:24` |
 | `NPM_CONFIG_REGISTRY` | 否 | npm 源 | `https://registry.npmmirror.com` |
 | `EXTENSION_KEY` | 否 | 扩展固定 ID 的签名 key | - |

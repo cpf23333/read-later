@@ -2,16 +2,35 @@ name: Build Mobile APK
 
 on:
   workflow_dispatch:
+    inputs:
+      use_cache:
+        description: 使用 Gradle 构建缓存
+        type: boolean
+        default: true
 
 jobs:
   build-apk:
     runs-on: docker
     container:
-      # 需要包含 Flutter 3.38.x + JDK 21 + Android SDK（可自建并推到 Nexus）
-      # 例如：MOBILE_CI_IMAGE=192.168.1.100:8083/readlater-flutter:3.38.10
+      # 需要包含 Flutter 3.38.x + JDK 21 + Android SDK
       image: ${{ vars.MOBILE_CI_IMAGE }}
+    env:
+      HOME: /root
+      PUB_CACHE: /root/.pub-cache
+      GRADLE_USER_HOME: /root/.gradle
+      PUB_HOSTED_URL: ${{ vars.PUB_HOSTED_URL || 'https://pub.flutter-io.cn' }}
     steps:
       - uses: actions/checkout@v7
+
+      - name: Cache Gradle build cache
+        if: ${{ github.event.inputs.use_cache != 'false' }}
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.gradle/caches/build-cache-1
+          key: ${{ runner.os }}-gradle-build-${{ hashFiles('mobile/android/**/*.gradle*', 'mobile/android/gradle/wrapper/gradle-wrapper.properties', 'mobile/pubspec.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-build-
 
       - name: Prepare naming variables
         id: vars
@@ -30,8 +49,8 @@ jobs:
         working-directory: mobile
         run: |
           flutter pub get
-          flutter analyze
-          flutter test
+          flutter analyze --no-pub
+          flutter test --no-pub
 
       - name: Build arm64 release APK
         working-directory: mobile

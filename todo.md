@@ -74,3 +74,29 @@
 - [ ] 服务端测试框架（当前无，仅 curl 手测）
 - [ ] `AGENTS.md` 补充 mobile 章节与 `/api/sites` API 表
 - [ ] 扩展端与移动端行为对齐检查清单
+
+## 10. CI 构建与镜像优化（Forgejo）
+
+> 结论：`readlater-ci`（扩展/服务端）与移动端镜像保持独立，不合并；移动端镜像体积 6.85GB，合并会拖慢所有 CI job。
+
+### 已完成
+
+- [x] 移动端镜像采用 `ghcr.io/cirruslabs/flutter:3.38.10`（Flutter 3.38.10 + JDK 21 + Android SDK 36）
+- [x] 派生镜像 `mobile/ci/Dockerfile` 补 Node（Gitea/Forgejo 的 JS action 需要 `node`）
+- [x] 派生镜像已构建并验证（15.5GB，含 Node/NDK/CMake/pub/Gradle 缓存）
+- [x] 新增 `build-mobile-apk.yml`（手动触发，arm64 APK artifact）
+- [x] workflow 支持 `MOBILE_CI_IMAGE`、`PUB_HOSTED_URL` 变量
+
+### 待优化
+
+- [ ] **移动端镜像预装完整构建链**：在 `ci/mobile-ci/Dockerfile` 中预装 NDK 29.0.13599879 / 28.2.13676358、CMake 3.22.1、build-tools 35/36、platform 34/35/36、Gradle 8.14 发行包与 Gradle 依赖缓存、`~/.pub-cache`；CI 可改为离线构建，避免每次下载 SDK/NDK/CMake
+- [ ] **移动端 pub cache 预置**：构建 `readlater-android-ci` 镜像时复制 `mobile/pubspec.lock` 并执行 `flutter pub get`，把 `/root/.pub-cache` 打进镜像；CI 改为 `flutter pub get --offline`（首选，避免每次 CI 访问 pub.dev）
+- [ ] **Gradle 缓存**：移动端 workflow 加 `actions/cache@v6` 缓存 `~/.gradle/caches`、`~/.gradle/wrapper`，按 `mobile/android/**/*.gradle*` + `gradle-wrapper.properties` 做 key
+- [ ] **Nexus Maven proxy**：为 Android Gradle 的 `google()` / `mavenCentral()` 依赖建 Maven proxy（8081 `/repository/maven-*`），通过 `settings.gradle.kts` 或 init script 指向 Nexus，减少公网 Maven 下载
+- [ ] **PUB_HOSTED_URL 策略**：保持可选；公共镜像（如 `https://pub.flutter-io.cn`）只作为兜底。Nexus raw proxy 只能缓存 pub 元数据，`archive_url` 是 pub.dev 绝对地址会绕过 Nexus，不作为完整 pub 源
+- [ ] **runner 镜像缓存**：确认 `docker_dind` 的存储不被频繁清理，避免每次 job 重新拉 6.85GB；如空间不足再评估 `docker system prune` 策略
+- [ ] **移动端镜像构建脚本/文档**：Docker Hub 不可达时用 `--build-arg NODE_IMAGE=<内网 Debian node 镜像>`；构建、验证、推送步骤写进 README/AGENTS
+- [ ] **固定升级流程**：Flutter/JDK/Android SDK 升级时重建 `readlater-android-ci`，更新 `MOBILE_CI_IMAGE` tag；不要 unpinned `latest`
+- [ ] **验证后清理测试分支**：生产镜像验证通过后删除 `ci/mobile-ci-verify` 分支和 `.forgejo/workflows/build-mobile-apk-verify.yml`；生产 `MOBILE_CI_IMAGE` 指向 `192.168.1.100:8083/readlater-android-ci:3.38.10`
+- [ ] **CI 构建文件抽离到顶层 `ci/`**：CI 是仓库级而非 server 子包能力。建议 `ci/readlater-ci/`（Dockerfile、build-and-push.*、.env.example）、`ci/mobile-ci/`（Dockerfile），更新 workflow 与 AGENTS/README 路径；`server/Dockerfile`、`deploy.Dockerfile`、build/reload、`push-server-to-dockerhub.*` 属于部署，保留在 `server/`。在 APK 构建验证通过后单独分支执行，避免和移动端验证混在一起
+- [ ] **待推送**：新镜像 `192.168.1.100:8083/readlater-android-ci:3.38.10` 构建完成后推送到 Nexus`n- [ ] **Nexus 清理（可选）**：评估是否删除早先的 `192.168.1.100:8083/readlater-flutter:3.38.10` 别名，节省 6.85GB；若保留则明确它只是 Flutter 官方镜像的 Nexus 副本
