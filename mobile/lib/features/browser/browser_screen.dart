@@ -12,6 +12,7 @@ import 'browser_notifier.dart';
 import 'browser_toolbar.dart';
 import 'detected_media.dart';
 import 'long_press_sheet.dart';
+import 'new_tab_page.dart';
 import 'tab_strip.dart';
 import 'tab_webview.dart';
 
@@ -82,10 +83,13 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
 
   void _snack(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
-  String _message(Object error) => error is ApiException ? error.message : '$error';
+  String _message(Object error) =>
+      error is ApiException ? error.message : '$error';
 
   /// 截取当前可见区域；失败时返回 null，不阻塞收藏。
   Future<String?> _takeScreenshot(InAppWebViewController controller) async {
@@ -142,7 +146,8 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
         linkText: payload.text,
         nearbyImage: null,
         extraction: payload.extraction,
-        onOpenInNewTab: (url) => ref.read(browserProvider.notifier).openTab(url),
+        onOpenInNewTab: (url) =>
+            ref.read(browserProvider.notifier).openTab(url),
       ),
     );
 
@@ -160,24 +165,29 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
 
   Future<void> _collectCurrentPage() async {
     final active = ref.read(browserProvider).activeTab;
-    if (active == null || active.url.isEmpty || active.url == BrowserNotifier.blankUrl) {
+    if (active == null ||
+        active.url.isEmpty ||
+        active.url == BrowserNotifier.blankUrl) {
       _snack('当前没有可收藏的页面');
       return;
     }
 
     try {
       final controller = _activeController();
-      final preview = await ref.read(captureServiceProvider).prepare(
+      final preview = await ref
+          .read(captureServiceProvider)
+          .prepare(
             url: active.url,
             linkText: active.title,
             sourcePage: active.url,
           );
 
-      final screenshot = controller == null ? null : await _takeScreenshot(controller);
-      await ref.read(captureServiceProvider).save(
-            preview,
-            screenshotBase64: screenshot,
-          );
+      final screenshot = controller == null
+          ? null
+          : await _takeScreenshot(controller);
+      await ref
+          .read(captureServiceProvider)
+          .save(preview, screenshotBase64: screenshot);
       _snack('已收藏当前页');
       ref.read(libraryProvider.notifier).refresh();
     } catch (error) {
@@ -187,7 +197,9 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
 
   Future<void> _collectCurrentSite() async {
     final active = ref.read(browserProvider).activeTab;
-    if (active == null || active.url.isEmpty || active.url == BrowserNotifier.blankUrl) {
+    if (active == null ||
+        active.url.isEmpty ||
+        active.url == BrowserNotifier.blankUrl) {
       _snack('当前没有可收藏的站点');
       return;
     }
@@ -223,7 +235,9 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
               title: const Text('新标签页'),
               onTap: () {
                 Navigator.pop(sheetContext);
-                ref.read(browserProvider.notifier).openTab(BrowserNotifier.blankUrl);
+                ref
+                    .read(browserProvider.notifier)
+                    .openTab(BrowserNotifier.blankUrl);
               },
             ),
             ListTile(
@@ -261,7 +275,9 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
           child: Column(
             children: [
               BrowserToolbar(
-                url: active?.url == BrowserNotifier.blankUrl ? '' : (active?.url ?? ''),
+                url: active?.url == BrowserNotifier.blankUrl
+                    ? ''
+                    : (active?.url ?? ''),
                 canGoBack: active?.canGoBack ?? false,
                 canGoForward: active?.canGoForward ?? false,
                 loading: active?.loading ?? false,
@@ -276,9 +292,13 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
               TabStrip(
                 tabs: state.tabs,
                 activeId: state.activeTabId,
-                onSelect: (id) => ref.read(browserProvider.notifier).activate(id),
-                onClose: (id) => ref.read(browserProvider.notifier).closeTab(id),
-                onNewTab: () => ref.read(browserProvider.notifier).openTab(BrowserNotifier.blankUrl),
+                onSelect: (id) =>
+                    ref.read(browserProvider.notifier).activate(id),
+                onClose: (id) =>
+                    ref.read(browserProvider.notifier).closeTab(id),
+                onNewTab: () => ref
+                    .read(browserProvider.notifier)
+                    .openTab(BrowserNotifier.blankUrl),
               ),
               const Divider(height: 1),
               Expanded(
@@ -292,13 +312,17 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
                                 key: ValueKey(tab.id),
                                 tab: tab,
                                 active: tab.id == state.activeTabId,
-                                onCreated: (controller) => registry.register(tab.id, controller),
+                                onCreated: (controller) =>
+                                    registry.register(tab.id, controller),
                                 onLongPressLink: _openLongPressSheet,
                                 onMediaDetected: (media) =>
                                     _onMediaDetected(tab.id, media),
                               )
                             : const SizedBox.shrink(),
                       ),
+                    if (active != null &&
+                        active.url == BrowserNotifier.blankUrl)
+                      Positioned.fill(child: NewTabPage(onNavigate: _navigate)),
                     if (videoSettings.showPlayerButton &&
                         active != null &&
                         _mediaByTab.containsKey(active.id))
@@ -308,7 +332,8 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
                         child: SafeArea(
                           child: FloatingActionButton.extended(
                             heroTag: 'media-player-fab',
-                            onPressed: () => _openMediaPlayer(_mediaByTab[active.id]!),
+                            onPressed: () =>
+                                _openMediaPlayer(_mediaByTab[active.id]!),
                             icon: const Icon(Icons.play_arrow),
                             label: const Text('播放视频'),
                           ),

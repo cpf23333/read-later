@@ -36,10 +36,18 @@ class TabStrip extends StatelessWidget {
               itemBuilder: (context, index) {
                 final tab = tabs[index];
                 final active = tab.id == activeId;
+                final label = tab.title.isNotEmpty
+                    ? tab.title
+                    : (tab.url.isEmpty || tab.url == 'about:blank'
+                          ? '新标签页'
+                          : tab.url);
                 return InkWell(
                   onTap: () => onSelect(tab.id),
                   child: Container(
-                    constraints: const BoxConstraints(minWidth: 120, maxWidth: 220),
+                    constraints: const BoxConstraints(
+                      minWidth: 120,
+                      maxWidth: 220,
+                    ),
                     padding: const EdgeInsets.only(left: 12, right: 4),
                     decoration: BoxDecoration(
                       color: active
@@ -51,12 +59,14 @@ class TabStrip extends StatelessWidget {
                       children: [
                         Expanded(
                           child: Text(
-                            tab.title.isEmpty ? tab.url : tab.title,
+                            label,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               fontSize: 13,
-                              fontWeight: active ? FontWeight.w600 : FontWeight.normal,
+                              fontWeight: active
+                                  ? FontWeight.w600
+                                  : FontWeight.normal,
                             ),
                           ),
                         ),

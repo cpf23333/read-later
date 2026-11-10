@@ -3,6 +3,7 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/errors.dart';
+import '../../core/config/server_url.dart';
 import '../../core/models/config.dart';
 import '../../providers.dart';
 
@@ -22,6 +23,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool _obscureKey = true;
   bool _busy = false;
   String? _status;
+  String? _urlError;
 
   @override
   void initState() {
@@ -47,14 +49,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   void _snack(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _saveAndTest() async {
     final url = _urlController.text.trim();
     final key = _keyController.text.trim();
-    if (url.isEmpty) {
-      _snack('请填写服务器地址');
+    final urlError = validateServerUrl(url);
+    if (urlError != null) {
+      setState(() => _urlError = urlError);
       return;
     }
     if (key.isEmpty) {
@@ -62,15 +67,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       return;
     }
 
-    final normalizedUrl = url.contains('://') ? url : 'http://$url';
+    final normalizedUrl = normalizeServerUrl(url)!;
 
     setState(() {
+      _urlError = null;
       _busy = true;
       _status = null;
     });
 
     try {
-      await ref.read(configStoreProvider).save(
+      await ref
+          .read(configStoreProvider)
+          .save(
             ServerConfig(baseUrl: normalizedUrl, apiKey: key, enabled: true),
           );
       await ref.read(apiClientProvider).health();
@@ -101,8 +109,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         title: const Text('清除浏览数据'),
         content: const Text('将清除 Cookie、缓存与本地存储，确定继续？'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('取消')),
-          TextButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('清除')),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('清除'),
+          ),
         ],
       ),
     );
@@ -135,7 +149,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('知道了')),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('知道了'),
+          ),
         ],
       ),
     );
@@ -156,10 +173,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           const SizedBox(height: 8),
           TextField(
             controller: _urlController,
-            decoration: const InputDecoration(
+            onChanged: (value) {
+              setState(() => _urlError = validateServerUrl(value));
+            },
+            decoration: InputDecoration(
               labelText: '服务器地址',
               hintText: 'http://192.168.1.2:3000',
-              border: OutlineInputBorder(),
+              errorText: _urlError,
+              border: const OutlineInputBorder(),
             ),
             keyboardType: TextInputType.url,
           ),
@@ -171,7 +192,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               labelText: 'API Key',
               border: const OutlineInputBorder(),
               suffixIcon: IconButton(
-                icon: Icon(_obscureKey ? Icons.visibility : Icons.visibility_off),
+                icon: Icon(
+                  _obscureKey ? Icons.visibility : Icons.visibility_off,
+                ),
                 onPressed: () => setState(() => _obscureKey = !_obscureKey),
               ),
             ),
@@ -180,7 +203,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           FilledButton.icon(
             onPressed: _busy ? null : _saveAndTest,
             icon: _busy
-                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
                 : const Icon(Icons.wifi_tethering),
             label: const Text('保存并测试连接'),
           ),
