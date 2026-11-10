@@ -35,6 +35,13 @@ abstract class ApiClient {
 
   Future<List<Site>> listSites();
   Future<Site> addSite(SiteInput input);
+  Future<Site> updateSite(
+    String id, {
+    String? title,
+    String? iconUrl,
+    String? userAgentMode,
+    String? userAgent,
+  });
   Future<void> deleteSite(String id);
   Future<List<Site>> listSiteTrash();
   Future<void> restoreSite(String id);

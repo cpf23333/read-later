@@ -36,7 +36,11 @@ class DioApiClient implements ApiClient {
     return uri.replace(queryParameters: query);
   }
 
-  Options _options(String apiKey, {required String method, required Duration timeout}) {
+  Options _options(
+    String apiKey, {
+    required String method,
+    required Duration timeout,
+  }) {
     return Options(
       method: method,
       headers: {'Authorization': 'Bearer $apiKey'},
@@ -84,9 +88,15 @@ class DioApiClient implements ApiClient {
       case DioExceptionType.badResponse:
         final code = e.response?.statusCode;
         final message = _serverErrorMessage(e.response?.data);
-        if (code == 401) return const AuthException();
-        if (code == 400) return ValidationException(message ?? '请求参数错误');
-        if (code != null && code >= 500) return ServerException(message ?? '服务器错误');
+        if (code == 401) {
+          return const AuthException();
+        }
+        if (code == 400) {
+          return ValidationException(message ?? '请求参数错误');
+        }
+        if (code != null && code >= 500) {
+          return ServerException(message ?? '服务器错误');
+        }
         return NetworkException(message ?? '请求失败');
       case DioExceptionType.connectionError:
       case DioExceptionType.badCertificate:
@@ -105,7 +115,11 @@ class DioApiClient implements ApiClient {
 
   @override
   Future<HealthStatus> health() async {
-    final body = await _request('GET', '/api/health', timeout: const Duration(seconds: 5));
+    final body = await _request(
+      'GET',
+      '/api/health',
+      timeout: const Duration(seconds: 5),
+    );
     return HealthStatus(ok: body['success'] == true);
   }
 
@@ -115,12 +129,19 @@ class DioApiClient implements ApiClient {
       await _request('GET', '/api/links/exists', query: {'url': url}),
     );
     final data = body['data'];
-    return ExistsResult.fromJson(data is Map<String, dynamic> ? data : const {'exists': false});
+    return ExistsResult.fromJson(
+      data is Map<String, dynamic> ? data : const {'exists': false},
+    );
   }
 
   @override
   Future<void> addLink(AddLinkRequest req) async {
-    final body = await _request('POST', '/api/links', data: req.toJson(), timeout: _addLinkTimeout);
+    final body = await _request(
+      'POST',
+      '/api/links',
+      data: req.toJson(),
+      timeout: _addLinkTimeout,
+    );
     _unwrap(body);
   }
 
@@ -133,14 +154,20 @@ class DioApiClient implements ApiClient {
     String sortBy = 'created_at',
     String sortOrder = 'desc',
   }) async {
-    final body = _unwrap(await _request('GET', '/api/links', query: {
-      'page': '$page',
-      'pageSize': '$pageSize',
-      'sortBy': sortBy,
-      'sortOrder': sortOrder,
-      if (search != null && search.isNotEmpty) 'search': search,
-      if (domain != null && domain.isNotEmpty) 'domain': domain,
-    }));
+    final body = _unwrap(
+      await _request(
+        'GET',
+        '/api/links',
+        query: {
+          'page': '$page',
+          'pageSize': '$pageSize',
+          'sortBy': sortBy,
+          'sortOrder': sortOrder,
+          if (search != null && search.isNotEmpty) 'search': search,
+          if (domain != null && domain.isNotEmpty) 'domain': domain,
+        },
+      ),
+    );
     final payload = body['data'];
     final List<dynamic> rawLinks;
     final int total;
@@ -168,7 +195,9 @@ class DioApiClient implements ApiClient {
 
   String? _resolvePath(String? path, String baseUrl) {
     if (path == null || path.isEmpty) return null;
-    if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('data:')) {
+    if (path.startsWith('http://') ||
+        path.startsWith('https://') ||
+        path.startsWith('data:')) {
       return path;
     }
     if (path.startsWith('/')) return '$baseUrl$path';
@@ -209,7 +238,9 @@ class DioApiClient implements ApiClient {
 
   @override
   Future<void> batchDeleteLinks(List<String> ids) async {
-    _unwrap(await _request('POST', '/api/links/batch-delete', data: {'ids': ids}));
+    _unwrap(
+      await _request('POST', '/api/links/batch-delete', data: {'ids': ids}),
+    );
   }
 
   @override
@@ -234,7 +265,10 @@ class DioApiClient implements ApiClient {
     final body = _unwrap(await _request('GET', '/api/domains'));
     final data = body['data'];
     return data is List
-        ? data.whereType<Map<String, dynamic>>().map(DomainStat.fromJson).toList()
+        ? data
+              .whereType<Map<String, dynamic>>()
+              .map(DomainStat.fromJson)
+              .toList()
         : <DomainStat>[];
   }
 
@@ -243,7 +277,10 @@ class DioApiClient implements ApiClient {
     final body = _unwrap(await _request('GET', '/api/trash'));
     final data = body['data'];
     final items = data is List
-        ? data.whereType<Map<String, dynamic>>().map(TrashItem.fromJson).toList()
+        ? data
+              .whereType<Map<String, dynamic>>()
+              .map(TrashItem.fromJson)
+              .toList()
         : <TrashItem>[];
     final baseUrl = (await _configStore.read()).baseUrl;
     return items.map((item) => _resolveTrashImages(item, baseUrl)).toList();
@@ -261,12 +298,16 @@ class DioApiClient implements ApiClient {
 
   @override
   Future<void> batchRestoreTrash(List<String> ids) async {
-    _unwrap(await _request('POST', '/api/trash/batch-restore', data: {'ids': ids}));
+    _unwrap(
+      await _request('POST', '/api/trash/batch-restore', data: {'ids': ids}),
+    );
   }
 
   @override
   Future<void> batchPurgeTrash(List<String> ids) async {
-    _unwrap(await _request('POST', '/api/trash/batch-delete', data: {'ids': ids}));
+    _unwrap(
+      await _request('POST', '/api/trash/batch-delete', data: {'ids': ids}),
+    );
   }
 
   @override
@@ -280,11 +321,43 @@ class DioApiClient implements ApiClient {
 
   @override
   Future<Site> addSite(SiteInput input) async {
-    final body = _unwrap(await _request('POST', '/api/sites', data: {
-      'url': input.url,
-      'title': input.title,
-      if (input.iconUrl != null) 'icon_url': input.iconUrl,
-    }));
+    final body = _unwrap(
+      await _request(
+        'POST',
+        '/api/sites',
+        data: {
+          'url': input.url,
+          'title': input.title,
+          if (input.iconUrl != null) 'icon_url': input.iconUrl,
+          'user_agent_mode': input.userAgentMode,
+          if (input.userAgent != null) 'user_agent': input.userAgent,
+        },
+      ),
+    );
+    final data = body['data'];
+    return Site.fromJson(data is Map<String, dynamic> ? data : const {});
+  }
+
+  @override
+  Future<Site> updateSite(
+    String id, {
+    String? title,
+    String? iconUrl,
+    String? userAgentMode,
+    String? userAgent,
+  }) async {
+    final body = _unwrap(
+      await _request(
+        'PATCH',
+        '/api/sites/$id',
+        data: {
+          'title': ?title,
+          'icon_url': ?iconUrl,
+          'user_agent_mode': ?userAgentMode,
+          'user_agent': ?userAgent,
+        },
+      ),
+    );
     final data = body['data'];
     return Site.fromJson(data is Map<String, dynamic> ? data : const {});
   }
@@ -320,7 +393,9 @@ class DioApiClient implements ApiClient {
     );
     final data = body['data'];
     return SiteExistsResult.fromJson(
-      data is Map<String, dynamic> ? data : const {'exists': false, 'inTrash': false},
+      data is Map<String, dynamic>
+          ? data
+          : const {'exists': false, 'inTrash': false},
     );
   }
 }

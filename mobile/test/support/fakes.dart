@@ -92,6 +92,7 @@ class FakeApiClient implements ApiClient {
   final List<String> deletedSiteIds = [];
   final List<AddLinkRequest> addedLinks = [];
   final List<SiteInput> addedSites = [];
+  final List<Map<String, Object?>> updatedSites = [];
   final List<List<String>> batchDeletedLinkIds = [];
   final List<List<String>> batchRestoredTrashIds = [];
   final List<List<String>> batchPurgedTrashIds = [];
@@ -213,7 +214,39 @@ class FakeApiClient implements ApiClient {
       url: input.url,
       title: input.title,
       iconUrl: input.iconUrl,
+      userAgentMode: input.userAgentMode,
+      userAgent: input.userAgent,
       createdAt: 1,
+    );
+  }
+
+  @override
+  Future<Site> updateSite(
+    String id, {
+    String? title,
+    String? iconUrl,
+    String? userAgentMode,
+    String? userAgent,
+  }) async {
+    _throwIfError();
+    updatedSites.add({
+      'id': id,
+      'title': title,
+      'iconUrl': iconUrl,
+      'userAgentMode': userAgentMode,
+      'userAgent': userAgent,
+    });
+    final existing = sites.where((site) => site.id == id).isEmpty
+        ? null
+        : sites.firstWhere((site) => site.id == id);
+    return Site(
+      id: id,
+      url: existing?.url ?? 'https://example.com',
+      title: title ?? existing?.title ?? '',
+      iconUrl: iconUrl ?? existing?.iconUrl,
+      userAgentMode: userAgentMode ?? existing?.userAgentMode ?? 'default',
+      userAgent: userAgent ?? existing?.userAgent,
+      createdAt: existing?.createdAt ?? 1,
     );
   }
 

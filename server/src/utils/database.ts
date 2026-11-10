@@ -66,6 +66,8 @@ export function initDatabase(dataDir: string): Database.Database {
       url TEXT NOT NULL,
       title TEXT,
       icon_url TEXT,
+      user_agent_mode TEXT NOT NULL DEFAULT 'default',
+      user_agent TEXT,
       created_at INTEGER NOT NULL,
       deleted_at INTEGER
     );
@@ -130,6 +132,16 @@ export function initDatabase(dataDir: string): Database.Database {
 
   db.exec(`CREATE INDEX IF NOT EXISTS idx_links_normalized_url ON links(normalized_url)`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_links_domain ON links(domain)`);
+
+  // 迁移：站点 User-Agent 配置
+  const siteTableInfo = db.prepare('PRAGMA table_info(sites)').all() as Array<{ name: string }>;
+  const siteColumnNames = new Set(siteTableInfo.map((col) => col.name));
+  if (!siteColumnNames.has('user_agent_mode')) {
+    db.exec(`ALTER TABLE sites ADD COLUMN user_agent_mode TEXT NOT NULL DEFAULT 'default'`);
+  }
+  if (!siteColumnNames.has('user_agent')) {
+    db.exec(`ALTER TABLE sites ADD COLUMN user_agent TEXT`);
+  }
 
   return db;
 }
@@ -685,18 +697,67 @@ export function addSite(input: {
   url: string;
   title: string;
   icon_url: string | null;
+  user_agent_mode?: 'default' | 'desktop' | 'custom';
+  user_agent?: string | null;
 }): Site {
   const database = getDatabase();
   const id = input.id || `${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 
   database
     .prepare(
-      `INSERT INTO sites (id, url, title, icon_url, created_at, deleted_at)
-       VALUES (?, ?, ?, ?, ?, NULL)`
+      `INSERT INTO sites (id, url, title, icon_url, user_agent_mode, user_agent, created_at, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, NULL)`
     )
-    .run(id, input.url, input.title, input.icon_url, Date.now());
+    .run(
+      id,
+      input.url,
+      input.title,
+      input.icon_url,
+      input.user_agent_mode || 'default',
+      input.user_agent || null,
+      Date.now()
+    );
 
   return getSiteById(id)!;
+}
+
+/**
+ * 更新站点标题/图标/User-Agent 配置（只更新传入字段）。
+ */
+export function updateSite(
+  id: string,
+  fields: {
+    title?: string;
+    icon_url?: string | null;
+    user_agent_mode?: 'default' | 'desktop' | 'custom';
+    user_agent?: string | null;
+  }
+): Site | undefined {
+  const database = getDatabase();
+  const sets: string[] = [];
+  const params: (string | null)[] = [];
+
+  if (fields.title !== undefined) {
+    sets.push('title = ?');
+    params.push(fields.title);
+  }
+  if (fields.icon_url !== undefined) {
+    sets.push('icon_url = ?');
+    params.push(fields.icon_url);
+  }
+  if (fields.user_agent_mode !== undefined) {
+    sets.push('user_agent_mode = ?');
+    params.push(fields.user_agent_mode);
+  }
+  if (fields.user_agent !== undefined) {
+    sets.push('user_agent = ?');
+    params.push(fields.user_agent);
+  }
+  if (sets.length === 0) return getSiteById(id);
+
+  params.push(id);
+  database.prepare(`UPDATE sites SET ${sets.join(', ')} WHERE id = ?`).run(...params);
+  return getSiteById(id);
 }
 
 /**

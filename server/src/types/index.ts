@@ -149,6 +149,8 @@ export interface Site {
   url: string;
   title: string;
   icon_url: string | null;
+  user_agent_mode: 'default' | 'desktop' | 'custom';
+  user_agent: string | null;
   created_at: number;
   deleted_at: number | null;
 }
@@ -158,6 +160,16 @@ export interface SiteInput {
   url: string;
   title?: string;
   icon_url?: string;
+  user_agent_mode?: 'default' | 'desktop' | 'custom';
+  user_agent?: string | null;
+}
+
+// 更新站点请求体
+export interface SiteUpdateInput {
+  title?: string;
+  icon_url?: string | null;
+  user_agent_mode?: 'default' | 'desktop' | 'custom';
+  user_agent?: string | null;
 }
 
 // 站点存在性响应

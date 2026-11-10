@@ -17,6 +17,7 @@ import 'browser_state.dart';
 import 'detected_media.dart';
 import 'external_navigation.dart';
 import 'inject_loader.dart';
+import 'user_agent.dart';
 
 /// 长按链接回调数据（页面内提取结果通过 Future 并行返回）。
 class LinkPressPayload {
@@ -59,6 +60,8 @@ class _TabWebViewState extends ConsumerState<TabWebView> {
   InAppWebViewController? _controller;
   Completer<Map<String, dynamic>>? _extractCompleter;
   DateTime? _lastExternalBlockedAt;
+  String? _appliedUserAgent;
+  bool _applyingUserAgent = false;
 
   @override
   void initState() {
@@ -84,15 +87,53 @@ class _TabWebViewState extends ConsumerState<TabWebView> {
     final controller = _controller;
     if (controller == null) return;
     try {
-      await controller.evaluateJavascript(source: '''
+      await controller.evaluateJavascript(
+        source: '''
         (() => {
           document.querySelectorAll('video, audio').forEach((el) => {
             try { el.pause(); } catch (_) {}
           });
         })();
-      ''');
+      ''',
+      );
     } catch (_) {
       // 页面已销毁等情况忽略。
+    }
+  }
+
+  Future<void> _applyUserAgentForUrl(
+    InAppWebViewController controller,
+    String url,
+  ) async {
+    final desired = userAgentForUrl(url, ref.read(sitesProvider).sites);
+    if (desired == _appliedUserAgent || _applyingUserAgent) return;
+
+    _appliedUserAgent = desired;
+    _applyingUserAgent = true;
+    try {
+      await controller.setSettings(
+        settings: buildWebViewSettings(
+          isAndroid: defaultTargetPlatform == TargetPlatform.android,
+          userAgent: desired,
+        ),
+      );
+      await controller.reload();
+    } catch (_) {
+      // 页面已销毁或 WebView 正在切换时忽略。
+    } finally {
+      _applyingUserAgent = false;
+    }
+  }
+
+  Future<void> _applyUserAgentForCurrentPage() async {
+    final controller = _controller;
+    if (controller == null) return;
+    try {
+      final current = await controller.getUrl();
+      final url = current?.toString() ?? widget.tab.url;
+      await _applyUserAgentForUrl(controller, url);
+    } catch (_) {
+      // 页面尚未就绪时忽略。
     }
   }
 
@@ -100,19 +141,21 @@ class _TabWebViewState extends ConsumerState<TabWebView> {
   void _notifyExternalBlocked() {
     final now = DateTime.now();
     final last = _lastExternalBlockedAt;
-    if (last != null && now.difference(last) < const Duration(seconds: 3)) return;
+    if (last != null && now.difference(last) < const Duration(seconds: 3)) {
+      return;
+    }
     _lastExternalBlockedAt = now;
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('已拦截网页自动打开外部应用')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('已拦截网页自动打开外部应用')));
   }
 
   void _showLaunchFailed() {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('未找到可打开的应用')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('未找到可打开的应用')));
   }
 
   void _update({
@@ -122,7 +165,9 @@ class _TabWebViewState extends ConsumerState<TabWebView> {
     bool? canGoBack,
     bool? canGoForward,
   }) {
-    ref.read(browserProvider.notifier).updateTab(
+    ref
+        .read(browserProvider.notifier)
+        .updateTab(
           widget.tab.id,
           url: url,
           title: title,
@@ -142,9 +187,9 @@ class _TabWebViewState extends ConsumerState<TabWebView> {
       controller
           .evaluateJavascript(source: 'window.__rlExtract(${jsonEncode(url)})')
           .catchError((Object _) {
-        if (!completer.isCompleted) completer.complete(const {});
-        return true;
-      }),
+            if (!completer.isCompleted) completer.complete(const {});
+            return true;
+          }),
     );
 
     return completer.future.timeout(
@@ -158,12 +203,14 @@ class _TabWebViewState extends ConsumerState<TabWebView> {
     if (url is! String || url.isEmpty) return;
 
     // 立即把 payload 交给 UI（sheet 先显示加载态），提取在后台并行完成。
-    widget.onLongPressLink?.call(LinkPressPayload(
-      url: url,
-      text: data['text'] as String?,
-      sourcePage: data['sourcePage'] as String? ?? '',
-      extraction: _extract(url),
-    ));
+    widget.onLongPressLink?.call(
+      LinkPressPayload(
+        url: url,
+        text: data['text'] as String?,
+        sourcePage: data['sourcePage'] as String? ?? '',
+        extraction: _extract(url),
+      ),
+    );
   }
 
   @override
@@ -175,13 +222,24 @@ class _TabWebViewState extends ConsumerState<TabWebView> {
 
     final isAndroid = defaultTargetPlatform == TargetPlatform.android;
     final windowId = widget.tab.windowId;
+    final sites = ref.watch(sitesProvider).sites;
+    final initialUserAgent = userAgentForUrl(widget.tab.url, sites);
+
+    ref.listen(sitesProvider, (previous, next) {
+      if (previous?.sites != next.sites) {
+        unawaited(_applyUserAgentForCurrentPage());
+      }
+    });
 
     return InAppWebView(
       windowId: windowId,
       initialUrlRequest: windowId == null
           ? URLRequest(url: WebUri(widget.tab.url))
           : null,
-      initialSettings: buildWebViewSettings(isAndroid: isAndroid),
+      initialSettings: buildWebViewSettings(
+        isAndroid: isAndroid,
+        userAgent: initialUserAgent,
+      ),
       initialUserScripts: UnmodifiableListView<UserScript>([
         UserScript(
           source: injectJs,
@@ -191,6 +249,7 @@ class _TabWebViewState extends ConsumerState<TabWebView> {
       ]),
       onWebViewCreated: (controller) {
         _controller = controller;
+        _appliedUserAgent = initialUserAgent;
         controller.addJavaScriptHandler(
           handlerName: 'rl:longPress',
           callback: (args) {
@@ -236,6 +295,9 @@ class _TabWebViewState extends ConsumerState<TabWebView> {
       },
       onLoadStart: (controller, url) {
         _update(loading: true, url: url?.toString());
+        unawaited(
+          _applyUserAgentForUrl(controller, url?.toString() ?? widget.tab.url),
+        );
       },
       onLoadStop: (controller, url) async {
         _update(
@@ -282,7 +344,9 @@ class _TabWebViewState extends ConsumerState<TabWebView> {
           }
           return false;
         }
-        ref.read(browserProvider.notifier).openTab(
+        ref
+            .read(browserProvider.notifier)
+            .openTab(
               url.isEmpty ? BrowserNotifier.blankUrl : url,
               windowId: action.windowId,
             );
@@ -321,9 +385,9 @@ class _TabWebViewState extends ConsumerState<TabWebView> {
       },
       onDownloadStartRequest: (controller, request) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('暂不支持下载')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('暂不支持下载')));
       },
     );
   }

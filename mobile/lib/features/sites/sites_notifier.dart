@@ -55,4 +55,20 @@ class SitesNotifier extends Notifier<SitesState> {
       state = state.copyWith(sites: restored, error: '$error');
     }
   }
+
+  Future<void> updateUserAgent(
+    Site site, {
+    required String mode,
+    String? userAgent,
+  }) async {
+    final updated = await ref
+        .read(apiClientProvider)
+        .updateSite(site.id, userAgentMode: mode, userAgent: userAgent);
+    state = state.copyWith(
+      sites: [
+        for (final item in state.sites) item.id == updated.id ? updated : item,
+      ],
+      clearError: true,
+    );
+  }
 }

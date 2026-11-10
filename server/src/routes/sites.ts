@@ -24,8 +24,9 @@ import {
   softDeleteSite,
   restoreSite,
   deleteSitePermanently,
+  updateSite,
 } from '../utils/database.ts';
-import type { Site, SiteInput, ApiResponse, SiteExistsResponse } from '../types/index.ts';
+import type { Site, SiteInput, SiteUpdateInput, ApiResponse, SiteExistsResponse } from '../types/index.ts';
 
 const app = new Hono();
 
@@ -99,6 +100,14 @@ app.post('/', apiRateLimit, async (c) => {
   const title = (typeof body.title === 'string' && body.title.trim()) || origin;
   const iconUrl =
     typeof body.icon_url === 'string' && body.icon_url.trim() ? body.icon_url.trim() : null;
+  const userAgentMode = normalizeUaMode(body.user_agent_mode) || 'default';
+  const userAgent =
+    typeof body.user_agent === 'string' && body.user_agent.trim()
+      ? body.user_agent.trim()
+      : null;
+  if (userAgentMode === 'custom' && !userAgent) {
+    return c.json<ApiResponse>({ success: false, error: 'user_agent is required for custom mode' }, 400);
+  }
 
   const existing = getSiteByOrigin(origin);
   if (existing) {
@@ -111,8 +120,66 @@ app.post('/', apiRateLimit, async (c) => {
     });
   }
 
-  const site = addSite({ url: origin, title, icon_url: iconUrl });
+  const site = addSite({
+    url: origin,
+    title,
+    icon_url: iconUrl,
+    user_agent_mode: userAgentMode,
+    user_agent: userAgent,
+  });
   return c.json<ApiResponse<Site>>({ success: true, data: site });
+});
+
+const UA_MODES = new Set(['default', 'desktop', 'custom']);
+
+function normalizeUaMode(value: unknown): 'default' | 'desktop' | 'custom' | undefined {
+  return typeof value === 'string' && UA_MODES.has(value)
+    ? (value as 'default' | 'desktop' | 'custom')
+    : undefined;
+}
+
+/**
+ * 更新站点（标题/图标/User-Agent 配置）
+ * PATCH /api/sites/:id
+ */
+app.patch('/:id', apiRateLimit, async (c) => {
+  const id = sanitizeId(c.req.param('id'));
+  if (!id) {
+    return c.json<ApiResponse>({ success: false, error: 'Invalid ID' }, 400);
+  }
+
+  const site = getSiteById(id);
+  if (!site || site.deleted_at !== null) {
+    return c.json<ApiResponse>({ success: false, error: 'Not found' }, 404);
+  }
+
+  const body = await c.req.json<SiteUpdateInput>().catch(() => null);
+  if (!body) {
+    return c.json<ApiResponse>({ success: false, error: 'Invalid body' }, 400);
+  }
+
+  const fields: Parameters<typeof updateSite>[1] = {};
+  if (typeof body.title === 'string') fields.title = body.title.trim();
+  if (body.icon_url === null || typeof body.icon_url === 'string') {
+    fields.icon_url = body.icon_url === null ? null : body.icon_url.trim() || null;
+  }
+  if (body.user_agent_mode !== undefined) {
+    const mode = normalizeUaMode(body.user_agent_mode);
+    if (!mode) {
+      return c.json<ApiResponse>({ success: false, error: 'Invalid user_agent_mode' }, 400);
+    }
+    fields.user_agent_mode = mode;
+  }
+  if (body.user_agent === null || typeof body.user_agent === 'string') {
+    fields.user_agent = body.user_agent === null ? null : body.user_agent.trim() || null;
+  }
+
+  if (fields.user_agent_mode === 'custom' && !fields.user_agent && !site.user_agent) {
+    return c.json<ApiResponse>({ success: false, error: 'user_agent is required for custom mode' }, 400);
+  }
+
+  const updated = updateSite(id, fields);
+  return c.json<ApiResponse<Site>>({ success: true, data: updated });
 });
 
 /**

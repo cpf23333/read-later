@@ -15,6 +15,11 @@ class SiteCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final host = hostOf(site.url) ?? site.url;
+    final uaLabel = switch (site.userAgentMode) {
+      'desktop' => '桌面版',
+      'custom' => '自定义 UA',
+      _ => null,
+    };
 
     return Card(
       clipBehavior: Clip.antiAlias,
@@ -39,7 +44,7 @@ class SiteCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      host,
+                      uaLabel == null ? host : '$host · $uaLabel',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.bodySmall,

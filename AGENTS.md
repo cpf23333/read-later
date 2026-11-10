@@ -194,6 +194,7 @@ openssl rand -base64 32
 | GET    | /api/sites                 | 站点列表（不含回收站）                 |
 | POST   | /api/sites                 | 新增站点（origin 去重，回收站中则恢复） |
 | DELETE | /api/sites/:id             | 删除站点（软删除进回收站）             |
+| PATCH  | /api/sites/:id             | 更新站点标题/图标/User-Agent 配置      |
 | GET    | /api/sites/trash           | 回收站站点                             |
 | POST   | /api/sites/:id/restore     | 还原站点                               |
 | DELETE | /api/sites/trash/:id       | 永久删除站点                           |
