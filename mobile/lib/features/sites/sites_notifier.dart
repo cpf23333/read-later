@@ -7,19 +7,27 @@ import '../../providers.dart';
 class SitesState {
   final List<Site> sites;
   final bool loading;
+  final bool initialized;
   final String? error;
 
-  const SitesState({this.sites = const [], this.loading = false, this.error});
+  const SitesState({
+    this.sites = const [],
+    this.loading = false,
+    this.initialized = false,
+    this.error,
+  });
 
   SitesState copyWith({
     List<Site>? sites,
     bool? loading,
+    bool? initialized,
     String? error,
     bool clearError = false,
   }) {
     return SitesState(
       sites: sites ?? this.sites,
       loading: loading ?? this.loading,
+      initialized: initialized ?? this.initialized,
       error: clearError ? null : (error ?? this.error),
     );
   }
@@ -34,9 +42,18 @@ class SitesNotifier extends Notifier<SitesState> {
     state = state.copyWith(loading: true, clearError: true);
     try {
       final sites = await ref.read(apiClientProvider).listSites();
-      state = state.copyWith(sites: sites, loading: false, clearError: true);
+      state = state.copyWith(
+        sites: sites,
+        loading: false,
+        initialized: true,
+        clearError: true,
+      );
     } catch (error) {
-      state = state.copyWith(loading: false, error: '$error');
+      state = state.copyWith(
+        loading: false,
+        initialized: true,
+        error: '$error',
+      );
     }
   }
 

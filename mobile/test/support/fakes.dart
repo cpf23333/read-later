@@ -56,9 +56,11 @@ class FakePageMetaResolver implements PageMetaResolver {
 
   PageMeta meta;
   Object? error;
+  int resolveCalls = 0;
 
   @override
   Future<PageMeta> resolve(String url) async {
+    resolveCalls++;
     if (error != null) throw error!;
     return meta;
   }
@@ -73,7 +75,10 @@ class FakeApiClient implements ApiClient {
     this.siteTrash = const [],
     this.trash = const [],
     this.linkExistsResult = const ExistsResult(exists: false),
-    this.siteExistsResult = const SiteExistsResult(exists: false, inTrash: false),
+    this.siteExistsResult = const SiteExistsResult(
+      exists: false,
+      inTrash: false,
+    ),
     this.domains = const [],
     this.error,
   });

@@ -1,9 +1,6 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -29,7 +26,10 @@ class LongPressResult {
   bool get droppedAny => droppedImage || droppedScreenshot;
 }
 
-/// 长按链接弹出的收藏菜单（收藏固定第一项，收藏主站第二项）。
+/// 长按链接弹出的收藏菜单。
+///
+/// 打开菜单时不解析标题/图片；只有点击“收藏到稍后再看”后才开始解析，
+/// 避免长按后立刻发起网络请求和页面脚本提取。
 class LongPressSheet extends ConsumerStatefulWidget {
   const LongPressSheet({
     super.key,
@@ -40,6 +40,7 @@ class LongPressSheet extends ConsumerStatefulWidget {
     this.nearbyImage,
     this.extraction,
     this.onOpenInNewTab,
+    this.onOpenInBackground,
   });
 
   final String url;
@@ -47,94 +48,65 @@ class LongPressSheet extends ConsumerStatefulWidget {
   final String? linkText;
   final String? nearbyText;
   final String? nearbyImage;
-  final Future<Map<String, dynamic>>? extraction;
+
+  /// 延迟执行的页面内提取；只有保存时才调用。
+  final Future<Map<String, dynamic>> Function()? extraction;
   final ValueChanged<String>? onOpenInNewTab;
+  final ValueChanged<String>? onOpenInBackground;
 
   @override
   ConsumerState<LongPressSheet> createState() => _LongPressSheetState();
 }
 
 class _LongPressSheetState extends ConsumerState<LongPressSheet> {
-  LinkPreview? _preview;
-  Object? _error;
-  bool _loading = true;
   bool _saving = false;
 
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-    try {
-      final previewFuture = ref.read(captureServiceProvider).prepare(
-            url: widget.url,
-            linkText: widget.linkText,
-            nearbyText: widget.nearbyText,
-            nearbyImage: widget.nearbyImage,
-            sourcePage: widget.sourcePage,
-          );
-      final extractionFuture = widget.extraction ?? Future<Map<String, dynamic>>.value(const {});
-
-      final preview = await previewFuture;
-      final extracted = await extractionFuture;
-
-      final firstNonEmpty = [
-        preview.nearbyImage,
-        extracted['nearbyImage'] as String?,
-      ].firstWhere((value) => value != null && value.isNotEmpty, orElse: () => null);
-
-      if (!mounted) return;
-      final resolvedImage = await ref
-          .read(captureServiceProvider)
-          .resolveNearbyImage(firstNonEmpty);
-      if (!mounted) return;
-      setState(() {
-        _preview = preview.copyWith(
-          nearbyImage: resolvedImage,
-          clearNearbyImage: resolvedImage == null && firstNonEmpty != null,
-        );
-        _loading = false;
-      });
-    } catch (error) {
-      if (!mounted) return;
-      setState(() {
-        _error = error;
-        _loading = false;
-      });
-    }
-  }
-
   Future<void> _saveLink() async {
-    final preview = _preview;
-    if (preview == null || _saving) return;
-
+    if (_saving) return;
     setState(() => _saving = true);
 
-    final caps = applyMediaCaps(nearbyImage: preview.nearbyImage);
-
     try {
-      await ref.read(captureServiceProvider).save(
-            preview.copyWith(nearbyImage: caps.nearbyImage),
-          );
+      final capture = ref.read(captureServiceProvider);
+      final prepared = await capture.prepare(
+        url: widget.url,
+        linkText: widget.linkText,
+        nearbyText: widget.nearbyText,
+        nearbyImage: widget.nearbyImage,
+        sourcePage: widget.sourcePage,
+      );
+
+      final extracted = widget.extraction == null
+          ? const <String, dynamic>{}
+          : await widget.extraction!();
+      final extractedImage = extracted['nearbyImage'] as String?;
+      final firstImage = [prepared.nearbyImage, extractedImage].firstWhere(
+        (value) => value != null && value.isNotEmpty,
+        orElse: () => null,
+      );
+
+      final resolvedImage = await capture.resolveNearbyImage(firstImage);
+      final preview = prepared.copyWith(
+        nearbyImage: resolvedImage,
+        clearNearbyImage: resolvedImage == null && firstImage != null,
+      );
+      final caps = applyMediaCaps(nearbyImage: preview.nearbyImage);
+
+      await capture.save(preview.copyWith(nearbyImage: caps.nearbyImage));
       if (!mounted) return;
       setState(() => _saving = false);
-      Navigator.of(context).maybePop(LongPressResult(
-        saved: true,
-        kind: 'link',
-        droppedImage: caps.droppedImage,
-      ));
+      Navigator.of(context).maybePop(
+        LongPressResult(
+          saved: true,
+          kind: 'link',
+          droppedImage: caps.droppedImage,
+        ),
+      );
     } catch (error) {
       if (!mounted) return;
       setState(() => _saving = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('保存失败：${_message(error)}')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('保存失败：${_message(error)}')));
     }
   }
 
@@ -147,13 +119,15 @@ class _LongPressSheetState extends ConsumerState<LongPressSheet> {
       await service.save(draft);
       if (!mounted) return;
       setState(() => _saving = false);
-      Navigator.of(context).maybePop(const LongPressResult(saved: true, kind: 'site'));
+      Navigator.of(
+        context,
+      ).maybePop(const LongPressResult(saved: true, kind: 'site'));
     } catch (error) {
       if (!mounted) return;
       setState(() => _saving = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('收藏主站失败：${_message(error)}')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('收藏主站失败：${_message(error)}')));
     }
   }
 
@@ -162,12 +136,11 @@ class _LongPressSheetState extends ConsumerState<LongPressSheet> {
     return '$error';
   }
 
-  bool get _notConfigured => _error is NotConfiguredException;
-
   @override
   Widget build(BuildContext context) {
-    final preview = _preview;
     final theme = Theme.of(context);
+    final title = widget.linkText?.trim();
+    final host = hostOf(widget.url);
 
     return SafeArea(
       child: Padding(
@@ -179,16 +152,14 @@ class _LongPressSheetState extends ConsumerState<LongPressSheet> {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (preview?.nearbyImage != null) ...[
-                  _PreviewImage(value: preview!.nearbyImage!),
-                  const SizedBox(width: 10),
-                ],
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        preview?.title ?? (widget.linkText ?? widget.url),
+                        title == null || title.isEmpty
+                            ? (host ?? widget.url)
+                            : title,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.titleMedium,
@@ -200,58 +171,31 @@ class _LongPressSheetState extends ConsumerState<LongPressSheet> {
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.bodySmall,
                       ),
-                      if (preview?.existingTitle != null &&
-                          preview!.existingTitle!.isNotEmpty) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          '已有收藏：${preview.existingTitle}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodySmall,
-                        ),
-                      ],                    ],
+                    ],
                   ),
                 ),
               ],
             ),
             const Divider(height: 16),
-            if (_loading)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 12),
-                child: Row(
-                  children: [
-                    SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
-                    SizedBox(width: 12),
-                    Text('正在准备…'),
-                  ],
-                ),
-              ),
-            if (_notConfigured)
-              ListTile(
-                leading: const Icon(Icons.settings),
-                title: const Text('服务器未配置，去设置'),
-                onTap: () {
-                  Navigator.of(context).maybePop();
-                  context.go('/settings');
-                },
-              ),
-            if (_error != null && !_notConfigured)
-              ListTile(
-                leading: const Icon(Icons.error_outline),
-                title: Text('加载失败：${_message(_error!)}'),
-                trailing: TextButton(onPressed: _load, child: const Text('重试')),
-              ),
             ListTile(
-              enabled: !_saving && !_loading && preview != null,
+              enabled: !_saving,
               leading: const Icon(Icons.bookmark_add_outlined),
               title: const Text('收藏到稍后再看'),
               onTap: _saveLink,
             ),
             ListTile(
-              enabled: !_saving && !_loading,
+              enabled: !_saving,
               leading: const Icon(Icons.public_outlined),
-              title: Text('收藏主站 ${hostOf(widget.url) ?? ''}'.trim()),
+              title: Text('收藏主站 ${host ?? ''}'.trim()),
               onTap: _saveSite,
+            ),
+            ListTile(
+              leading: const Icon(Icons.tab_unselected),
+              title: const Text('后台打开新标签页'),
+              onTap: () {
+                Navigator.of(context).maybePop();
+                widget.onOpenInBackground?.call(widget.url);
+              },
             ),
             ListTile(
               leading: const Icon(Icons.open_in_new),
@@ -281,7 +225,10 @@ class _LongPressSheetState extends ConsumerState<LongPressSheet> {
               leading: const Icon(Icons.language),
               title: const Text('用系统浏览器打开'),
               onTap: () async {
-                await launchUrl(Uri.parse(widget.url), mode: LaunchMode.externalApplication);
+                await launchUrl(
+                  Uri.parse(widget.url),
+                  mode: LaunchMode.externalApplication,
+                );
                 if (context.mounted) Navigator.of(context).maybePop();
               },
             ),
@@ -294,45 +241,5 @@ class _LongPressSheetState extends ConsumerState<LongPressSheet> {
         ),
       ),
     );
-  }
-}
-
-class _PreviewImage extends StatelessWidget {
-  const _PreviewImage({required this.value});
-
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    if (value.startsWith('data:')) {
-      try {
-        final bytes = base64Decode(value.split(',').last);
-        return ClipRRect(
-          borderRadius: BorderRadius.circular(6),
-          child: Image.memory(
-            bytes,
-            width: 56,
-            height: 56,
-            cacheWidth: 56,
-            fit: BoxFit.cover,
-          ),
-        );
-      } catch (_) {
-        return const SizedBox.shrink();
-      }
-    }
-    if (value.startsWith('http')) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(6),
-        child: Image.network(
-          value,
-          width: 56,
-          height: 56,
-          fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
-        ),
-      );
-    }
-    return const SizedBox.shrink();
   }
 }

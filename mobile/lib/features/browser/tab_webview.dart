@@ -19,12 +19,12 @@ import 'external_navigation.dart';
 import 'inject_loader.dart';
 import 'user_agent.dart';
 
-/// 长按链接回调数据（页面内提取结果通过 Future 并行返回）。
+/// 长按链接回调数据（页面内提取延迟到保存时执行）。
 class LinkPressPayload {
   final String url;
   final String? text;
   final String sourcePage;
-  final Future<Map<String, dynamic>>? extraction;
+  final Future<Map<String, dynamic>> Function()? extraction;
 
   const LinkPressPayload({
     required this.url,
@@ -202,13 +202,13 @@ class _TabWebViewState extends ConsumerState<TabWebView> {
     final url = data['url'];
     if (url is! String || url.isEmpty) return;
 
-    // 立即把 payload 交给 UI（sheet 先显示加载态），提取在后台并行完成。
+    // 不立即执行页面提取，保存时再调用 callback。
     widget.onLongPressLink?.call(
       LinkPressPayload(
         url: url,
         text: data['text'] as String?,
         sourcePage: data['sourcePage'] as String? ?? '',
-        extraction: _extract(url),
+        extraction: () => _extract(url),
       ),
     );
   }
@@ -222,7 +222,14 @@ class _TabWebViewState extends ConsumerState<TabWebView> {
 
     final isAndroid = defaultTargetPlatform == TargetPlatform.android;
     final windowId = widget.tab.windowId;
-    final sites = ref.watch(sitesProvider).sites;
+    final sitesState = ref.watch(sitesProvider);
+    final sites = sitesState.sites;
+
+    // 站点 UA 规则未加载完成前先不创建 WebView，避免先按移动 UA 加载再刷新。
+    if (!sitesState.initialized) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
     final initialUserAgent = userAgentForUrl(widget.tab.url, sites);
 
     ref.listen(sitesProvider, (previous, next) {
@@ -234,7 +241,14 @@ class _TabWebViewState extends ConsumerState<TabWebView> {
     return InAppWebView(
       windowId: windowId,
       initialUrlRequest: windowId == null
-          ? URLRequest(url: WebUri(widget.tab.url))
+          ? URLRequest(
+              url: WebUri(widget.tab.url),
+              // Android WebView 对初始请求的 UA 以 URLRequest header 为准；
+              // 同时保留 initialSettings.userAgent 作为后续导航兜底。
+              headers: initialUserAgent == null
+                  ? null
+                  : {'User-Agent': initialUserAgent},
+            )
           : null,
       initialSettings: buildWebViewSettings(
         isAndroid: isAndroid,

@@ -33,6 +33,7 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
   void initState() {
     super.initState();
     _restoreSession();
+    Future.microtask(() => ref.read(sitesProvider.notifier).refresh());
   }
 
   @override
@@ -148,6 +149,8 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
         extraction: payload.extraction,
         onOpenInNewTab: (url) =>
             ref.read(browserProvider.notifier).openTab(url),
+        onOpenInBackground: (url) =>
+            ref.read(browserProvider.notifier).openTab(url, activate: false),
       ),
     );
 
