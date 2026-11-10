@@ -18,10 +18,12 @@
 
 ARG NODE_IMAGE=node:24-bookworm-slim
 ARG PUB_HOSTED_URL=https://pub.dev
+ARG IMAGE_VERSION=dev
+ARG SDK_IMAGE
 
 FROM ${NODE_IMAGE} AS node
 
-FROM ghcr.io/cirruslabs/flutter:3.38.10 AS base
+FROM ${SDK_IMAGE} AS base
 ARG PUB_HOSTED_URL
 
 # 国内 Flutter 存储/pub 镜像；CI 里可用变量覆盖
@@ -31,14 +33,8 @@ ENV PUB_HOSTED_URL=${PUB_HOSTED_URL}
 COPY --from=node /usr/local/bin/node /usr/local/bin/node
 RUN node --version
 
-# 预装 Android SDK 组件（Flutter 镜像已带 platform 36 / build-tools 36）
-# 拆成多个 RUN，避免单个 Docker layer 过大导致 Nexus 上传超时
-RUN yes | sdkmanager --licenses >/dev/null
-RUN sdkmanager --install "platforms;android-34" "platforms;android-35"
-RUN sdkmanager --install "build-tools;35.0.0"
-RUN sdkmanager --install "ndk;28.2.13676358"
-RUN sdkmanager --install "ndk;29.0.13599879"
-RUN sdkmanager --install "cmake;3.22.1"
+# Android SDK extras（platform 34/35、build-tools 35、NDK 28/29、CMake）
+# 由 readlater-android-sdk 基础镜像提供，这里不再执行 sdkmanager。
 
 # 预热 Gradle 发行包（gradle-wrapper.properties 已指向腾讯镜像）
 COPY android/gradlew /tmp/gradle-warm/gradlew
@@ -48,13 +44,14 @@ RUN chmod +x /tmp/gradle-warm/gradlew && \
     ./gradlew --version && \
     rm -rf /tmp/gradle-warm
 
-# 预热 pub 依赖（只复制 lockfile，不把源码打进最终镜像）
+# 预热 pub 依赖（只复制 lockfile 和本地依赖路径，不把整个源码打进最终镜像）
 COPY pubspec.yaml pubspec.lock /tmp/pub-warm/
+COPY third_party /tmp/pub-warm/third_party
 RUN cd /tmp/pub-warm && \
     PUB_HOSTED_URL="${PUB_HOSTED_URL}" flutter pub get && \
     rm -rf /tmp/pub-warm
 
-# 预热 Gradle/Maven 依赖：临时复制整个 mobile 工程跑一次 debug 构建，
+# 预热 Gradle/Maven 依赖：临时复制整个 mobile 工程跑一次 release 构建，
 # 只把 /root/.gradle 和 /root/.pub-cache 带回最终镜像，源码不进最终层。
 FROM base AS gradle-warm
 ARG PUB_HOSTED_URL
@@ -68,6 +65,13 @@ RUN cd /tmp/app && \
 FROM base
 COPY --from=gradle-warm /root/.gradle /root/.gradle
 COPY --from=gradle-warm /root/.pub-cache /root/.pub-cache
+
+# 镜像版本元数据放在最终阶段，避免每次换版本号导致上面的重层缓存失效
+ARG IMAGE_VERSION
+LABEL org.opencontainers.image.title="readlater-android-ci"
+LABEL org.opencontainers.image.version="${IMAGE_VERSION}"
+LABEL org.opencontainers.image.description="ReadLater Android CI: Flutter 3.38.10 + JDK 21 + Android SDK 36 + Node"
+ENV READLATER_CI_VERSION=${IMAGE_VERSION}
 
 # 验证
 RUN flutter --version | head -2 && \

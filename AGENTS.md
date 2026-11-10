@@ -41,6 +41,18 @@
 7. **凭据/签名文件永不提交**
    - keystore、`.jks`、`.b64`、密码、token 等只放本地或 Secrets。
 
+8. **禁止自动 commit/push，必须逐次获得明确授权**
+   - **任何 commit 或 push 之前都必须停下来**，即使改动已验证、构建已通过、用户刚说过“开始做/继续/验证”。
+   - 提交前先展示：
+     - `git status`
+     - 改动文件列表和 diff 摘要
+     - 已执行的验证命令和结果
+     - 准备使用的 commit message
+   - 只有用户明确回复“提交”“commit”“推送”“push”或等价指令后才允许执行。
+   - 授权只对本次列出的改动有效，不会延续到后续修改。
+   - 未获授权时，改动只能保留在工作区或分支，不得 commit/push。
+   - 禁止用 `--no-verify` 绕过检查，禁止自行设置“已授权”标记。
+
 ## 技术栈
 
 - **框架**: WXT (浏览器扩展开发框架)
@@ -411,24 +423,55 @@ reload.bat   # Windows
 
 | 变量 | 必需 | 说明 | 示例 |
 | --- | --- | --- | --- |
-| `CI_REGISTRY` | 是 | CI 镜像所在仓库，末尾不要带 `/` | `192.168.1.100:8083` |
-| `MOBILE_CI_IMAGE` | 构建 APK 时必填 | Flutter 3.38 + JDK 21 + Android SDK 镜像 | `192.168.1.100:8083/readlater-android-ci:3.38.10` |
+| `CI_REGISTRY` | 是 | CI 镜像所在仓库，末尾不要带 `/` | `<nexus-host>:8083` |
+| `MOBILE_CI_IMAGE` | 构建 APK 时必填 | Flutter 3.38 + JDK 21 + Android SDK 镜像 | `<nexus-host>:8083/readlater-android-ci:3.38.10-r2` |
+| `MOBILE_CI_IMAGE_VERSION` | 构建 APK 时必填 | 镜像自身版本，与镜像内 `READLATER_CI_VERSION` 校验 | `3.38.10-r2` |
 | `PUB_HOSTED_URL` | 否 | Dart pub 镜像源；不填用 pub.dev | `https://pub.flutter-io.cn` |
 | `CI_BASE_IMAGE` | 否 | CI 镜像基础镜像 | `node:24` |
 | `NPM_CONFIG_REGISTRY` | 否 | npm 源 | `https://registry.npmmirror.com` |
 | `EXTENSION_KEY` | 否 | 扩展固定 ID 的签名 key | - |
 | `DOCKER_MIRROR` | CI runner 无外网时填 | Buildah 的 Docker Hub 镜像加速源 | `docker.m.daocloud.io` |
-| `SERVER_BASE_IMAGE` | 内网仓库时填 | 服务器镜像基础镜像的完整地址（优先于 mirror） | `192.168.1.100:8083/library/node:24-alpine` |
-| `PRIVATE_REGISTRIES` | 内网仓库时填 | Buildah 允许的 HTTP 私有仓库（逗号分隔） | `192.168.1.100:8083` |
+| `SERVER_BASE_IMAGE` | 内网仓库时填 | 服务器镜像基础镜像的完整地址（优先于 mirror） | `<nexus-host>:8083/library/node:24-alpine` |
+| `PRIVATE_REGISTRIES` | 内网仓库时填 | Buildah 允许的 HTTP 私有仓库（逗号分隔） | `<nexus-host>:8083` |
 | `APT_REPO_DEBIAN` / `APT_REPO_SECURITY` | 否 | CI 镜像 Debian 源 | - |
 
 Secrets（`Settings → Actions → Secrets`）：`DOCKER_REGISTRY_USER`、`DOCKER_REGISTRY_PASSWORD` 用于推送 CI 镜像。
 
 > 日志出现 `docker pull image=/readlater-ci:latest`、`invalid reference format`，说明 `CI_REGISTRY` 为空——填写仓库地址后重新触发工作流即可。
 >
-> `build-server-image` 的 Buildah 日志出现 `pinging container registry registry-1.docker.io ... i/o timeout`，说明 `DOCKER_MIRROR` 为空或不可达。若使用内网 Nexus：先把 `node:24-alpine` 推进 `192.168.1.100:8083/library/node:24-alpine`，再设 `SERVER_BASE_IMAGE=192.168.1.100:8083/library/node:24-alpine`；`PRIVATE_REGISTRIES` 未填时工作流会自动使用 `CI_REGISTRY`。
+> `build-server-image` 的 Buildah 日志出现 `pinging container registry registry-1.docker.io ... i/o timeout`，说明 `DOCKER_MIRROR` 为空或不可达。若使用内网 Nexus：先把 `node:24-alpine` 推进 `<nexus-host>:8083/library/node:24-alpine`，再设 `SERVER_BASE_IMAGE=<nexus-host>:8083/library/node:24-alpine`；`PRIVATE_REGISTRIES` 未填时工作流会自动使用 `CI_REGISTRY`。
 >
 > 如果 mirror 返回 `short read: expected ... but got ...: unexpected EOF`，说明镜像代理缓存的 blob 不完整（kspeeder 等缓存服务常见）；先清理该镜像的代理缓存或重启代理服务，或直接改用 `SERVER_BASE_IMAGE` 指向内网 registry 中已推送的完整镜像。
+### 移动端镜像与本地 `.env`
+
+移动端 CI 镜像分两层：
+
+```
+readlater-android-sdk  ← Flutter 镜像 + platform 34/35、build-tools 35、NDK 28/29、CMake
+        ↓ FROM
+readlater-android-ci   ← 再加 Node、pub/Gradle 缓存、版本校验
+```
+
+本地构建配置写在 `mobile/ci/.env`（已被 `.gitignore` 忽略，禁止提交）；
+`build-sdk.*`、`build-and-push.*` 会自动读取。模板是
+`mobile/ci/.env.example`。
+
+| 变量 | 用途 |
+| --- | --- |
+| `CI_REGISTRY` | Nexus Docker 仓库 |
+| `SDK_TEST_BASE_URL` | sdkmanager 的 Nexus raw SDK 源，必须带结尾 `/` |
+| `SDK_IMAGE` | `readlater-android-sdk` 完整镜像地址 |
+| `PUB_HOSTED_URL` | 本地 `flutter pub get` 的 Nexus pub 源 |
+| `NODE_IMAGE` / `FLUTTER_IMAGE` | 基础镜像覆盖，可选 |
+
+Forgejo Action **不读取** `mobile/ci/.env`，只读仓库 Variables：
+
+- `MOBILE_CI_IMAGE`
+- `MOBILE_CI_IMAGE_VERSION`
+- `PUB_HOSTED_URL`
+
+因此本地 `.env` 可以写内网 IP，Action 配置仍由 Forgejo Variables 管理。
+
 ### CI 镜像 (`readlater-ci`)
 
 工作流共用统一的 CI 镜像 `${CI_REGISTRY}/readlater-ci:latest`（通过 Forgejo 项目变量 `CI_REGISTRY` 配置），基于 `node:24`（Debian），预装：

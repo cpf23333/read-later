@@ -97,6 +97,6 @@
 - [ ] **runner 镜像缓存**：确认 `docker_dind` 的存储不被频繁清理，避免每次 job 重新拉 6.85GB；如空间不足再评估 `docker system prune` 策略
 - [ ] **移动端镜像构建脚本/文档**：Docker Hub 不可达时用 `--build-arg NODE_IMAGE=<内网 Debian node 镜像>`；构建、验证、推送步骤写进 README/AGENTS
 - [ ] **固定升级流程**：Flutter/JDK/Android SDK 升级时重建 `readlater-android-ci`，更新 `MOBILE_CI_IMAGE` tag；不要 unpinned `latest`
-- [ ] **验证后清理测试分支**：生产镜像验证通过后删除 `ci/mobile-ci-verify` 分支和 `.forgejo/workflows/build-mobile-apk-verify.yml`；生产 `MOBILE_CI_IMAGE` 指向 `192.168.1.100:8083/readlater-android-ci:3.38.10`
+- [ ] **验证后清理测试分支**：生产镜像验证通过后删除 `ci/mobile-ci-verify` 分支和 `.forgejo/workflows/build-mobile-apk-verify.yml`；生产 `MOBILE_CI_IMAGE` 指向 `<nexus-host>:8083/readlater-android-ci:3.38.10`
 - [ ] **CI 构建文件抽离到顶层 `ci/`**：CI 是仓库级而非 server 子包能力。建议 `ci/readlater-ci/`（Dockerfile、build-and-push.*、.env.example）、`ci/mobile-ci/`（Dockerfile），更新 workflow 与 AGENTS/README 路径；`server/Dockerfile`、`deploy.Dockerfile`、build/reload、`push-server-to-dockerhub.*` 属于部署，保留在 `server/`。在 APK 构建验证通过后单独分支执行，避免和移动端验证混在一起
-- [ ] **待推送**：新镜像 `192.168.1.100:8083/readlater-android-ci:3.38.10` 构建完成后推送到 Nexus`n- [ ] **Nexus 清理（可选）**：评估是否删除早先的 `192.168.1.100:8083/readlater-flutter:3.38.10` 别名，节省 6.85GB；若保留则明确它只是 Flutter 官方镜像的 Nexus 副本
+- [ ] **待推送**：新镜像 `<nexus-host>:8083/readlater-android-ci:3.38.10` 构建完成后推送到 Nexus`n- [ ] **Nexus 清理（可选）**：评估是否删除早先的 `<nexus-host>:8083/readlater-flutter:3.38.10` 别名，节省 6.85GB；若保留则明确它只是 Flutter 官方镜像的 Nexus 副本

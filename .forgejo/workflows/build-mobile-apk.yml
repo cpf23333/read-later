@@ -20,6 +20,22 @@ jobs:
       GRADLE_USER_HOME: /root/.gradle
       PUB_HOSTED_URL: ${{ vars.PUB_HOSTED_URL || 'https://pub.flutter-io.cn' }}
     steps:
+      - name: Verify CI image
+        env:
+          EXPECTED_IMAGE_VERSION: ${{ vars.MOBILE_CI_IMAGE_VERSION }}
+        run: |
+          echo "CI image version: ${READLATER_CI_VERSION:-unknown}"
+          echo "expected image version: ${EXPECTED_IMAGE_VERSION:-unset}"
+          if [ -n "${EXPECTED_IMAGE_VERSION}" ] && [ "${READLATER_CI_VERSION:-}" != "${EXPECTED_IMAGE_VERSION}" ]; then
+            echo "::error::CI 镜像版本不匹配：run=$READLATER_CI_VERSION expected=$EXPECTED_IMAGE_VERSION"
+            echo "更新镜像："
+            echo "  docker build --build-arg IMAGE_VERSION=${EXPECTED_IMAGE_VERSION} --build-arg NODE_IMAGE=docker.m.daocloud.io/library/node:22 --build-arg PUB_HOSTED_URL=https://pub.flutter-io.cn -f mobile/ci/Dockerfile -t ${MOBILE_CI_IMAGE} mobile"
+            echo "  docker push ${MOBILE_CI_IMAGE}"
+            echo "  docker exec docker_dind docker rmi ${MOBILE_CI_IMAGE} || true"
+            echo "  docker exec docker_dind docker pull ${MOBILE_CI_IMAGE}"
+            exit 1
+          fi
+
       - uses: actions/checkout@v7
 
       - name: Decode Android keystore
