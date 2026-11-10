@@ -1,10 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:media_kit/media_kit.dart';
+import 'package:media_kit_video/media_kit_video.dart' hide enterFullscreen, exitFullscreen;
 
 import '../../platform/system_ui.dart';
 import '../browser/detected_media.dart';
 
-/// 全屏 Media3 ExoPlayer 页面：播放浏览器里检测到的视频地址。
+/// 全屏 media_kit 播放页：播放浏览器里检测到的视频地址。
 class MediaPlayerScreen extends StatefulWidget {
   const MediaPlayerScreen({super.key, required this.media});
 
@@ -15,14 +18,37 @@ class MediaPlayerScreen extends StatefulWidget {
 }
 
 class _MediaPlayerScreenState extends State<MediaPlayerScreen> {
+  late final Player _player;
+  late final VideoController _controller;
+  StreamSubscription<String>? _errorSubscription;
+  String? _error;
+
   @override
   void initState() {
     super.initState();
     enterFullscreen();
+
+    _player = Player();
+    _controller = VideoController(_player);
+    _errorSubscription = _player.stream.error.listen((message) {
+      if (!mounted) return;
+      setState(() => _error = message);
+    });
+
+    final headers = <String, String>{
+      if (widget.media.userAgent.trim().isNotEmpty) 'User-Agent': widget.media.userAgent,
+      if (widget.media.sourcePage.trim().isNotEmpty) 'Referer': widget.media.sourcePage,
+    };
+    unawaited(_player.open(
+      Media(widget.media.url, httpHeaders: headers),
+      play: true,
+    ));
   }
 
   @override
   void dispose() {
+    _errorSubscription?.cancel();
+    _player.dispose();
     exitFullscreen();
     super.dispose();
   }
@@ -34,17 +60,24 @@ class _MediaPlayerScreenState extends State<MediaPlayerScreen> {
       body: Stack(
         children: [
           Positioned.fill(
-            child: AndroidView(
-              viewType: 'readlater/media3',
-              creationParams: {
-                'url': widget.media.url,
-                'referer': widget.media.sourcePage,
-                'userAgent': widget.media.userAgent,
-                'title': widget.media.title,
-              },
-              creationParamsCodec: const StandardMessageCodec(),
-            ),
+            child: Video(controller: _controller),
           ),
+          if (_error != null)
+            Positioned.fill(
+              child: ColoredBox(
+                color: Colors.black54,
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(32),
+                    child: Text(
+                      '播放失败：$_error',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: Colors.white),
+                    ),
+                  ),
+                ),
+              ),
+            ),
           SafeArea(
             child: Align(
               alignment: Alignment.topLeft,

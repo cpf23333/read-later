@@ -159,7 +159,7 @@ async function extractLinkInfo(
         url,
         linkText,
         nearbyText,
-        nearbyImage: imageResult.base64 || imageResult.url,
+        nearbyImage: imageResult.base64,
         hasCustomJs: !!customJsConfig,
       },
     };

@@ -90,8 +90,15 @@ class _LongPressSheetState extends ConsumerState<LongPressSheet> {
       ].firstWhere((value) => value != null && value.isNotEmpty, orElse: () => null);
 
       if (!mounted) return;
+      final resolvedImage = await ref
+          .read(captureServiceProvider)
+          .resolveNearbyImage(firstNonEmpty);
+      if (!mounted) return;
       setState(() {
-        _preview = preview.copyWith(nearbyImage: firstNonEmpty);
+        _preview = preview.copyWith(
+          nearbyImage: resolvedImage,
+          clearNearbyImage: resolvedImage == null && firstNonEmpty != null,
+        );
         _loading = false;
       });
     } catch (error) {

@@ -10,8 +10,6 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
-        flutterEngine.platformViewsController.registry
-            .registerViewFactory("readlater/media3", Media3PlayerViewFactory())
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.cpf23333.readlater/external")
             .setMethodCallHandler { call, result ->
                 if (call.method != "launch") {
