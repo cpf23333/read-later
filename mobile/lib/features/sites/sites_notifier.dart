@@ -73,14 +73,21 @@ class SitesNotifier extends Notifier<SitesState> {
     }
   }
 
-  Future<void> updateUserAgent(
+  Future<void> updateSite(
     Site site, {
+    required String title,
+    required String? iconUrl,
     required String mode,
     String? userAgent,
   }) async {
-    final updated = await ref
-        .read(apiClientProvider)
-        .updateSite(site.id, userAgentMode: mode, userAgent: userAgent);
+    final updated = await ref.read(apiClientProvider).updateSite(
+          site.id,
+          title: title,
+          iconUrl: iconUrl,
+          updateIcon: true,
+          userAgentMode: mode,
+          userAgent: mode == 'custom' ? userAgent : null,
+        );
     state = state.copyWith(
       sites: [
         for (final item in state.sites) item.id == updated.id ? updated : item,

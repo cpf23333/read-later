@@ -33,7 +33,10 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
   void initState() {
     super.initState();
     _restoreSession();
-    Future.microtask(() => ref.read(sitesProvider.notifier).refresh());
+    Future.microtask(() {
+      ref.read(sitesProvider.notifier).refresh();
+      ref.read(globalUserAgentProvider.notifier).refresh();
+    });
   }
 
   @override

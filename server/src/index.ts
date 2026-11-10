@@ -30,6 +30,7 @@ import { isAllowedExtension } from './utils/security.ts';
 import linksRoute from './routes/links.ts';
 import trashRoute from './routes/trash.ts';
 import domainsRoute from './routes/domains.ts';
+import settingsRoute from './routes/settings.ts';
 import statsRoute from './routes/stats.ts';
 import uploadRoute from './routes/upload.ts';
 import healthRoute from './routes/health.ts';
@@ -155,6 +156,7 @@ app.route('/api/trash', trashRoute);
 app.route('/api/domains', domainsRoute);
 app.route('/api/stats', statsRoute);
 app.route('/api/sites', sitesRoute);
+app.route('/api/settings', settingsRoute);
 app.route('/api/upload', uploadRoute);
 
 // 搜索路由（挂载在 /api/search）

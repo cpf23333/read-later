@@ -199,6 +199,8 @@ openssl rand -base64 32
 | POST   | /api/sites/:id/restore     | 还原站点                               |
 | DELETE | /api/sites/trash/:id       | 永久删除站点                           |
 | GET    | /api/sites/exists          | 检查站点是否存在（含 inTrash）         |
+| GET    | /api/settings/user-agent   | 获取全局默认 User-Agent                |
+| PATCH  | /api/settings/user-agent   | 更新全局默认 User-Agent                |
 | POST   | /api/upload                | 上传图片（保留兼容）                   |
 
 ## 移动端（Flutter）

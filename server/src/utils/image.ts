@@ -146,6 +146,171 @@ export async function downloadImage(url: string, prefix: string): Promise<string
   }
 }
 
+const ICO_PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+
+/** 从 ICO 文件中提取最大的 PNG 帧（现代 favicon 常见）。 */
+function extractIcoPng(buffer: Buffer): Buffer | null {
+  if (buffer.length < 6) return null;
+  if (buffer.readUInt16LE(0) !== 0 || buffer.readUInt16LE(2) !== 1) return null;
+  const count = buffer.readUInt16LE(4);
+  let best: Buffer | null = null;
+  for (let i = 0; i < count; i++) {
+    const entry = 6 + i * 16;
+    if (entry + 16 > buffer.length) break;
+    const size = buffer.readUInt32LE(entry + 8);
+    const offset = buffer.readUInt32LE(entry + 12);
+    if (size === 0 || offset + size > buffer.length) continue;
+    const frame = buffer.subarray(offset, offset + size);
+    if (
+      frame.length >= ICO_PNG_SIGNATURE.length &&
+      frame.subarray(0, ICO_PNG_SIGNATURE.length).equals(ICO_PNG_SIGNATURE)
+    ) {
+      if (!best || frame.length > best.length) best = frame;
+    }
+  }
+  return best;
+}
+
+/** 从 ICO 的 BMP 帧解码为 PNG（常见旧版 favicon）。 */
+async function decodeIcoBmp(buffer: Buffer): Promise<Buffer | null> {
+  if (buffer.length < 6) return null;
+  if (buffer.readUInt16LE(0) !== 0 || buffer.readUInt16LE(2) !== 1) return null;
+  const count = buffer.readUInt16LE(4);
+  let best: { width: number; height: number; bitCount: number; frame: Buffer } | null =
+    null;
+  for (let i = 0; i < count; i++) {
+    const entry = 6 + i * 16;
+    if (entry + 16 > buffer.length) break;
+    const width = buffer[entry] || 256;
+    const height = buffer[entry + 1] || 256;
+    const bitCount = buffer.readUInt16LE(entry + 6);
+    const size = buffer.readUInt32LE(entry + 8);
+    const offset = buffer.readUInt32LE(entry + 12);
+    if (size === 0 || offset + size > buffer.length) continue;
+    const frame = buffer.subarray(offset, offset + size);
+    if (
+      frame.length >= ICO_PNG_SIGNATURE.length &&
+      frame.subarray(0, ICO_PNG_SIGNATURE.length).equals(ICO_PNG_SIGNATURE)
+    ) {
+      continue;
+    }
+    if (!best || width * height > best.width * best.height) {
+      best = { width, height, bitCount, frame };
+    }
+  }
+  if (!best) return null;
+
+  const { frame, width, height, bitCount } = best;
+  const headerSize = frame.readUInt32LE(0);
+  if (headerSize < 40 || frame.length < headerSize) return null;
+  const paletteCount = bitCount <= 8 ? 1 << bitCount : 0;
+  const xorOffset = headerSize + paletteCount * 4;
+  const rowSize = Math.floor((bitCount * width + 31) / 32) * 4;
+  if (xorOffset + rowSize * height > frame.length) return null;
+  const maskOffset = xorOffset + rowSize * height;
+  const maskRowSize = Math.floor((width + 31) / 32) * 4;
+  const rgba = Buffer.alloc(width * height * 4);
+  const palette: number[][] = [];
+  for (let i = 0; i < paletteCount; i++) {
+    const p = headerSize + i * 4;
+    if (p + 4 > frame.length) break;
+    palette.push([frame[p + 2], frame[p + 1], frame[p], frame[p + 3]]);
+  }
+
+  for (let y = 0; y < height; y++) {
+    const srcRow = xorOffset + (height - 1 - y) * rowSize;
+    const dstRow = y * width * 4;
+    for (let x = 0; x < width; x++) {
+      let r = 0;
+      let g = 0;
+      let b = 0;
+      let a = 255;
+      if (bitCount === 32) {
+        const p = srcRow + x * 4;
+        b = frame[p];
+        g = frame[p + 1];
+        r = frame[p + 2];
+        a = frame[p + 3];
+      } else if (bitCount === 24) {
+        const p = srcRow + x * 3;
+        b = frame[p];
+        g = frame[p + 1];
+        r = frame[p + 2];
+      } else if (bitCount === 8) {
+        const color = palette[frame[srcRow + x]] ?? [0, 0, 0, 255];
+        [r, g, b, a] = color;
+      } else {
+        return null;
+      }
+
+      if (maskOffset + maskRowSize * height <= frame.length) {
+        const maskByte = frame[maskOffset + (height - 1 - y) * maskRowSize + (x >> 3)];
+        if (maskByte !== undefined && (maskByte & (0x80 >> (x & 7))) !== 0) {
+          a = 0;
+        }
+      }
+      const p = dstRow + x * 4;
+      rgba[p] = r;
+      rgba[p + 1] = g;
+      rgba[p + 2] = b;
+      rgba[p + 3] = a;
+    }
+  }
+
+  return sharp(rgba, { raw: { width, height, channels: 4 } }).png().toBuffer();
+}
+
+/**
+ * 站点图标专用处理：统一转成 256px PNG，避免 ICO/WebP 等格式在客户端无法显示。
+ */
+export async function processSiteIcon(imageData: string): Promise<string | null> {
+  try {
+    let buffer: Buffer | null = null;
+
+    if (imageData.startsWith('data:image')) {
+      const match = imageData.match(/^data:image\/[\w.+-]+;base64,(.+)$/s);
+      if (!match) return null;
+      buffer = Buffer.from(match[1], 'base64');
+    } else if (imageData.startsWith('http://') || imageData.startsWith('https://')) {
+      if (!isValidImageUrl(imageData)) return null;
+      const response = await fetch(imageData);
+      if (!response.ok) return null;
+      buffer = Buffer.from(await response.arrayBuffer());
+    }
+    if (!buffer || buffer.length === 0 || buffer.length > MAX_IMAGE_SIZE) {
+      return null;
+    }
+
+    const pngFrame = extractIcoPng(buffer);
+    if (pngFrame) {
+      buffer = pngFrame;
+    } else {
+      const bmpPng = await decodeIcoBmp(buffer);
+      if (bmpPng) buffer = bmpPng;
+    }
+
+    const png = await sharp(buffer)
+      .trim({ threshold: 10 })
+      .resize(256, 256, {
+        fit: 'contain',
+        background: { r: 0, g: 0, b: 0, alpha: 0 },
+      })
+      .png()
+      .toBuffer();
+
+    const filename = `${Date.now()}_site_icon_${Math.random()
+      .toString(36)
+      .substring(2, 9)}.png`;
+    const filepath = path.join(IMAGES_DIR, filename);
+    if (!isSafeFilePath(filename, IMAGES_DIR)) return null;
+    fs.writeFileSync(filepath, png);
+    return `/images/${filename}`;
+  } catch (error) {
+    console.error('[processSiteIcon] Failed:', (error as Error).message);
+    return null;
+  }
+}
+
 /**
  * 处理图片数据（base64 / URL / 路径）
  */

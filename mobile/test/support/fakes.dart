@@ -6,6 +6,7 @@ import 'package:readlater/core/models/health.dart';
 import 'package:readlater/core/models/link.dart';
 import 'package:readlater/core/models/domain_stat.dart';
 import 'package:readlater/core/models/site.dart';
+import 'package:readlater/core/models/user_agent_rule.dart';
 import 'package:readlater/core/storage/session_store.dart';
 import 'package:readlater/core/web/title_resolver.dart';
 
@@ -91,6 +92,7 @@ class FakeApiClient implements ApiClient {
   List<DomainStat> domains;
   ExistsResult linkExistsResult;
   SiteExistsResult siteExistsResult;
+  UserAgentRule defaultUserAgent = const UserAgentRule();
   ApiException? error;
 
   final List<String> deletedLinkIds = [];
@@ -230,6 +232,7 @@ class FakeApiClient implements ApiClient {
     String id, {
     String? title,
     String? iconUrl,
+    bool updateIcon = false,
     String? userAgentMode,
     String? userAgent,
   }) async {
@@ -238,6 +241,7 @@ class FakeApiClient implements ApiClient {
       'id': id,
       'title': title,
       'iconUrl': iconUrl,
+      'updateIcon': updateIcon,
       'userAgentMode': userAgentMode,
       'userAgent': userAgent,
     });
@@ -248,11 +252,37 @@ class FakeApiClient implements ApiClient {
       id: id,
       url: existing?.url ?? 'https://example.com',
       title: title ?? existing?.title ?? '',
-      iconUrl: iconUrl ?? existing?.iconUrl,
+      iconUrl: updateIcon ? iconUrl : existing?.iconUrl,
       userAgentMode: userAgentMode ?? existing?.userAgentMode ?? 'default',
       userAgent: userAgent ?? existing?.userAgent,
       createdAt: existing?.createdAt ?? 1,
     );
+  }
+
+  @override
+  Future<UserAgentRule> getDefaultUserAgent() async {
+    _throwIfError();
+    return defaultUserAgent;
+  }
+
+  @override
+  Future<UserAgentRule> updateDefaultUserAgent({
+    required String mode,
+    String? userAgent,
+  }) async {
+    _throwIfError();
+    defaultUserAgent = UserAgentRule(mode: mode, customUserAgent: userAgent);
+    return defaultUserAgent;
+  }
+
+  @override
+  Future<String> uploadImage(
+    String image, {
+    String? filename,
+    String? purpose,
+  }) async {
+    _throwIfError();
+    return 'https://example.com/images/uploaded.png';
   }
 
   @override

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api/errors.dart';
 import '../../core/config/server_url.dart';
 import '../../core/models/config.dart';
+import '../../core/models/user_agent_rule.dart';
 import '../../providers.dart';
 
 /// 设置页：服务器配置、主题、清除浏览数据、导入说明。
@@ -29,6 +30,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   void initState() {
     super.initState();
     _loadConfig();
+    Future.microtask(() {
+      if (!ref.read(globalUserAgentProvider).initialized) {
+        ref.read(globalUserAgentProvider.notifier).refresh();
+      }
+    });
   }
 
   @override
@@ -91,6 +97,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       // 配置变更后刷新依赖服务器的页面。
       ref.read(libraryProvider.notifier).refresh();
       ref.read(sitesProvider.notifier).refresh();
+      ref.read(globalUserAgentProvider.notifier).refresh();
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -99,6 +106,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       });
       final message = error is ApiException ? error.message : '$error';
       _snack('已保存，但连接失败：$message');
+    }
+  }
+
+  Future<void> _editGlobalUserAgent() async {
+    final current = ref.read(globalUserAgentProvider).rule;
+    final result = await showDialog<UserAgentRule>(
+      context: context,
+      builder: (dialogContext) => _GlobalUserAgentDialog(rule: current),
+    );
+    if (result == null) return;
+    try {
+      await ref.read(globalUserAgentProvider.notifier).save(result);
+      if (mounted) _snack('全局默认 User-Agent 已更新');
+    } catch (error) {
+      if (mounted) _snack('保存失败：');
     }
   }
 
@@ -162,6 +184,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Widget build(BuildContext context) {
     final themeMode = ref.watch(themeProvider);
     final videoSettings = ref.watch(videoSettingsProvider);
+    final globalUa = ref.watch(globalUserAgentProvider);
     final theme = Theme.of(context);
 
     return Scaffold(
@@ -259,6 +282,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           Text('浏览器', style: theme.textTheme.titleMedium),
           ListTile(
             contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.desktop_windows_outlined),
+            title: const Text('全局默认 User-Agent'),
+            subtitle: Text(globalUa.rule.label),
+            onTap: _editGlobalUserAgent,
+          ),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
             leading: const Icon(Icons.delete_sweep_outlined),
             title: const Text('清除浏览数据'),
             subtitle: const Text('Cookie、缓存、本地存储'),
@@ -287,6 +317,108 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _GlobalUserAgentDialog extends StatefulWidget {
+  const _GlobalUserAgentDialog({required this.rule});
+
+  final UserAgentRule rule;
+
+  @override
+  State<_GlobalUserAgentDialog> createState() => _GlobalUserAgentDialogState();
+}
+
+class _GlobalUserAgentDialogState extends State<_GlobalUserAgentDialog> {
+  late String _mode;
+  late final TextEditingController _customController;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _mode = widget.rule.mode;
+    _customController = TextEditingController(
+      text: widget.rule.customUserAgent ?? '',
+    );
+  }
+
+  @override
+  void dispose() {
+    _customController.dispose();
+    super.dispose();
+  }
+
+  void _save() {
+    final custom = _customController.text.trim();
+    if (_mode == 'custom' && custom.isEmpty) {
+      setState(() => _error = '请输入自定义 User-Agent');
+      return;
+    }
+    Navigator.pop(
+      context,
+      UserAgentRule(
+        mode: _mode,
+        customUserAgent: _mode == 'custom' ? custom : null,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('全局默认 User-Agent'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            DropdownButtonFormField<String>(
+              initialValue: _mode,
+              decoration: const InputDecoration(
+                labelText: '模式',
+                border: OutlineInputBorder(),
+              ),
+              items: const [
+                DropdownMenuItem(value: 'default', child: Text('默认（手机 UA）')),
+                DropdownMenuItem(
+                  value: 'desktop',
+                  child: Text('桌面版（Windows Chrome）'),
+                ),
+                DropdownMenuItem(value: 'custom', child: Text('自定义')),
+              ],
+              onChanged: (value) {
+                if (value == null) return;
+                setState(() {
+                  _mode = value;
+                  _error = null;
+                });
+              },
+            ),
+            if (_mode == 'custom') ...[
+              const SizedBox(height: 12),
+              TextField(
+                controller: _customController,
+                minLines: 2,
+                maxLines: 4,
+                decoration: InputDecoration(
+                  labelText: 'User-Agent',
+                  errorText: _error,
+                  border: const OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('取消'),
+        ),
+        FilledButton(onPressed: _save, child: const Text('保存')),
+      ],
     );
   }
 }

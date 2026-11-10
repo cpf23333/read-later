@@ -11,6 +11,7 @@ import 'core/web/title_resolver.dart';
 import 'features/browser/browser_notifier.dart';
 import 'features/browser/browser_state.dart';
 import 'features/browser/capture_service.dart';
+import 'features/browser/global_user_agent.dart';
 import 'features/browser/site_service.dart';
 import 'features/browser/tab_registry.dart';
 import 'features/library/library_notifier.dart';
@@ -60,6 +61,7 @@ final siteServiceProvider = Provider<SiteService>(
   (ref) => SiteService(
     ref.watch(apiClientProvider),
     ref.watch(titleResolverProvider),
+    ref.watch(captureServiceProvider),
   ),
 );
 
@@ -76,6 +78,12 @@ final trashProvider = NotifierProvider<TrashNotifier, TrashState>(
 /// 站点页状态。
 final sitesProvider = NotifierProvider<SitesNotifier, SitesState>(
   SitesNotifier.new,
+);
+
+/// 全局默认 User-Agent。
+final globalUserAgentProvider =
+    NotifierProvider<GlobalUserAgentController, GlobalUserAgentState>(
+  GlobalUserAgentController.new,
 );
 
 /// 主题模式。

@@ -17,7 +17,7 @@ import 'browser_state.dart';
 import 'detected_media.dart';
 import 'external_navigation.dart';
 import 'inject_loader.dart';
-import 'user_agent.dart';
+import 'global_user_agent.dart';
 
 /// 长按链接回调数据（页面内提取延迟到保存时执行）。
 class LinkPressPayload {
@@ -105,7 +105,13 @@ class _TabWebViewState extends ConsumerState<TabWebView> {
     InAppWebViewController controller,
     String url,
   ) async {
-    final desired = userAgentForUrl(url, ref.read(sitesProvider).sites);
+    final sitesState = ref.read(sitesProvider);
+    final globalState = ref.read(globalUserAgentProvider);
+    final desired = resolveUserAgentForUrl(
+      url,
+      sitesState.sites,
+      globalState.rule,
+    );
     if (desired == _appliedUserAgent || _applyingUserAgent) return;
 
     _appliedUserAgent = desired;
@@ -223,17 +229,27 @@ class _TabWebViewState extends ConsumerState<TabWebView> {
     final isAndroid = defaultTargetPlatform == TargetPlatform.android;
     final windowId = widget.tab.windowId;
     final sitesState = ref.watch(sitesProvider);
+    final globalState = ref.watch(globalUserAgentProvider);
     final sites = sitesState.sites;
 
-    // 站点 UA 规则未加载完成前先不创建 WebView，避免先按移动 UA 加载再刷新。
-    if (!sitesState.initialized) {
+    // 站点/全局 UA 规则未加载完成前先不创建 WebView，避免先按移动 UA 加载再刷新。
+    if (!sitesState.initialized || !globalState.initialized) {
       return const Center(child: CircularProgressIndicator());
     }
 
-    final initialUserAgent = userAgentForUrl(widget.tab.url, sites);
+    final initialUserAgent = resolveUserAgentForUrl(
+      widget.tab.url,
+      sites,
+      globalState.rule,
+    );
 
     ref.listen(sitesProvider, (previous, next) {
       if (previous?.sites != next.sites) {
+        unawaited(_applyUserAgentForCurrentPage());
+      }
+    });
+    ref.listen(globalUserAgentProvider, (previous, next) {
+      if (previous?.rule != next.rule) {
         unawaited(_applyUserAgentForCurrentPage());
       }
     });

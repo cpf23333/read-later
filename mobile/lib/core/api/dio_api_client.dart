@@ -7,6 +7,7 @@ import '../models/domain_stat.dart';
 import '../models/health.dart';
 import '../models/link.dart';
 import '../models/site.dart';
+import '../models/user_agent_rule.dart';
 import 'api_client.dart';
 
 /// Dio 实现的服务器 API 客户端。
@@ -343,6 +344,7 @@ class DioApiClient implements ApiClient {
     String id, {
     String? title,
     String? iconUrl,
+    bool updateIcon = false,
     String? userAgentMode,
     String? userAgent,
   }) async {
@@ -352,7 +354,7 @@ class DioApiClient implements ApiClient {
         '/api/sites/$id',
         data: {
           'title': ?title,
-          'icon_url': ?iconUrl,
+          if (updateIcon) 'icon_url': iconUrl ?? '',
           'user_agent_mode': ?userAgentMode,
           'user_agent': ?userAgent,
         },
@@ -360,6 +362,55 @@ class DioApiClient implements ApiClient {
     );
     final data = body['data'];
     return Site.fromJson(data is Map<String, dynamic> ? data : const {});
+  }
+
+  @override
+  Future<UserAgentRule> getDefaultUserAgent() async {
+    final body = _unwrap(await _request('GET', '/api/settings/user-agent'));
+    final data = body['data'];
+    return UserAgentRule.fromJson(
+      data is Map<String, dynamic> ? data : const {},
+    );
+  }
+
+  @override
+  Future<UserAgentRule> updateDefaultUserAgent({
+    required String mode,
+    String? userAgent,
+  }) async {
+    final body = _unwrap(
+      await _request(
+        'PATCH',
+        '/api/settings/user-agent',
+        data: {'user_agent_mode': mode, 'user_agent': userAgent},
+      ),
+    );
+    final data = body['data'];
+    return UserAgentRule.fromJson(
+      data is Map<String, dynamic> ? data : const {},
+    );
+  }
+
+  @override
+  Future<String> uploadImage(
+    String image, {
+    String? filename,
+    String? purpose,
+  }) async {
+    final body = _unwrap(
+      await _request(
+        'POST',
+        '/api/upload',
+        data: {'image': image, 'filename': ?filename, 'purpose': ?purpose},
+      ),
+    );
+    final data = body['data'];
+    final path = data is Map<String, dynamic> ? data['url'] as String? : null;
+    if (path == null || path.isEmpty) {
+      throw const ServerException('上传失败');
+    }
+    final config = await _configStore.read();
+    return _resolvePath(path, config.baseUrl) ?? path;
   }
 
   @override

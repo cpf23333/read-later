@@ -101,6 +101,7 @@ export interface ImportBody {
 export interface UploadBody {
   image: string;
   filename?: string;
+  purpose?: string;
 }
 
 // 统计数据
@@ -141,6 +142,14 @@ export interface Env {
   ALLOWED_ORIGINS: string;
   NODE_ENV: 'development' | 'production';
   MAX_IMAGE_SIZE_MB: string;
+}
+
+// 站点 UA 模式
+export type UserAgentMode = 'default' | 'desktop' | 'custom';
+
+export interface UserAgentSetting {
+  user_agent_mode: UserAgentMode;
+  user_agent: string | null;
 }
 
 // 站点收藏数据结构

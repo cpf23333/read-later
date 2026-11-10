@@ -1,6 +1,7 @@
 import '../models/link.dart';
 import '../models/domain_stat.dart';
 import '../models/site.dart';
+import '../models/user_agent_rule.dart';
 import '../models/health.dart';
 
 /// 服务器 API 客户端接口（便于测试替换）。
@@ -39,10 +40,17 @@ abstract class ApiClient {
     String id, {
     String? title,
     String? iconUrl,
+    bool updateIcon = false,
     String? userAgentMode,
     String? userAgent,
   });
   Future<void> deleteSite(String id);
+  Future<UserAgentRule> getDefaultUserAgent();
+  Future<UserAgentRule> updateDefaultUserAgent({
+    required String mode,
+    String? userAgent,
+  });
+  Future<String> uploadImage(String image, {String? filename, String? purpose});
   Future<List<Site>> listSiteTrash();
   Future<void> restoreSite(String id);
   Future<void> purgeSite(String id);

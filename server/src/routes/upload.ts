@@ -3,7 +3,7 @@
  */
 
 import { Hono } from 'hono';
-import { processImage } from '../utils/image.ts';
+import { processImage, processSiteIcon } from '../utils/image.ts';
 import type { UploadBody, ApiResponse } from '../types/index.ts';
 
 const app = new Hono();
@@ -20,7 +20,10 @@ app.post('/', async (c) => {
     return c.json<ApiResponse>({ success: false, error: 'No image' }, 400);
   }
 
-  const result = await processImage(image, 'upload');
+  const result =
+    body.purpose === 'site-icon'
+      ? await processSiteIcon(image)
+      : await processImage(image, 'upload');
   if (!result) {
     return c.json<ApiResponse>(
       {

@@ -7,7 +7,7 @@ import path from 'path';
 import { tokenizeSearchQuery } from './security.ts';
 import { normalizeUrl, domainOf } from './url.ts';
 import { moveImageToTrash, restoreImageFromTrash, deleteImageFile } from './image.ts';
-import type { Link, TrashItem, Site } from '../types/index.ts';
+import type { Link, TrashItem, Site, UserAgentMode, UserAgentSetting } from '../types/index.ts';
 
 let db: Database.Database | null = null;
 
@@ -49,6 +49,11 @@ export function initDatabase(dataDir: string): Database.Database {
 
     CREATE INDEX IF NOT EXISTS idx_links_created ON links(created_at);
     CREATE INDEX IF NOT EXISTS idx_trash_deleted ON trash(deleted_at);
+
+    CREATE TABLE IF NOT EXISTS app_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
 
     CREATE TABLE IF NOT EXISTS export_tasks (
       id TEXT PRIMARY KEY,
@@ -685,6 +690,50 @@ export function getExportTaskById(id: string): ExportTask | undefined {
 export function deleteExportTask(id: string): void {
   const database = getDatabase();
   database.prepare('DELETE FROM export_tasks WHERE id = ?').run(id);
+}
+
+// ===== 应用设置 =====
+
+const DEFAULT_USER_AGENT_KEY = 'default_user_agent';
+
+function isUserAgentMode(value: unknown): value is UserAgentMode {
+  return value === 'default' || value === 'desktop' || value === 'custom';
+}
+
+export function getDefaultUserAgentSetting(): UserAgentSetting {
+  const database = getDatabase();
+  const row = database
+    .prepare('SELECT value FROM app_settings WHERE key = ?')
+    .get(DEFAULT_USER_AGENT_KEY) as { value: string } | undefined;
+  if (!row) return { user_agent_mode: 'default', user_agent: null };
+
+  try {
+    const parsed = JSON.parse(row.value) as {
+      user_agent_mode?: unknown;
+      user_agent?: unknown;
+    };
+    return {
+      user_agent_mode: isUserAgentMode(parsed.user_agent_mode)
+        ? parsed.user_agent_mode
+        : 'default',
+      user_agent:
+        typeof parsed.user_agent === 'string' && parsed.user_agent.trim()
+          ? parsed.user_agent.trim()
+          : null,
+    };
+  } catch {
+    return { user_agent_mode: 'default', user_agent: null };
+  }
+}
+
+export function setDefaultUserAgentSetting(setting: UserAgentSetting): void {
+  const database = getDatabase();
+  database
+    .prepare(
+      `INSERT INTO app_settings (key, value) VALUES (?, ?)
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value`
+    )
+    .run(DEFAULT_USER_AGENT_KEY, JSON.stringify(setting));
 }
 
 // ===== 站点操作 =====

@@ -1,12 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:readlater/core/models/site.dart';
+import 'package:readlater/core/models/user_agent_rule.dart';
+import 'package:readlater/features/browser/global_user_agent.dart';
 import 'package:readlater/features/browser/user_agent.dart';
 
-Site _site({
-  required String url,
-  String mode = 'default',
-  String? userAgent,
-}) {
+Site _site({required String url, String mode = 'default', String? userAgent}) {
   return Site(
     id: url,
     url: url,
@@ -18,36 +16,33 @@ Site _site({
 }
 
 void main() {
-  test('默认模式不覆盖 UA', () {
-    expect(
-      userAgentForUrl('https://example.com/a', [_site(url: 'https://example.com')]),
-      isNull,
-    );
-  });
-
-  test('桌面模式返回桌面 UA，忽略 www 前缀', () {
-    final ua = userAgentForUrl(
-      'https://www.example.com/a',
-      [_site(url: 'https://example.com', mode: 'desktop')],
-    );
+  test('站点桌面模式覆盖全局默认', () {
+    final ua = resolveUserAgentForUrl('https://www.example.com/a', [
+      _site(url: 'https://example.com', mode: 'desktop'),
+    ], const UserAgentRule(mode: 'default'));
     expect(ua, desktopUserAgent);
   });
 
-  test('自定义模式返回自定义 UA', () {
-    final ua = userAgentForUrl(
-      'https://example.com/a',
-      [_site(url: 'https://example.com', mode: 'custom', userAgent: 'MyAgent')],
-    );
-    expect(ua, 'MyAgent');
+  test('站点默认模式跟随全局默认', () {
+    final ua = resolveUserAgentForUrl('https://example.com/a', [
+      _site(url: 'https://example.com'),
+    ], const UserAgentRule(mode: 'desktop'));
+    expect(ua, desktopUserAgent);
   });
 
-  test('不同域名不匹配', () {
-    expect(
-      userAgentForUrl(
-        'https://other.com/a',
-        [_site(url: 'https://example.com', mode: 'desktop')],
-      ),
-      isNull,
+  test('无站点规则时使用全局默认', () {
+    final ua = resolveUserAgentForUrl(
+      'https://other.com/a',
+      const [],
+      const UserAgentRule(mode: 'custom', customUserAgent: 'GlobalUA'),
     );
+    expect(ua, 'GlobalUA');
+  });
+
+  test('站点自定义 UA 优先', () {
+    final ua = resolveUserAgentForUrl('https://example.com/a', [
+      _site(url: 'https://example.com', mode: 'custom', userAgent: 'SiteUA'),
+    ], const UserAgentRule(mode: 'desktop'));
+    expect(ua, 'SiteUA');
   });
 }
