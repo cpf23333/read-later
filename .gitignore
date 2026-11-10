@@ -41,3 +41,8 @@ deploy
 # 本地临时数据目录（server 测试/验证）
 server/.tmp-*/
 
+# Android 签名文件（不要提交）
+*.jks
+*.keystore
+mobile/android/keystore.properties
+

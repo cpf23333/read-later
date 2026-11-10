@@ -22,6 +22,17 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - name: Decode Android keystore
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > /tmp/readlater-release.jks
+            echo "ANDROID_KEYSTORE_PATH=/tmp/readlater-release.jks" >> "$GITHUB_ENV"
+          else
+            echo "ANDROID_KEYSTORE_BASE64 not configured; release APK will use debug signing"
+          fi
+
       - name: Cache Gradle build cache
         if: ${{ github.event.inputs.use_cache != 'false' }}
         uses: actions/cache@v6
@@ -54,10 +65,23 @@ jobs:
 
       - name: Build arm64 release APK
         working-directory: mobile
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           flutter build apk --release \
             --target-platform android-arm64 \
             --split-per-abi
+
+      - name: Verify APK signature
+        run: |
+          APK=mobile/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+          if [ -x "$ANDROID_HOME/build-tools/36.0.0/apksigner" ]; then
+            "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --print-certs "$APK" | head -20
+          else
+            echo "apksigner not found, skip signature verification"
+          fi
 
       - name: Upload APK
         uses: forgejo/upload-artifact@v5
