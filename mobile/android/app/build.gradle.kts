@@ -63,6 +63,10 @@ android {
     }
 
     buildTypes {
+        debug {
+            // 允许 debug 包与正式包同时安装，便于真机测试。
+            applicationIdSuffix = ".debug"
+        }
         release {
             signingConfig =
                 if (hasReleaseSigning) {
