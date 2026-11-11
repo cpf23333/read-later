@@ -55,10 +55,7 @@ export function initDatabase(dataDir: string): Database.Database {
     );
 
     CREATE INDEX IF NOT EXISTS idx_links_created ON links(created_at);
-    CREATE INDEX IF NOT EXISTS idx_links_normalized_url ON links(normalized_url);
-    CREATE INDEX IF NOT EXISTS idx_links_domain ON links(domain);
     CREATE INDEX IF NOT EXISTS idx_trash_deleted ON trash(deleted_at);
-
     CREATE TABLE IF NOT EXISTS app_settings (
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
@@ -88,6 +85,9 @@ export function initDatabase(dataDir: string): Database.Database {
     CREATE UNIQUE INDEX IF NOT EXISTS idx_sites_url ON sites(url);
     CREATE INDEX IF NOT EXISTS idx_sites_deleted ON sites(deleted_at);
   `);
+
+  // 注意：normalized_url/domain 索引必须等迁移加列之后再创建，
+  // 否则旧数据库启动时会报 no such column。
 
   // 迁移：添加 normalized_url 列并回填已有数据
   const tableInfo = db.prepare("PRAGMA table_info(links)").all() as Array<{ name: string }>;
