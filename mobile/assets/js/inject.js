@@ -342,13 +342,13 @@
     const duration = dash.duration || (data.timelength ? data.timelength / 1000 : 0);
 
     try {
-      window.flutter_inappwebview.callHandler('rl:bilibili', {
+      window.flutter_inappwebview.callHandler('rl:dash', {
         url: first.baseUrl,
         type: 'bilibili-dash',
         title: document.title,
         sourcePage: location.href,
         ua: navigator.userAgent,
-        bilibili: { duration: duration, video: video, audio: audio },
+        dash: { duration: duration, video: video, audio: audio },
       });
     } catch (_) {
       // 非 app 环境忽略。

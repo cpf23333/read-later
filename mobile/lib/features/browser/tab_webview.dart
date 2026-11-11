@@ -230,7 +230,7 @@ class _TabWebViewState extends ConsumerState<TabWebView> {
 
   Future<void> _handleDetectedMedia(Map<String, dynamic> map) async {
     var media = DetectedMedia.fromMap(map);
-    if (media.isBilibili && media.sourcePage.isNotEmpty) {
+    if (media.hasDash && media.sourcePage.isNotEmpty) {
       try {
         final cookies = await CookieManager.instance().getCookies(
           url: WebUri(media.sourcePage),
@@ -348,7 +348,7 @@ class _TabWebViewState extends ConsumerState<TabWebView> {
           },
         );
         controller.addJavaScriptHandler(
-          handlerName: 'rl:bilibili',
+          handlerName: 'rl:dash',
           callback: (args) {
             final map = args.isNotEmpty ? args.first : null;
             if (map is Map) {

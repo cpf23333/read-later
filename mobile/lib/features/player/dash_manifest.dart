@@ -1,18 +1,17 @@
 import '../browser/detected_media.dart';
 
-/// 把 Bilibili playinfo 的 DASH 音视频轨生成一个临时 MPD。
+/// 把音视频分轨的 DASH 信息生成一个临时 MPD。
 ///
-/// media_kit/libmpv 可以直接读取本地 MPD，并通过 httpHeaders 给远端分片
-/// 带上 Referer/User-Agent/Cookie。Bilibili 的高清视频通常是音视频分离的，
-/// 所以这里选最高带宽的视频轨和音频轨，交给 MPV 自己合并播放。
-String buildBilibiliDashManifest(
-  BilibiliDash dash, {
+/// 该生成器不绑定具体平台：只要有 `video` / `audio` 轨和可选的
+/// SegmentBase 信息，就可以交给 media_kit/libmpv 播放。
+String buildDashManifest(
+  DashPlaylist dash, {
   String Function(String url)? rewriteBaseUrl,
 }) {
   final video = _best(dash.videos);
   final audio = _best(dash.audios);
   if (video == null) {
-    throw ArgumentError('Bilibili DASH 没有视频轨');
+    throw ArgumentError('DASH 清单没有视频轨');
   }
 
   final duration = dash.duration > 0 ? dash.duration : 0.0;
@@ -53,7 +52,7 @@ String buildBilibiliDashManifest(
   return buffer.toString();
 }
 
-BilibiliTrack? _best(List<BilibiliTrack> tracks) {
+DashTrack? _best(List<DashTrack> tracks) {
   if (tracks.isEmpty) return null;
   return tracks.reduce(
     (best, track) => track.bandwidth > best.bandwidth ? track : best,
@@ -65,7 +64,7 @@ void _writeAdaptationSet(
   required String id,
   required String contentType,
   required String mimeType,
-  required BilibiliTrack track,
+  required DashTrack track,
   String Function(String url)? rewriteBaseUrl,
 }) {
   buffer

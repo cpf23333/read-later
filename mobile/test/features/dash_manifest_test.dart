@@ -1,14 +1,30 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:readlater/features/browser/detected_media.dart';
-import 'package:readlater/features/player/bilibili_dash_manifest.dart';
+import 'package:readlater/features/player/dash_manifest.dart';
+import 'package:readlater/features/player/header_media_proxy.dart';
 
 void main() {
-  test('DetectedMedia parses Bilibili DASH tracks', () {
+  test('media proxy only forwards allowlisted hosts', () async {
+    final proxy = await HeaderMediaProxy.start(
+      const {'Referer': 'https://example.com/'},
+      allowedHosts: const {'cdn.example'},
+    );
+    addTearDown(proxy.close);
+
+    final rewritten = proxy.rewrite('https://cdn.example/video.m4s');
+    expect(rewritten, startsWith('http://127.0.0.1:'));
+    expect(
+      () => proxy.rewrite('https://evil.example/video.m4s'),
+      throwsArgumentError,
+    );
+  });
+
+  test('DetectedMedia parses DASH tracks', () {
     final media = DetectedMedia.fromMap({
       'url': 'https://cdn.example/video.m4s',
       'sourcePage': 'https://www.bilibili.com/video/BV1xx',
       'title': '测试视频',
-      'bilibili': {
+      'dash': {
         'duration': 123.5,
         'video': [
           {
@@ -30,16 +46,17 @@ void main() {
       },
     });
 
-    expect(media.isBilibili, isTrue);
-    expect(media.bilibili!.duration, 123.5);
-    expect(media.bilibili!.videos.single.width, 1920);
-    expect(media.bilibili!.audios.single.codecs, 'mp4a.40.2');
+    expect(media.hasDash, isTrue);
+    expect(media.dash!.duration, 123.5);
+    expect(media.dash!.videos.single.width, 1920);
+    expect(media.dash!.audios.single.codecs, 'mp4a.40.2');
+    expect(media.dash!.allowedHosts, {'cdn.example'});
   });
 
-  test('handles Bilibili SegmentBase and segment_base variants', () {
+  test('handles SegmentBase and segment_base variants', () {
     final media = DetectedMedia.fromMap({
       'url': 'https://cdn.example/video.m4s',
-      'bilibili': {
+      'dash': {
         'duration': 10,
         'video': [
           {
@@ -55,17 +72,17 @@ void main() {
       },
     });
 
-    final track = media.bilibili!.videos.single;
+    final track = media.dash!.videos.single;
     expect(track.initializationRange, '0-934');
     expect(track.indexRange, '935-1406');
   });
 
   test('manifest picks highest bitrate and escapes URLs', () {
-    final dash = BilibiliDash(
+    final dash = DashPlaylist(
       duration: 60,
       videos: const [
-        BilibiliTrack(baseUrl: 'https://cdn.example/low.m4s', bandwidth: 100),
-        BilibiliTrack(
+        DashTrack(baseUrl: 'https://cdn.example/low.m4s', bandwidth: 100),
+        DashTrack(
           baseUrl: 'https://cdn.example/high.m4s?a=1&b=2',
           bandwidth: 1000,
           codecs: 'avc1.64001F',
@@ -76,11 +93,11 @@ void main() {
         ),
       ],
       audios: const [
-        BilibiliTrack(baseUrl: 'https://cdn.example/audio.m4s', bandwidth: 128),
+        DashTrack(baseUrl: 'https://cdn.example/audio.m4s', bandwidth: 128),
       ],
     );
 
-    final manifest = buildBilibiliDashManifest(dash);
+    final manifest = buildDashManifest(dash);
 
     expect(manifest, contains('mediaPresentationDuration="PT60.000S"'));
     expect(manifest, contains('https://cdn.example/high.m4s?a=1&amp;b=2'));
@@ -93,13 +110,13 @@ void main() {
   });
 
   test('manifest works without audio', () {
-    final dash = BilibiliDash(
+    final dash = DashPlaylist(
       duration: 10,
-      videos: const [BilibiliTrack(baseUrl: 'https://cdn.example/v.m4s')],
+      videos: const [DashTrack(baseUrl: 'https://cdn.example/v.m4s')],
       audios: const [],
     );
 
-    final manifest = buildBilibiliDashManifest(dash);
+    final manifest = buildDashManifest(dash);
     expect(manifest, contains('contentType="video"'));
     expect(manifest, isNot(contains('contentType="audio"')));
   });

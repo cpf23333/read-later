@@ -1,4 +1,7 @@
 /// 页面内检测到的可播放媒体。
+///
+/// 普通直链使用 [url]；需要音视频分轨的平台可以在 [dash] 中提供 DASH
+/// 轨道信息，播放器会生成临时 MPD，并通过本地代理补请求头。
 class DetectedMedia {
   final String url;
   final String type;
@@ -6,7 +9,7 @@ class DetectedMedia {
   final String sourcePage;
   final String userAgent;
   final String cookie;
-  final BilibiliDash? bilibili;
+  final DashPlaylist? dash;
 
   const DetectedMedia({
     required this.url,
@@ -15,11 +18,11 @@ class DetectedMedia {
     this.sourcePage = '',
     this.userAgent = '',
     this.cookie = '',
-    this.bilibili,
+    this.dash,
   });
 
   factory DetectedMedia.fromMap(Map<String, dynamic> map) {
-    final dash = map['bilibili'];
+    final dash = map['dash'] ?? map['bilibili'];
     return DetectedMedia(
       url: (map['url'] as String?) ?? '',
       type: (map['type'] as String?) ?? '',
@@ -27,8 +30,8 @@ class DetectedMedia {
       sourcePage: (map['sourcePage'] as String?) ?? '',
       userAgent: (map['ua'] as String?) ?? '',
       cookie: (map['cookie'] as String?) ?? '',
-      bilibili: dash is Map
-          ? BilibiliDash.fromMap(Map<String, dynamic>.from(dash))
+      dash: dash is Map
+          ? DashPlaylist.fromMap(Map<String, dynamic>.from(dash))
           : null,
     );
   }
@@ -41,11 +44,11 @@ class DetectedMedia {
       sourcePage: sourcePage,
       userAgent: userAgent,
       cookie: cookie ?? this.cookie,
-      bilibili: bilibili,
+      dash: dash,
     );
   }
 
-  bool get isBilibili => bilibili != null;
+  bool get hasDash => dash != null;
 
   String get displayTitle {
     if (title.trim().isNotEmpty) return title.trim();
@@ -54,37 +57,47 @@ class DetectedMedia {
   }
 }
 
-/// Bilibili playinfo 中的 DASH 音视频轨。
-class BilibiliDash {
+/// 一个 DASH 播放清单中的音视频轨道。
+class DashPlaylist {
   final double duration;
-  final List<BilibiliTrack> videos;
-  final List<BilibiliTrack> audios;
+  final List<DashTrack> videos;
+  final List<DashTrack> audios;
 
-  const BilibiliDash({
+  const DashPlaylist({
     required this.duration,
     required this.videos,
     required this.audios,
   });
 
-  factory BilibiliDash.fromMap(Map<String, dynamic> map) {
-    return BilibiliDash(
+  factory DashPlaylist.fromMap(Map<String, dynamic> map) {
+    return DashPlaylist(
       duration: _asDouble(map['duration']),
       videos: _tracks(map['video']),
       audios: _tracks(map['audio']),
     );
   }
 
-  static List<BilibiliTrack> _tracks(dynamic raw) {
+  static List<DashTrack> _tracks(dynamic raw) {
     if (raw is! List) return const [];
     return raw
         .whereType<Map>()
-        .map((item) => BilibiliTrack.fromMap(Map<String, dynamic>.from(item)))
+        .map((item) => DashTrack.fromMap(Map<String, dynamic>.from(item)))
         .where((track) => track.baseUrl.isNotEmpty)
         .toList(growable: false);
   }
+
+  /// 用于代理 host 白名单，避免代理转发任意 URL。
+  Set<String> get allowedHosts {
+    final hosts = <String>{};
+    for (final track in [...videos, ...audios]) {
+      final host = Uri.tryParse(track.baseUrl)?.host;
+      if (host != null && host.isNotEmpty) hosts.add(host);
+    }
+    return hosts;
+  }
 }
 
-class BilibiliTrack {
+class DashTrack {
   final String baseUrl;
   final List<String> backupUrls;
   final int bandwidth;
@@ -96,7 +109,7 @@ class BilibiliTrack {
   final String? initializationRange;
   final String? indexRange;
 
-  const BilibiliTrack({
+  const DashTrack({
     required this.baseUrl,
     this.backupUrls = const [],
     this.bandwidth = 0,
@@ -109,14 +122,14 @@ class BilibiliTrack {
     this.indexRange,
   });
 
-  factory BilibiliTrack.fromMap(Map<String, dynamic> map) {
+  factory DashTrack.fromMap(Map<String, dynamic> map) {
     final segmentBase =
-        map['segmentBase'] ?? map['segment_base'] ?? map['SegmentBase'];
+        map['SegmentBase'] ?? map['segmentBase'] ?? map['segment_base'];
     final segment = segmentBase is Map
         ? Map<String, dynamic>.from(segmentBase)
         : const <String, dynamic>{};
     final backups = map['backupUrl'] ?? map['backup_url'];
-    return BilibiliTrack(
+    return DashTrack(
       baseUrl: _asString(map['baseUrl'] ?? map['base_url']),
       backupUrls: backups is List
           ? backups.map(_asString).where((url) => url.isNotEmpty).toList()

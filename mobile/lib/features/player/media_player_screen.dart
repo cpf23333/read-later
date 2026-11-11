@@ -8,8 +8,8 @@ import 'package:media_kit_video/media_kit_video.dart'
 
 import '../../platform/system_ui.dart';
 import '../browser/detected_media.dart';
-import 'bilibili_dash_manifest.dart';
-import 'bilibili_media_proxy.dart';
+import 'dash_manifest.dart';
+import 'header_media_proxy.dart';
 
 /// 全屏 media_kit 播放页：播放浏览器里检测到的视频地址。
 class MediaPlayerScreen extends StatefulWidget {
@@ -26,7 +26,7 @@ class _MediaPlayerScreenState extends State<MediaPlayerScreen> {
   late final VideoController _controller;
   StreamSubscription<String>? _errorSubscription;
   File? _manifestFile;
-  BilibiliMediaProxy? _bilibiliProxy;
+  HeaderMediaProxy? _mediaProxy;
   String? _error;
 
   @override
@@ -54,15 +54,18 @@ class _MediaPlayerScreenState extends State<MediaPlayerScreen> {
     };
 
     try {
-      final bilibili = widget.media.bilibili;
-      if (bilibili != null) {
-        _bilibiliProxy = await BilibiliMediaProxy.start(headers);
-        final manifest = buildBilibiliDashManifest(
-          bilibili,
-          rewriteBaseUrl: _bilibiliProxy!.rewrite,
+      final dash = widget.media.dash;
+      if (dash != null) {
+        _mediaProxy = await HeaderMediaProxy.start(
+          headers,
+          allowedHosts: dash.allowedHosts,
+        );
+        final manifest = buildDashManifest(
+          dash,
+          rewriteBaseUrl: _mediaProxy!.rewrite,
         );
         final file = File(
-          '${Directory.systemTemp.path}/readlater_bilibili_'
+          '${Directory.systemTemp.path}/readlater_dash_'
           '${DateTime.now().microsecondsSinceEpoch}.mpd',
         );
         await file.writeAsString(manifest);
@@ -85,7 +88,7 @@ class _MediaPlayerScreenState extends State<MediaPlayerScreen> {
     if (file != null) {
       unawaited(file.delete().catchError((_) => file));
     }
-    unawaited(_bilibiliProxy?.close());
+    unawaited(_mediaProxy?.close());
     exitFullscreen();
     super.dispose();
   }
