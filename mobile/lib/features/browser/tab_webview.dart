@@ -42,6 +42,7 @@ class TabWebView extends ConsumerStatefulWidget {
     required this.onCreated,
     this.onLongPressLink,
     this.onMediaDetected,
+    this.onPageChanged,
     this.active = true,
   });
 
@@ -49,6 +50,7 @@ class TabWebView extends ConsumerStatefulWidget {
   final void Function(InAppWebViewController controller) onCreated;
   final void Function(LinkPressPayload payload)? onLongPressLink;
   final void Function(DetectedMedia media)? onMediaDetected;
+  final void Function(String url)? onPageChanged;
   final bool active;
 
   @override
@@ -61,6 +63,7 @@ class _TabWebViewState extends ConsumerState<TabWebView> {
   Completer<Map<String, dynamic>>? _extractCompleter;
   DateTime? _lastExternalBlockedAt;
   String? _appliedUserAgent;
+  String? _lastPageUrl;
   bool _applyingUserAgent = false;
 
   @override
@@ -219,6 +222,31 @@ class _TabWebViewState extends ConsumerState<TabWebView> {
     );
   }
 
+  void _notifyPageChanged(String url) {
+    if (url.isEmpty || url == _lastPageUrl) return;
+    _lastPageUrl = url;
+    widget.onPageChanged?.call(url);
+  }
+
+  Future<void> _handleDetectedMedia(Map<String, dynamic> map) async {
+    var media = DetectedMedia.fromMap(map);
+    if (media.isBilibili && media.sourcePage.isNotEmpty) {
+      try {
+        final cookies = await CookieManager.instance().getCookies(
+          url: WebUri(media.sourcePage),
+        );
+        final cookie = cookies
+            .map((item) => '${item.name}=${item.value}')
+            .join('; ');
+        if (cookie.isNotEmpty) media = media.copyWith(cookie: cookie);
+      } catch (_) {
+        // Cookie 读取失败时仍然播放公开/预览内容。
+      }
+    }
+    if (!mounted) return;
+    widget.onMediaDetected?.call(media);
+  }
+
   @override
   Widget build(BuildContext context) {
     final injectJs = _injectJs;
@@ -314,9 +342,28 @@ class _TabWebViewState extends ConsumerState<TabWebView> {
           callback: (args) {
             final map = args.isNotEmpty ? args.first : null;
             if (map is Map) {
-              widget.onMediaDetected?.call(
-                DetectedMedia.fromMap(Map<String, dynamic>.from(map)),
-              );
+              unawaited(_handleDetectedMedia(Map<String, dynamic>.from(map)));
+            }
+            return null;
+          },
+        );
+        controller.addJavaScriptHandler(
+          handlerName: 'rl:bilibili',
+          callback: (args) {
+            final map = args.isNotEmpty ? args.first : null;
+            if (map is Map) {
+              unawaited(_handleDetectedMedia(Map<String, dynamic>.from(map)));
+            }
+            return null;
+          },
+        );
+        controller.addJavaScriptHandler(
+          handlerName: 'rl:urlChanged',
+          callback: (args) {
+            final map = args.isNotEmpty ? args.first : null;
+            if (map is Map) {
+              final url = map['url'];
+              if (url is String) widget.onPageChanged?.call(url);
             }
             return null;
           },
@@ -325,6 +372,7 @@ class _TabWebViewState extends ConsumerState<TabWebView> {
       },
       onLoadStart: (controller, url) {
         _update(loading: true, url: url?.toString());
+        if (url != null) _notifyPageChanged(url.toString());
         unawaited(
           _applyUserAgentForUrl(controller, url?.toString() ?? widget.tab.url),
         );
@@ -338,6 +386,7 @@ class _TabWebViewState extends ConsumerState<TabWebView> {
         );
       },
       onUpdateVisitedHistory: (controller, url, isReload) async {
+        if (url != null) _notifyPageChanged(url.toString());
         _update(
           url: url?.toString(),
           canGoBack: await controller.canGoBack(),

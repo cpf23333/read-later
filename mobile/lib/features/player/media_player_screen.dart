@@ -1,11 +1,15 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
-import 'package:media_kit_video/media_kit_video.dart' hide enterFullscreen, exitFullscreen;
+import 'package:media_kit_video/media_kit_video.dart'
+    hide enterFullscreen, exitFullscreen;
 
 import '../../platform/system_ui.dart';
 import '../browser/detected_media.dart';
+import 'bilibili_dash_manifest.dart';
+import 'bilibili_media_proxy.dart';
 
 /// 全屏 media_kit 播放页：播放浏览器里检测到的视频地址。
 class MediaPlayerScreen extends StatefulWidget {
@@ -21,6 +25,8 @@ class _MediaPlayerScreenState extends State<MediaPlayerScreen> {
   late final Player _player;
   late final VideoController _controller;
   StreamSubscription<String>? _errorSubscription;
+  File? _manifestFile;
+  BilibiliMediaProxy? _bilibiliProxy;
   String? _error;
 
   @override
@@ -34,21 +40,52 @@ class _MediaPlayerScreenState extends State<MediaPlayerScreen> {
       if (!mounted) return;
       setState(() => _error = message);
     });
+    unawaited(_openMedia());
+  }
 
+  Future<void> _openMedia() async {
+    var url = widget.media.url;
     final headers = <String, String>{
-      if (widget.media.userAgent.trim().isNotEmpty) 'User-Agent': widget.media.userAgent,
-      if (widget.media.sourcePage.trim().isNotEmpty) 'Referer': widget.media.sourcePage,
+      if (widget.media.userAgent.trim().isNotEmpty)
+        'User-Agent': widget.media.userAgent,
+      if (widget.media.sourcePage.trim().isNotEmpty)
+        'Referer': widget.media.sourcePage,
+      if (widget.media.cookie.trim().isNotEmpty) 'Cookie': widget.media.cookie,
     };
-    unawaited(_player.open(
-      Media(widget.media.url, httpHeaders: headers),
-      play: true,
-    ));
+
+    try {
+      final bilibili = widget.media.bilibili;
+      if (bilibili != null) {
+        _bilibiliProxy = await BilibiliMediaProxy.start(headers);
+        final manifest = buildBilibiliDashManifest(
+          bilibili,
+          rewriteBaseUrl: _bilibiliProxy!.rewrite,
+        );
+        final file = File(
+          '${Directory.systemTemp.path}/readlater_bilibili_'
+          '${DateTime.now().microsecondsSinceEpoch}.mpd',
+        );
+        await file.writeAsString(manifest);
+        _manifestFile = file;
+        url = file.path;
+      }
+      if (!mounted) return;
+      await _player.open(Media(url, httpHeaders: headers), play: true);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _error = '$error');
+    }
   }
 
   @override
   void dispose() {
     _errorSubscription?.cancel();
     _player.dispose();
+    final file = _manifestFile;
+    if (file != null) {
+      unawaited(file.delete().catchError((_) => file));
+    }
+    unawaited(_bilibiliProxy?.close());
     exitFullscreen();
     super.dispose();
   }
@@ -59,9 +96,7 @@ class _MediaPlayerScreenState extends State<MediaPlayerScreen> {
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          Positioned.fill(
-            child: Video(controller: _controller),
-          ),
+          Positioned.fill(child: Video(controller: _controller)),
           if (_error != null)
             Positioned.fill(
               child: ColoredBox(

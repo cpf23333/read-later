@@ -299,10 +299,68 @@
     };
   } catch (_) {}
 
+  // ---- Bilibili DASH：页面登录后 __playinfo__ 内含音视频分轨 ----
+  const reportedBilibili = new Set();
+
+  function bilibiliTrack(track) {
+    if (!track) return null;
+    const segment =
+      track.SegmentBase || track.segmentBase || track.segment_base || {};
+    const backups = track.backupUrl || track.backup_url || [];
+    return {
+      baseUrl: track.baseUrl || track.base_url || '',
+      backupUrl: Array.isArray(backups) ? backups.slice(0, 2) : [],
+      bandwidth: track.bandwidth || 0,
+      codecs: track.codecs || '',
+      mimeType: track.mimeType || track.mime_type || '',
+      width: track.width || 0,
+      height: track.height || 0,
+      frameRate: track.frameRate || track.frame_rate || '',
+      segmentBase: {
+        Initialization: segment.Initialization || segment.initialization || '',
+        indexRange: segment.indexRange || segment.index_range || '',
+      },
+    };
+  }
+
+  function reportBilibili() {
+    const info = window.__playinfo__;
+    const data = info && info.data;
+    const dash = data && data.dash;
+    if (!dash || !Array.isArray(dash.video) || dash.video.length === 0) return;
+
+    const first = bilibiliTrack(dash.video[0]);
+    if (!first || !first.baseUrl) return;
+    const reportKey = location.href + '|' + first.baseUrl;
+    if (reportedBilibili.has(reportKey)) return;
+    reportedBilibili.add(reportKey);
+
+    const video = dash.video.map(bilibiliTrack).filter((item) => item && item.baseUrl);
+    const audio = (Array.isArray(dash.audio) ? dash.audio : [])
+      .map(bilibiliTrack)
+      .filter((item) => item && item.baseUrl);
+    const duration = dash.duration || (data.timelength ? data.timelength / 1000 : 0);
+
+    try {
+      window.flutter_inappwebview.callHandler('rl:bilibili', {
+        url: first.baseUrl,
+        type: 'bilibili-dash',
+        title: document.title,
+        sourcePage: location.href,
+        ua: navigator.userAgent,
+        bilibili: { duration: duration, video: video, audio: audio },
+      });
+    } catch (_) {
+      // 非 app 环境忽略。
+    }
+  }
+
   function scheduleMediaScan() {
     scanMediaElements();
+    reportBilibili();
     setTimeout(scanMediaElements, 1000);
-    setTimeout(scanMediaElements, 3000);
+    setTimeout(reportBilibili, 1000);
+    setTimeout(reportBilibili, 3000);
   }
 
   if (document.readyState === 'loading') {
@@ -311,7 +369,26 @@
     scheduleMediaScan();
   }
   setInterval(scanMediaElements, 3000);
+  setInterval(reportBilibili, 3000);
   window.__rlScanMedia = scheduleMediaScan;
+  window.__rlScanBilibili = reportBilibili;
+
+  // Bilibili 的站内切视频通常走 SPA 路由，不触发页面重载。
+  // URL 变化时清掉旧视频的探测缓存，并通知 Flutter 丢弃旧媒体。
+  let lastPageUrl = location.href;
+  function watchPageUrl() {
+    if (location.href === lastPageUrl) return;
+    lastPageUrl = location.href;
+    reportedBilibili.clear();
+    try {
+      window.flutter_inappwebview.callHandler('rl:urlChanged', {
+        url: location.href,
+      });
+    } catch (_) {}
+    reportBilibili();
+  }
+  setInterval(watchPageUrl, 1000);
+  window.__rlWatchPageUrl = watchPageUrl;
 
   // 集成测试钩子：直接触发长按回调（不模拟真实手势）。
   window.__rlTestLongPress = function (selector) {

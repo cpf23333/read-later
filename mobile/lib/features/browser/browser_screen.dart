@@ -60,6 +60,14 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
     });
   }
 
+  /// 页面 URL 变化（包括 Bilibili 的站内 SPA 切换）时丢弃旧视频，
+  /// 避免右下角按钮继续播放上一个视频。
+  void _onPageChanged(String tabId, String url) {
+    final removed = _mediaByTab.remove(tabId) != null;
+    _autoOpenedMedia.removeWhere((key) => key.startsWith('$tabId|'));
+    if (removed && mounted) setState(() {});
+  }
+
   void _openMediaPlayer(DetectedMedia media) {
     if (_playerOpen) return;
     _playerOpen = true;
@@ -323,11 +331,14 @@ class _BrowserScreenState extends ConsumerState<BrowserScreen> {
                                 onLongPressLink: _openLongPressSheet,
                                 onMediaDetected: (media) =>
                                     _onMediaDetected(tab.id, media),
+                                onPageChanged: (url) =>
+                                    _onPageChanged(tab.id, url),
                               )
                             : const SizedBox.shrink(),
                       ),
                     if (active != null &&
-                        active.url == BrowserNotifier.blankUrl)
+                        active.url == BrowserNotifier.blankUrl &&
+                        active.windowId == null)
                       Positioned.fill(child: NewTabPage(onNavigate: _navigate)),
                     if (videoSettings.showPlayerButton &&
                         active != null &&
