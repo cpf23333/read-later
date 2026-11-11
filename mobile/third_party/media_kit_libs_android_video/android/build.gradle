@@ -43,21 +43,13 @@ android {
     }
 
     dependencies {
-        implementation fileTree(dir: "$buildDir/output", include: "*.jar")
+        // 预编译 jar 位于插件包根目录 libs/（本项目 vendored），
+        // 而 $projectDir 指向插件包内的 android/，所以这里要用 ../libs。
+        implementation files(
+            "$projectDir/../libs/default-arm64-v8a.jar",
+            "$projectDir/../libs/default-armeabi-v7a.jar",
+            "$projectDir/../libs/default-x86.jar",
+            "$projectDir/../libs/default-x86_64.jar"
+        )
     }
 }
-
-task prepareDependencies {
-    def outputDir = file("$buildDir/output")
-    doFirst {
-        outputDir.deleteDir()
-        outputDir.mkdirs()
-        copy {
-            from file("$projectDir/libs")
-            include "*.jar"
-            into outputDir
-        }
-    }
-}
-
-assemble.dependsOn(prepareDependencies)

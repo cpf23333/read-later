@@ -90,6 +90,22 @@ jobs:
             --target-platform android-arm64 \
             --split-per-abi
 
+      - name: Verify APK native libraries
+        run: |
+          APK=mobile/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+          # 不要用 unzip -l | grep -q：Actions 开启 pipefail 时，
+          # grep -q 会提前退出并让 unzip 收到 SIGPIPE，从而误报缺库。
+          entries="$(unzip -Z1 "$APK" 2>/dev/null || true)"
+          for lib in \
+            lib/arm64-v8a/libmpv.so \
+            lib/arm64-v8a/libmediakitandroidhelper.so; do
+            if ! grep -Fxq -- "$lib" <<< "$entries"; then
+              echo "::error::APK 缺少 $lib，media_kit 会在启动时黑屏"
+              exit 1
+            fi
+          done
+          echo "APK native libraries OK"
+
       - name: Verify APK signature
         run: |
           APK=mobile/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
